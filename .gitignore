@@ -1,0 +1,27 @@
+# env
+.env
+.env.*
+apps/api/.env
+apps/web/.env.local
+
+# node
+node_modules/
+apps/api/node_modules/
+apps/web/node_modules/
+
+# next
+.next/
+apps/web/.next/
+
+# locks (если monorepo — лучше оставить один менеджер)
+package-lock.json
+apps/api/package-lock.json
+apps/web/package-lock.json
+
+# cursor / ide
+.cursor/
+.vscode/
+
+# misc
+dist/
+build/

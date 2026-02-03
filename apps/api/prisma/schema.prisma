@@ -1,0 +1,190 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ExamType {
+  TEST
+  ORAL
+}
+
+enum ExamProfession {
+  DOCTOR
+  NURSE
+}
+
+enum ExamLanguage {
+  UZ
+  RU
+}
+
+enum AttemptMode {
+  EXAM
+  PRACTICE
+}
+
+enum QuestionType {
+  TEST
+  ORAL
+}
+
+enum AttemptStatus {
+  CREATED
+  IN_PROGRESS
+  SUBMITTED
+  COMPLETED
+  EXPIRED
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  EXPIRED
+}
+
+model Category {
+  id    String @id @default(cuid())
+  name  String @unique
+  exams Exam[]
+}
+
+model Exam {
+  id               String   @id @default(cuid())
+  title            String
+  type             ExamType
+  profession       ExamProfession
+  language         ExamLanguage
+  direction        String
+  categoryId       String
+  timeLimitSeconds Int      @default(1800)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  category  Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  questions Question[]
+
+  @@unique([title, categoryId])
+  @@index([categoryId])
+  @@index([profession, language])
+}
+
+model Question {
+  id              String        @id @default(cuid())
+  examId          String
+  type            QuestionType
+  prompt          String
+  explanationHtml String?
+  order           Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  exam       Exam            @relation(fields: [examId], references: [id], onDelete: Cascade)
+  options    QuestionOption[]
+  oralAnswer OralAnswer?
+
+  @@index([examId])
+}
+
+model QuestionOption {
+  id         String   @id @default(cuid())
+  questionId String
+  label      String
+  isCorrect  Boolean  @default(false)
+  order      Int?
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+}
+
+model OralAnswer {
+  id         String  @id @default(cuid())
+  questionId String  @unique
+  answerHtml String
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+model ImportBatch {
+  id         String   @id @default(cuid())
+  sourceFile String?
+  createdAt  DateTime @default(now())
+  stats      Json?
+}
+
+model ExamAttempt {
+  id          String        @id
+  userId      String
+  examId      String
+  status      AttemptStatus
+  mode        AttemptMode   @default(EXAM)
+  questionIds String[]      @default([])
+  answers     Json
+  createdAt   DateTime @default(now())
+  startedAt   DateTime?
+  expiresAt   DateTime?
+  submittedAt DateTime?
+  score       Int?
+  maxScore    Int?
+
+  @@index([userId])
+  @@index([examId])
+}
+
+model User {
+  id         String   @id
+  telegramId String   @unique
+  firstName  String?
+  username   String?
+  role       UserRole @default(USER)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model UserSubscription {
+  id        String             @id @default(cuid())
+  userId    String
+  startsAt  DateTime           @default(now())
+  endsAt    DateTime
+  status    SubscriptionStatus @default(ACTIVE)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@index([userId])
+  @@index([endsAt])
+}
+
+model OneTimeAccess {
+  id         String   @id @default(cuid())
+  userId     String
+  examId     String
+  consumedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId])
+  @@index([examId])
+  @@index([consumedAt])
+  @@unique([userId, examId, consumedAt])
+}
+
+model AccessSettings {
+  id                          String  @id
+  subscriptionPrice           Int
+  subscriptionDurationDays    Int
+  allowFreeAttempts           Boolean
+  freeDailyLimit              Int
+  showAnswersWithoutSubscription Boolean
+  oneTimePrice                Int
+  showAnswersForOneTime        Boolean
+  updatedAt                   DateTime @updatedAt
+}

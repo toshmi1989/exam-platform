@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    /* Base setup */
+    "baseUrl": "./src",
+    "paths": {
+      "@modules/*": ["modules/*"]
+    },
+
+    /* Environment */
+    "module": "NodeNext",
+    "target": "ESNext",
+    "lib": ["ESNext"],
+    "types": ["node"],
+
+    /* Output */
+    "sourceMap": true,
+    "declaration": false,
+
+    /* Strictness */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+
+    /* Module behavior */
+    "moduleResolution": "NodeNext",
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+
+    /* Performance */
+    "skipLibCheck": true
+  },
+  "include": ["src"]
+}
