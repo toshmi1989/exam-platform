@@ -181,8 +181,8 @@ nano apps/api/.env
 Заполните (значения замените на свои):
 
 ```env
-# База данных
-DATABASE_URL="postgresql://exam_user:ваш_надёжный_пароль@localhost:5432/exam"
+# База данных (добавьте ?connection_limit=10 для пула соединений Prisma)
+DATABASE_URL="postgresql://exam_user:ваш_надёжный_пароль@localhost:5432/exam?connection_limit=10"
 
 # Сервер
 NODE_ENV=production
@@ -345,16 +345,33 @@ sudo systemctl enable nginx
 sudo nano /etc/nginx/sites-available/exam-platform
 ```
 
-Содержимое (пока без SSL):
+Содержимое (пока без SSL). Для ускорения включены gzip и keepalive к приложениям:
 
 ```nginx
+# Кэш для статики Next.js (опционально)
+proxy_cache_path /var/cache/nginx_nextjs levels=1:2 keys_zone=nextjs:10m max_size=100m inactive=60m use_temp_path=off;
+
+upstream nextjs_backend {
+    server 127.0.0.1:3000;
+    keepalive 8;
+}
+upstream api_backend {
+    server 127.0.0.1:3001;
+    keepalive 8;
+}
+
 # Фронтенд (Next.js)
 server {
     listen 80;
     server_name ваш-домен.ru www.ваш-домен.ru;
 
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
+
     location / {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://nextjs_backend;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -364,6 +381,17 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_cache_bypass $http_upgrade;
         proxy_read_timeout 86400;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+    }
+
+    location /_next/static/ {
+        proxy_pass http://nextjs_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_cache nextjs;
+        proxy_cache_valid 200 60m;
+        add_header X-Cache-Status $upstream_cache_status;
     }
 }
 
@@ -372,16 +400,32 @@ server {
     listen 80;
     server_name api.ваш-домен.ru;
 
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types application/json;
+
     location / {
-        proxy_pass http://127.0.0.1:3001;
+        proxy_pass http://api_backend;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
         client_max_body_size 10M;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
     }
 }
+```
+
+Создайте каталог для кэша (если используете `proxy_cache`):
+
+```bash
+sudo mkdir -p /var/cache/nginx_nextjs
+sudo chown www-data:www-data /var/cache/nginx_nextjs
 ```
 
 Включите сайт и проверьте конфиг:

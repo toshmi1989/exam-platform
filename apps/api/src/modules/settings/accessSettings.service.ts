@@ -11,6 +11,7 @@ export type AccessSettings = {
 };
 
 const SETTINGS_ID = 'default';
+const CACHE_TTL_MS = 60_000; // 1 minute
 
 const DEFAULT_SETTINGS: AccessSettings = {
   subscriptionPrice: 99000,
@@ -22,13 +23,20 @@ const DEFAULT_SETTINGS: AccessSettings = {
   showAnswersForOneTime: false,
 };
 
+let cache: { at: number; value: AccessSettings } | null = null;
+
 export async function getAccessSettings(): Promise<AccessSettings> {
+  const now = Date.now();
+  if (cache && now - cache.at < CACHE_TTL_MS) {
+    return cache.value;
+  }
+
   const existing = await prisma.accessSettings.findUnique({
     where: { id: SETTINGS_ID },
   });
 
   if (existing) {
-    return {
+    const value: AccessSettings = {
       subscriptionPrice: existing.subscriptionPrice,
       subscriptionDurationDays: existing.subscriptionDurationDays,
       allowFreeAttempts: existing.allowFreeAttempts,
@@ -37,6 +45,8 @@ export async function getAccessSettings(): Promise<AccessSettings> {
       oneTimePrice: existing.oneTimePrice,
       showAnswersForOneTime: existing.showAnswersForOneTime,
     };
+    cache = { at: now, value };
+    return value;
   }
 
   const created = await prisma.accessSettings.create({
@@ -46,7 +56,7 @@ export async function getAccessSettings(): Promise<AccessSettings> {
     },
   });
 
-  return {
+  const value: AccessSettings = {
     subscriptionPrice: created.subscriptionPrice,
     subscriptionDurationDays: created.subscriptionDurationDays,
     allowFreeAttempts: created.allowFreeAttempts,
@@ -55,11 +65,14 @@ export async function getAccessSettings(): Promise<AccessSettings> {
     oneTimePrice: created.oneTimePrice,
     showAnswersForOneTime: created.showAnswersForOneTime,
   };
+  cache = { at: now, value };
+  return value;
 }
 
 export async function updateAccessSettings(
   next: AccessSettings
 ): Promise<AccessSettings> {
+  cache = null;
   const updated = await prisma.accessSettings.upsert({
     where: { id: SETTINGS_ID },
     update: next,

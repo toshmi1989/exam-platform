@@ -1,6 +1,7 @@
 // apps/api/src/index.ts
 
 import express from 'express';
+import compression from 'compression';
 import type { Request, Response, NextFunction } from 'express';
 import attemptsRouter from './modules/attempts/attempts.routes';
 import categoriesRouter from './modules/categories/categories.routes';
@@ -20,6 +21,7 @@ import { getAccessSettings } from './modules/settings/accessSettings.service';
 
 const app = express();
 
+app.use(compression());
 app.use(express.json({ limit: '6mb' })); // chat images (base64) up to ~4 MB
 app.use((req, res, next) => {
   res.setHeader(

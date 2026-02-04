@@ -161,6 +161,7 @@ model UserSubscription {
 
   @@index([userId])
   @@index([endsAt])
+  @@index([userId, status, endsAt])
 }
 
 model OneTimeAccess {
