@@ -1,6 +1,7 @@
 // apps/api/src/index.ts
 
 import express from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import attemptsRouter from './modules/attempts/attempts.routes';
 import telegramAuthStub from './middlewares/telegramAuth.middleware';
 import categoriesRouter from './modules/categories/categories.routes';
@@ -8,6 +9,7 @@ import adminRouter from './modules/admin/admin.routes';
 import chatRouter from './modules/chat/chat.routes';
 import broadcastsRouter from './modules/broadcasts/broadcasts.routes';
 import examsRouter from './modules/exams/exams.routes';
+import paymentsRouter from './modules/payments/payments.routes';
 import { attachUserFromHeader } from './middlewares/attachUser.middleware';
 import {
   parseTelegramUser,
@@ -19,7 +21,7 @@ import { getAccessSettings } from './modules/settings/accessSettings.service';
 
 const app = express();
 
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '6mb' })); // chat images (base64) up to ~4 MB
 app.use((req, res, next) => {
   res.setHeader(
     'Access-Control-Allow-Origin',
@@ -27,6 +29,8 @@ app.use((req, res, next) => {
   );
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,x-telegram-id');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
   }
@@ -48,35 +52,39 @@ app.get('/api', (_req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
-app.get('/me', async (req, res) => {
+app.get('/me', async (req, res, next) => {
   const userId = req.user?.id;
   const telegramId = req.user?.telegramId;
   if (!userId || !telegramId) {
     return res.status(401).json({ ok: false, reasonCode: 'AUTH_REQUIRED' });
   }
-  const now = new Date();
-  const [subscription, settings] = await Promise.all([
-    prisma.userSubscription.findFirst({
-      where: {
-        userId,
-        status: 'ACTIVE',
-        startsAt: { lte: now },
-        endsAt: { gt: now },
-      },
-      select: { endsAt: true },
-    }),
-    getAccessSettings(),
-  ]);
-  return res.json({
-    telegramId,
-    subscriptionActive: Boolean(subscription),
-    subscriptionEndsAt: subscription?.endsAt?.toISOString(),
-    oneTimePrice: settings.oneTimePrice,
-    subscriptionPrice: settings.subscriptionPrice,
-  });
+  try {
+    const now = new Date();
+    const [subscription, settings] = await Promise.all([
+      prisma.userSubscription.findFirst({
+        where: {
+          userId,
+          status: 'ACTIVE',
+          startsAt: { lte: now },
+          endsAt: { gt: now },
+        },
+        select: { endsAt: true },
+      }),
+      getAccessSettings(),
+    ]);
+    return res.json({
+      telegramId,
+      subscriptionActive: Boolean(subscription),
+      subscriptionEndsAt: subscription?.endsAt?.toISOString(),
+      oneTimePrice: settings.oneTimePrice,
+      subscriptionPrice: settings.subscriptionPrice,
+    });
+  } catch (e) {
+    next(e);
+  }
 });
 
-app.post('/payments/one-time', async (req, res) => {
+app.post('/payments/one-time', async (req, res, next) => {
   const userId = req.user?.id;
   if (!userId) {
     return res.status(401).json({ ok: false, reasonCode: 'AUTH_REQUIRED' });
@@ -85,21 +93,25 @@ app.post('/payments/one-time', async (req, res) => {
   if (!examId) {
     return res.status(400).json({ ok: false, reasonCode: 'INVALID_EXAM' });
   }
-  const exam = await prisma.exam.findUnique({ where: { id: examId }, select: { id: true } });
-  if (!exam) {
-    return res.status(404).json({ ok: false, reasonCode: 'EXAM_NOT_FOUND' });
-  }
-  const existing = await prisma.oneTimeAccess.findFirst({
-    where: { userId, examId, consumedAt: null },
-    select: { id: true },
-  });
-  if (existing) {
+  try {
+    const exam = await prisma.exam.findUnique({ where: { id: examId }, select: { id: true } });
+    if (!exam) {
+      return res.status(404).json({ ok: false, reasonCode: 'EXAM_NOT_FOUND' });
+    }
+    const existing = await prisma.oneTimeAccess.findFirst({
+      where: { userId, examId, consumedAt: null },
+      select: { id: true },
+    });
+    if (existing) {
+      return res.json({ ok: true });
+    }
+    await prisma.oneTimeAccess.create({
+      data: { userId, examId },
+    });
     return res.json({ ok: true });
+  } catch (e) {
+    next(e);
   }
-  await prisma.oneTimeAccess.create({
-    data: { userId, examId },
-  });
-  return res.json({ ok: true });
 });
 
 app.post('/auth/telegram', (req, res) => {
@@ -195,9 +207,17 @@ app.use('/attempts', attemptsRouter);
 app.use('/admin', adminRouter);
 app.use('/chat', chatRouter);
 app.use('/broadcasts', broadcastsRouter);
+app.use('/payments', paymentsRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ status: 'not_found' });
+});
+
+// Global error handler: unhandled rejections in async routes end up here
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  console.error('[API error]', err);
+  if (res.headersSent) return;
+  res.status(500).json({ ok: false, reasonCode: 'INTERNAL_ERROR' });
 });
 
 const port = process.env.PORT ? Number(process.env.PORT) : 3001;

@@ -5,8 +5,9 @@ import PageHeader from '../../components/PageHeader';
 import Section from '../../components/Section';
 import { LANGUAGE_COOKIE_KEY, languages, Language } from '../../lib/uiSettings';
 
-export default function HomePage() {
-  const langCookie = cookies().get(LANGUAGE_COOKIE_KEY)?.value ?? 'Русский';
+export default async function HomePage() {
+  const cookieStore = await cookies();
+  const langCookie = cookieStore.get(LANGUAGE_COOKIE_KEY)?.value ?? 'Русский';
   const language = (languages as readonly string[]).includes(langCookie)
     ? (langCookie as Language)
     : 'Русский';

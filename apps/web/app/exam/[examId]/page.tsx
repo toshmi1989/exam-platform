@@ -9,8 +9,9 @@ interface ExamPageProps {
   params: { examId: string };
 }
 
-export default function ExamPage({ params }: ExamPageProps) {
-  const langCookie = cookies().get(LANGUAGE_COOKIE_KEY)?.value ?? 'Русский';
+export default async function ExamPage({ params }: ExamPageProps) {
+  const cookieStore = await cookies();
+  const langCookie = cookieStore.get(LANGUAGE_COOKIE_KEY)?.value ?? 'Русский';
   const language = (languages as readonly string[]).includes(langCookie)
     ? (langCookie as Language)
     : 'Русский';

@@ -7,6 +7,9 @@ import BottomNav from '../../../components/BottomNav';
 import Card from '../../../components/Card';
 import PageHeader from '../../../components/PageHeader';
 import { readSettings, Language } from '../../../lib/uiSettings';
+import { createPayment } from '../../../lib/api';
+
+export const dynamic = 'force-dynamic';
 
 const paymentMethods = [
   { id: 'anorbank', label: 'Anorbank', logo: '/payments/anorbank.svg' },
@@ -15,10 +18,14 @@ const paymentMethods = [
   { id: 'uzum', label: 'Uzum', logo: '/payments/uzum.svg' },
   { id: 'xazna', label: 'Xazna', logo: '/payments/xazna.svg' },
   { id: 'alif', label: 'Alif', logo: '/payments/alif.svg' },
+  { id: 'visa', label: 'Visa', logo: '/payments/visa.svg' },
+  { id: 'mastercard', label: 'Mastercard', logo: '/payments/mastercard.svg' },
 ];
 
 export default function SubscribePage() {
   const [language, setLanguage] = useState<Language>(readSettings().language);
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const update = () => setLanguage(readSettings().language);
@@ -31,19 +38,37 @@ export default function SubscribePage() {
       return {
         title: 'Choose payment method',
         subtitle: 'Select a convenient way to purchase your subscription.',
+        errorPay: 'Payment failed. Please try again.',
       };
     }
     if (language === 'Узбекский') {
       return {
-        title: 'To‘lov usulini tanlang',
+        title: "To'lov usulini tanlang",
         subtitle: 'Obunani sotib olish uchun qulay usulni tanlang.',
+        errorPay: "To'lov amalga oshmadi. Qayta urinib ko'ring.",
       };
     }
     return {
       title: 'Выберите способ оплаты',
       subtitle: 'Выберите удобный способ оплаты подписки.',
+      errorPay: 'Оплата не прошла. Попробуйте снова.',
     };
   }, [language]);
+
+  async function handlePay(paymentSystem: string) {
+    setError(null);
+    setPaying(true);
+    try {
+      const { checkout_url } = await createPayment({
+        kind: 'subscription',
+        paymentSystem,
+      });
+      window.location.href = checkout_url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : copy.errorPay);
+      setPaying(false);
+    }
+  }
 
   return (
     <>
@@ -52,23 +77,36 @@ export default function SubscribePage() {
           <BackButton placement="bottom" />
           <PageHeader title={copy.title} subtitle={copy.subtitle} />
 
-        <div className="grid grid-cols-2 gap-4">
-          {paymentMethods.map((method) => (
-            <Card key={method.id} className="flex flex-col items-center gap-3 p-4">
-              <div className="flex h-12 w-full items-center justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={method.logo}
-                  alt={method.label}
-                  className="h-10 w-auto object-contain"
-                />
-              </div>
-              <p className="text-sm font-medium text-slate-700">
-                {method.label}
-              </p>
-            </Card>
-          ))}
-        </div>
+          <div className="grid grid-cols-2 gap-4">
+            {paymentMethods.map((method) => (
+              <Card
+                key={method.id}
+                className={`flex flex-col items-center gap-3 p-4 transition ${paying ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:opacity-90'}`}
+                onClick={() => !paying && handlePay(method.id)}
+              >
+                <div className="flex h-12 w-full items-center justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={method.logo}
+                    alt={method.label}
+                    className="h-10 w-auto object-contain"
+                  />
+                </div>
+                <p className="text-sm font-medium text-slate-700">
+                  {method.label}
+                </p>
+              </Card>
+            ))}
+          </div>
+
+          {error ? (
+            <div
+              className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"
+              role="alert"
+            >
+              {error}
+            </div>
+          ) : null}
         </main>
       </AnimatedPage>
       <BottomNav />

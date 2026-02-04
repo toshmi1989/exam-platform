@@ -113,12 +113,13 @@ export default function AdminImportPage() {
     if (!fileBase64 || !profession) return;
     setImportLoading(true);
     setErrorMessage(null);
-    const { response } = await apiFetch('/admin/import/execute', {
+    const { response, data } = await apiFetch('/admin/import/execute', {
       method: 'POST',
       json: { profession, fileBase64 },
     });
     if (!response.ok) {
-      setErrorMessage('Import failed.');
+      const errDetail = typeof (data as { error?: string })?.error === 'string' ? (data as { error: string }).error : '';
+      setErrorMessage(errDetail ? `Import failed: ${errDetail}` : 'Import failed.');
       setImportLoading(false);
       return;
     }

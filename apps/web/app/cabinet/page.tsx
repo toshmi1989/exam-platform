@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import AnimatedPage from '../../components/AnimatedPage';
 import BottomNav from '../../components/BottomNav';
@@ -12,7 +13,9 @@ import { readSettings, Language } from '../../lib/uiSettings';
 import { getProfile, getChatUnread } from '../../lib/api';
 import { getQuoteByIndex, CABINET_QUOTES } from '../../data/cabinetQuotes';
 
-export default function CabinetPage() {
+export const dynamic = 'force-dynamic';
+
+function CabinetClient() {
   const router = useRouter();
   const [profile, setProfile] = useState<TelegramUserSnapshot | null>(null);
   const [language, setLanguage] = useState<Language>(readSettings().language);
@@ -93,6 +96,8 @@ export default function CabinetPage() {
     return source ? source.charAt(0).toUpperCase() : 'C';
   }, [profile?.firstName, profile?.username]);
 
+  const isGuest = Boolean(profile?.telegramId?.startsWith?.('guest-'));
+
   const currentQuoteText = useMemo(() => {
     const quote = getQuoteByIndex(quoteIndex);
     if (language === 'Английский') return quote.en;
@@ -116,6 +121,8 @@ export default function CabinetPage() {
         buy: 'Buy subscription',
         oneTime: 'Take a one-time test',
         activeSubscription: 'Active',
+        oneTimeCardTitle: 'One-time test',
+        oneTimeCardHint: 'Pay once and take one exam.',
       };
     }
     if (language === 'Узбекский') {
@@ -133,6 +140,8 @@ export default function CabinetPage() {
         buy: 'Obunani sotib olish',
         oneTime: 'Bir martalik test topshirish',
         activeSubscription: 'Faol',
+        oneTimeCardTitle: 'Bir martalik test',
+        oneTimeCardHint: 'Bir marta to‘lang va bitta imtihon topshiring.',
       };
     }
     return {
@@ -149,6 +158,8 @@ export default function CabinetPage() {
       buy: 'Купить подписку',
       oneTime: 'Сдать разовый тест',
       activeSubscription: 'Активна',
+      oneTimeCardTitle: 'Разовый тест',
+      oneTimeCardHint: 'Оплатите один раз и сдайте один экзамен.',
     };
   }, [language]);
 
@@ -204,50 +215,73 @@ export default function CabinetPage() {
             </div>
           </Card>
 
-          <Card title={copy.subscriptionTitle}>
-            <div className="flex flex-col gap-2 text-sm text-slate-700">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500">{copy.statusLabel}</span>
-                <span
-                  className={`inline-block rounded-lg px-2.5 py-1 font-semibold ${
-                    subscriptionActive
-                      ? 'border border-emerald-400 bg-emerald-50 text-emerald-700'
-                      : 'text-slate-900'
-                  }`}
-                >
-                  {subscriptionActive ? copy.activeSubscription : copy.noSubscription}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-slate-500">{copy.expiresLabel}</span>
-                <span className="font-semibold text-slate-900">
-                  {subscriptionEndsAt
-                    ? new Date(subscriptionEndsAt).toLocaleDateString()
-                    : '—'}
-                </span>
-              </div>
-            </div>
-            <div className="mt-6">
-              <Button href="/cabinet/subscribe" size="lg" className="w-full">
-                {copy.buy}
-              </Button>
-            </div>
-            {!subscriptionActive ? (
-              <div className="mt-3">
+          {isGuest ? (
+            <Card title={copy.oneTimeCardTitle}>
+              <p className="text-sm text-slate-600">{copy.oneTimeCardHint}</p>
+              <div className="mt-4">
                 <Button
                   size="lg"
-                  variant="secondary"
                   className="w-full"
                   onClick={() => router.push('/cabinet/my-exams?access=one-time')}
                 >
                   {copy.oneTime}
                 </Button>
               </div>
-            ) : null}
-          </Card>
+            </Card>
+          ) : (
+            <Card title={copy.subscriptionTitle}>
+              <div className="flex flex-col gap-2 text-sm text-slate-700">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">{copy.statusLabel}</span>
+                  <span
+                    className={`inline-block rounded-lg px-2.5 py-1 font-semibold ${
+                      subscriptionActive
+                        ? 'border border-emerald-400 bg-emerald-50 text-emerald-700'
+                        : 'text-slate-900'
+                    }`}
+                  >
+                    {subscriptionActive ? copy.activeSubscription : copy.noSubscription}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">{copy.expiresLabel}</span>
+                  <span className="font-semibold text-slate-900">
+                    {subscriptionEndsAt
+                      ? new Date(subscriptionEndsAt).toLocaleDateString()
+                      : '—'}
+                  </span>
+                </div>
+              </div>
+              <div className="mt-6">
+                <Button href="/cabinet/subscribe" size="lg" className="w-full">
+                  {copy.buy}
+                </Button>
+              </div>
+              {!subscriptionActive ? (
+                <div className="mt-3">
+                  <Button
+                    size="lg"
+                    variant="secondary"
+                    className="w-full"
+                    onClick={() => router.push('/cabinet/my-exams?access=one-time')}
+                  >
+                    {copy.oneTime}
+                  </Button>
+                </div>
+              ) : null}
+            </Card>
+          )}
         </main>
       </AnimatedPage>
       <BottomNav />
     </>
+  );
+}
+
+export default function CabinetPage() {
+  return (
+    <Suspense fallback={null}>
+      <CabinetClient />
+    </Suspense>
   );
 }

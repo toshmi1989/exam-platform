@@ -188,3 +188,21 @@ model AccessSettings {
   showAnswersForOneTime        Boolean
   updatedAt                   DateTime @updatedAt
 }
+
+model PaymentInvoice {
+  id         String    @id @default(cuid())
+  invoiceId  String    @unique
+  userId     String
+  kind       String
+  examId     String?
+  amountTiyin Int
+  ps         String
+  status     String    @default("created")
+  mcUuid     String?
+  createdAt  DateTime  @default(now())
+  paidAt     DateTime?
+
+  @@index([userId])
+  @@index([invoiceId])
+  @@index([status])
+}

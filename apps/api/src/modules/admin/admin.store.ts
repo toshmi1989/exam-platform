@@ -35,7 +35,7 @@ const chatThreads = new Map<string, ChatThread>();
 const broadcasts: Broadcast[] = [];
 const blacklist = new Map<string, BlacklistEntry>();
 
-const MAX_IMAGE_SIZE = 200 * 1024;
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB base64 (~3.75 MB image)
 const CHAT_RETENTION_DAYS = 10;
 const BROADCAST_RETENTION_DAYS = 30;
 const MAX_MESSAGES_PER_THREAD = 200;

@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AnimatedPage from '../../../components/AnimatedPage';
@@ -11,6 +12,8 @@ import PageHeader from '../../../components/PageHeader';
 import { readSettings, Language } from '../../../lib/uiSettings';
 import { apiFetch } from '../../../lib/api/client';
 import { createAttempt, startAttempt, getProfile } from '../../../lib/api';
+
+export const dynamic = 'force-dynamic';
 
 type ProfessionKey = 'doctors' | 'nurses';
 type ExamTypeKey = 'test' | 'oral';
@@ -29,7 +32,7 @@ const professionLabelsByLang: Record<Language, Record<ProfessionKey, string>> = 
   Узбекский: { doctors: 'Shifokorlar', nurses: 'Hamshiralar' },
 };
 
-export default function MyExamsFlowPage() {
+function MyExamsFlowClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const accessMode = searchParams.get('access') === 'one-time' ? 'one-time' : 'default';
@@ -487,5 +490,13 @@ export default function MyExamsFlowPage() {
       </AnimatedPage>
       <BottomNav />
     </>
+  );
+}
+
+export default function MyExamsFlowPage() {
+  return (
+    <Suspense fallback={null}>
+      <MyExamsFlowClient />
+    </Suspense>
   );
 }

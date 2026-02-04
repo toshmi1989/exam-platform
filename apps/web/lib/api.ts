@@ -206,4 +206,50 @@ export async function purchaseOneTimeAccess(examId: string): Promise<void> {
   }
 }
 
+export interface CreatePaymentParams {
+  kind: 'one-time' | 'subscription';
+  paymentSystem: string;
+  examId?: string;
+  mode?: 'exam' | 'practice';
+}
+
+export interface CreatePaymentResult {
+  checkout_url: string;
+  invoiceId: string;
+}
+
+export async function createPayment(params: CreatePaymentParams): Promise<CreatePaymentResult> {
+  const { response, data } = await apiFetch('/payments/create', {
+    method: 'POST',
+    json: params as unknown as Record<string, unknown>,
+  });
+  if (!response.ok) {
+    const payload = data as ApiError & { reasonCode?: string; message?: string };
+    if (payload?.reasonCode === 'INVALID_RETURN_URL') {
+      throw new Error(payload?.message ?? 'Укажите на сервере FRONTEND_URL — публичный HTTPS-адрес (например ngrok).');
+    }
+    throw payload as ApiError;
+  }
+  const payload = data as { checkout_url?: string; invoiceId?: string } | null;
+  const checkout_url = payload?.checkout_url ?? '';
+  const invoiceId = payload?.invoiceId ?? '';
+  if (!checkout_url || !invoiceId) {
+    throw new Error('Invalid createPayment response');
+  }
+  return { checkout_url, invoiceId };
+}
+
+export async function getPaymentStatus(invoiceId: string): Promise<{ status: string; kind?: string; examId?: string }> {
+  const { response, data } = await apiFetch(`/payments/status/${encodeURIComponent(invoiceId)}`);
+  if (!response.ok) {
+    throw data as ApiError;
+  }
+  const payload = data as { status?: string; kind?: string; examId?: string } | null;
+  return {
+    status: payload?.status ?? 'created',
+    kind: payload?.kind,
+    examId: payload?.examId,
+  };
+}
+
 export type { ApiError };

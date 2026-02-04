@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -10,17 +11,22 @@ import Button from '../../../components/Button';
 import Card from '../../../components/Card';
 import PageHeader from '../../../components/PageHeader';
 import { readSettings, Language } from '../../../lib/uiSettings';
-import { getProfile, purchaseOneTimeAccess, createAttempt, startAttempt } from '../../../lib/api';
+import { getProfile, createPayment, getPaymentStatus, createAttempt, startAttempt } from '../../../lib/api';
+
+export const dynamic = 'force-dynamic';
 
 const paymentMethods = [
+  { id: 'anorbank', label: 'Anorbank', logo: '/payments/anorbank.svg' },
   { id: 'click', label: 'Click', logo: '/payments/click.svg' },
   { id: 'payme', label: 'Payme', logo: '/payments/payme.svg' },
   { id: 'uzum', label: 'Uzum', logo: '/payments/uzum.svg' },
   { id: 'xazna', label: 'Xazna', logo: '/payments/xazna.svg' },
   { id: 'alif', label: 'Alif', logo: '/payments/alif.svg' },
+  { id: 'visa', label: 'Visa', logo: '/payments/visa.svg' },
+  { id: 'mastercard', label: 'Mastercard', logo: '/payments/mastercard.svg' },
 ];
 
-export default function PayOneTimePage() {
+function PayOneTimeClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const examId = searchParams.get('examId') ?? '';
@@ -80,7 +86,7 @@ export default function PayOneTimePage() {
     };
   }, [language]);
 
-  async function handlePay() {
+  async function handlePay(paymentSystem: string) {
     if (!examId) {
       setError(copy.noExam);
       return;
@@ -88,13 +94,15 @@ export default function PayOneTimePage() {
     setError(null);
     setPaying(true);
     try {
-      await purchaseOneTimeAccess(examId);
-      const attempt = await createAttempt(examId, mode);
-      await startAttempt(attempt.attemptId);
-      router.push(`/attempt/${attempt.attemptId}`);
-    } catch {
-      setError(copy.errorPay);
-    } finally {
+      const { checkout_url } = await createPayment({
+        kind: 'one-time',
+        examId,
+        paymentSystem,
+        mode,
+      });
+      window.location.href = checkout_url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : copy.errorPay);
       setPaying(false);
     }
   }
@@ -140,7 +148,11 @@ export default function PayOneTimePage() {
 
           <div className="grid grid-cols-2 gap-4">
             {paymentMethods.map((method) => (
-              <Card key={method.id} className="flex flex-col items-center gap-3 p-4">
+              <Card
+                key={method.id}
+                className={`flex flex-col items-center gap-3 p-4 transition ${paying ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:opacity-90'}`}
+                onClick={() => !paying && handlePay(method.id)}
+              >
                 <div className="flex h-12 w-full items-center justify-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -163,14 +175,9 @@ export default function PayOneTimePage() {
             </div>
           ) : null}
 
-          <Button
-            size="lg"
-            className="w-full"
-            onClick={handlePay}
-            disabled={paying || oneTimePrice == null}
-          >
-            {paying ? '…' : copy.pay}
-          </Button>
+          <p className="text-center text-sm text-slate-500">
+            {copy.pay}
+          </p>
 
           <Button href="/cabinet/my-exams" size="lg" variant="secondary" className="w-full">
             {copy.back}
@@ -179,5 +186,13 @@ export default function PayOneTimePage() {
       </AnimatedPage>
       <BottomNav />
     </>
+  );
+}
+
+export default function PayOneTimePage() {
+  return (
+    <Suspense fallback={null}>
+      <PayOneTimeClient />
+    </Suspense>
   );
 }

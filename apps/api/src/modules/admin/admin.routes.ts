@@ -585,7 +585,8 @@ router.post('/import/execute', async (req, res) => {
     });
     res.json({ ok: true, result });
   } catch (err) {
-    res.status(500).json({ ok: false });
+    const errMsg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ ok: false, error: errMsg });
   }
 });
 

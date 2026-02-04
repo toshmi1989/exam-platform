@@ -17,6 +17,8 @@ import {
   writeSettings,
 } from '../../../lib/uiSettings';
 
+export const dynamic = 'force-dynamic';
+
 export default function SettingsPage() {
   const [language, setLanguage] = useState(defaultSettings.language);
   const [theme, setTheme] = useState(defaultSettings.theme);

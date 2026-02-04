@@ -10,6 +10,8 @@ import PageHeader from '../../../components/PageHeader';
 import { readSettings, Language } from '../../../lib/uiSettings';
 import { apiFetch } from '../../../lib/api/client';
 
+export const dynamic = 'force-dynamic';
+
 type ChatMessage = {
   id: string;
   text: string;
@@ -18,7 +20,7 @@ type ChatMessage = {
   imageData?: string;
 };
 
-const MAX_IMAGE_BYTES = 200 * 1024;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB (screenshots 2–3 MB)
 
 export default function ChatPage() {
   const [language, setLanguage] = useState<Language>(readSettings().language);
@@ -27,6 +29,7 @@ export default function ChatPage() {
   const [isSending, setIsSending] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   useEffect(() => {
     const update = () => setLanguage(readSettings().language);
@@ -49,6 +52,7 @@ export default function ChatPage() {
         refreshed: 'History refreshed.',
         upload: 'Add photo',
         imageTooLarge: 'Image is too large.',
+        photoAttached: 'Photo attached.',
       };
     }
     if (language === 'Узбекский') {
@@ -61,6 +65,7 @@ export default function ChatPage() {
         refreshed: 'Tarix yangilandi.',
         upload: 'Rasm qo‘shish',
         imageTooLarge: 'Rasm juda katta.',
+        photoAttached: 'Rasm qo‘shildi.',
       };
     }
     return {
@@ -72,6 +77,7 @@ export default function ChatPage() {
       refreshed: 'История обновлена.',
       upload: 'Добавить фото',
       imageTooLarge: 'Изображение слишком большое.',
+      photoAttached: 'Фото прикреплено.',
     };
   }, [language]);
 
@@ -126,6 +132,29 @@ export default function ChatPage() {
 
   return (
     <>
+      {lightboxImage ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightboxImage(null)}
+          role="dialog"
+          aria-label="Просмотр фото"
+        >
+          <button
+            type="button"
+            className="absolute right-4 top-4 rounded-full bg-white/90 px-3 py-1 text-lg font-bold text-black"
+            onClick={() => setLightboxImage(null)}
+          >
+            ×
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxImage}
+            alt=""
+            className="max-h-full max-w-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      ) : null}
       <AnimatedPage>
         <main className="flex flex-col gap-6 pb-28 pt-[3.75rem]">
           <BackButton placement="bottom" />
@@ -152,12 +181,19 @@ export default function ChatPage() {
                   >
                     {message.text}
                     {message.imageData ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={message.imageData}
-                        alt="attachment"
-                        className="mt-2 w-full rounded-xl object-cover"
-                      />
+                      <button
+                        type="button"
+                        onClick={() => setLightboxImage(message.imageData ?? null)}
+                        className="mt-2 block w-full cursor-pointer rounded-xl text-left"
+                        title="Открыть в полном размере"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={message.imageData}
+                          alt="attachment"
+                          className="w-full rounded-xl object-cover"
+                        />
+                      </button>
                     ) : null}
                   </div>
                 ))}
@@ -168,25 +204,48 @@ export default function ChatPage() {
               <p className="text-xs text-rose-500">{errorMessage}</p>
             ) : null}
 
-            <div className="flex items-center gap-3">
+            {selectedImage ? (
+              <div className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={selectedImage}
+                  alt=""
+                  className="h-16 w-16 shrink-0 rounded-lg object-cover"
+                />
+                <div className="min-w-0 flex-1 text-xs text-slate-500">
+                  {copy.photoAttached}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedImage(null)}
+                  className="shrink-0 rounded-full bg-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-300"
+                >
+                  ×
+                </button>
+              </div>
+            ) : null}
+
+            <div className="flex flex-col gap-2">
               <input
                 value={text}
                 onChange={(event) => setText(event.target.value)}
                 placeholder={copy.placeholder}
-                className="flex-1 rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#2AABEE]"
+                className="w-full min-w-0 rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#2AABEE]"
               />
-              <label className="cursor-pointer text-xs text-slate-500">
-                {copy.upload}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(event) => handleImageChange(event.target.files?.[0] ?? null)}
-                />
-              </label>
-              <Button size="md" onClick={handleSend} disabled={isSending}>
-                {copy.send}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="cursor-pointer shrink-0 text-xs text-slate-500 underline">
+                  {copy.upload}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(event) => handleImageChange(event.target.files?.[0] ?? null)}
+                  />
+                </label>
+                <Button size="md" onClick={handleSend} disabled={isSending} className="shrink-0">
+                  {copy.send}
+                </Button>
+              </div>
             </div>
           </Card>
         </main>
