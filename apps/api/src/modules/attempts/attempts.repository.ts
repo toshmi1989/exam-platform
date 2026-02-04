@@ -1,22 +1,23 @@
 // apps/api/src/modules/attempts/attempts.repository.ts
 
+import { AttemptMode, AttemptStatus } from '@prisma/client';
 import { prisma } from '../../db/prisma';
 import { ExamAttempt } from '../examAttempt/attempt.model';
 
-function mapStatusToDb(status: ExamAttempt['status']) {
+function mapStatusToDb(status: ExamAttempt['status']): AttemptStatus {
   switch (status) {
     case 'created':
-      return 'CREATED';
+      return AttemptStatus.CREATED;
     case 'inProgress':
-      return 'IN_PROGRESS';
+      return AttemptStatus.IN_PROGRESS;
     case 'submitted':
-      return 'SUBMITTED';
+      return AttemptStatus.SUBMITTED;
     case 'completed':
-      return 'COMPLETED';
+      return AttemptStatus.COMPLETED;
     case 'expired':
-      return 'EXPIRED';
+      return AttemptStatus.EXPIRED;
     default:
-      return 'CREATED';
+      return AttemptStatus.CREATED;
   }
 }
 
@@ -57,7 +58,7 @@ function mapAttemptFromDb(attempt: {
     status: mapStatusFromDb(attempt.status),
     mode: attempt.mode === 'PRACTICE' ? 'practice' : 'exam',
     questionIds: attempt.questionIds ?? [],
-    answers: (attempt.answers as Record<string, unknown>) ?? {},
+    answers: (attempt.answers as Record<string, string>) ?? {},
     createdAt: attempt.createdAt.getTime(),
     startedAt: attempt.startedAt?.getTime(),
     expiresAt: attempt.expiresAt?.getTime(),
@@ -73,13 +74,13 @@ function mapAttemptToDb(attempt: ExamAttempt) {
     userId: attempt.userId,
     examId: attempt.examId,
     status: mapStatusToDb(attempt.status),
-    mode: attempt.mode === 'practice' ? 'PRACTICE' : 'EXAM',
+    mode: attempt.mode === 'practice' ? AttemptMode.PRACTICE : AttemptMode.EXAM,
     questionIds: attempt.questionIds ?? [],
-    answers: attempt.answers ?? {},
+    answers: (attempt.answers ?? {}) as object,
     createdAt: new Date(attempt.createdAt),
-    startedAt: attempt.startedAt ? new Date(attempt.startedAt) : null,
-    expiresAt: attempt.expiresAt ? new Date(attempt.expiresAt) : null,
-    submittedAt: attempt.submittedAt ? new Date(attempt.submittedAt) : null,
+    startedAt: attempt.startedAt != null ? new Date(attempt.startedAt) : null,
+    expiresAt: attempt.expiresAt != null ? new Date(attempt.expiresAt) : null,
+    submittedAt: attempt.submittedAt != null ? new Date(attempt.submittedAt) : null,
     score: attempt.score ?? null,
     maxScore: attempt.maxScore ?? null,
   };

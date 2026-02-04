@@ -5,7 +5,7 @@ export interface ExamAttempt {
   status: 'created' | 'inProgress' | 'submitted' | 'completed' | 'expired';
   mode: 'exam' | 'practice';
   questionIds: string[];
-  answers: Record<string, unknown>;
+  answers: Record<string, string>;
   createdAt: number;
   startedAt?: number;
   expiresAt?: number;

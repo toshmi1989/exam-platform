@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import express from 'express';
+import { Prisma } from '@prisma/client';
 import { requireAdmin } from '../../middlewares/adminGuard.middleware';
 import { prisma } from '../../db/prisma';
 import {
@@ -148,12 +149,12 @@ router.get('/analytics', async (_req, res) => {
 
 router.get('/users', async (req, res) => {
   const search = String(req.query.search ?? '').trim();
-  const where = search
+  const where: Prisma.UserWhereInput | undefined = search
     ? {
         OR: [
           { telegramId: { contains: search } },
-          { firstName: { contains: search, mode: 'insensitive' } },
-          { username: { contains: search, mode: 'insensitive' } },
+          { firstName: { contains: search, mode: Prisma.QueryMode.insensitive } },
+          { username: { contains: search, mode: Prisma.QueryMode.insensitive } },
         ],
       }
     : undefined;
@@ -289,12 +290,12 @@ router.post('/users/:telegramId/one-time/revoke', async (req, res) => {
 
 router.get('/exams', async (req, res) => {
   const search = String(req.query.search ?? '').trim();
-  const where = search
+  const where: Prisma.ExamWhereInput | undefined = search
     ? {
         OR: [
-          { title: { contains: search, mode: 'insensitive' } },
-          { direction: { contains: search, mode: 'insensitive' } },
-          { category: { name: { contains: search, mode: 'insensitive' } } },
+          { title: { contains: search, mode: Prisma.QueryMode.insensitive } },
+          { direction: { contains: search, mode: Prisma.QueryMode.insensitive } },
+          { category: { name: { contains: search, mode: Prisma.QueryMode.insensitive } } },
         ],
       }
     : undefined;

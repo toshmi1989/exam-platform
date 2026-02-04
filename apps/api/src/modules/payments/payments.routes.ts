@@ -183,7 +183,8 @@ router.post('/multicard/callback', async (req: Request, res: Response) => {
  * Returns { status: 'created' | 'paid' } for polling after redirect.
  */
 router.get('/status/:invoiceId', async (req: Request, res: Response) => {
-  const invoiceId = req.params.invoiceId?.trim();
+  const raw = req.params.invoiceId;
+  const invoiceId = typeof raw === 'string' ? raw.trim() : Array.isArray(raw) ? raw[0]?.trim() ?? '' : '';
   if (!invoiceId) {
     return res.status(400).json({ ok: false, reasonCode: 'INVALID_INVOICE' });
   }

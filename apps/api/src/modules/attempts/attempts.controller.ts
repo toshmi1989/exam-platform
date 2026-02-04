@@ -56,7 +56,7 @@ export async function startAttemptHandler(
   req: Request,
   res: Response
 ): Promise<void> {
-  const attemptId = req.params.id;
+  const attemptId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id ?? '';
 
   const result = await startAttempt(attemptId);
   if (!result.success) {
@@ -71,7 +71,7 @@ export async function submitAttemptHandler(
   req: Request,
   res: Response
 ): Promise<void> {
-  const attemptId = req.params.id;
+  const attemptId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id ?? '';
 
   const result = await submitAttempt(attemptId);
   if (!result.success) {
@@ -85,7 +85,7 @@ export async function saveAnswerHandler(
   req: Request,
   res: Response
 ) {
-  const { attemptId } = req.params;
+  const attemptId = Array.isArray(req.params.attemptId) ? req.params.attemptId[0] : req.params.attemptId ?? '';
   const { questionId, answer } = req.body;
 
   const userId = req.user?.id; // позже из Telegram middleware
@@ -113,7 +113,7 @@ export async function getQuestionsHandler(
   req: Request,
   res: Response
 ) {
-  const { attemptId } = req.params;
+  const attemptId = Array.isArray(req.params.attemptId) ? req.params.attemptId[0] : req.params.attemptId ?? '';
   const userId = req.user?.id;
   if (!userId) {
     return res.status(401).json({
@@ -137,7 +137,7 @@ export async function getResultHandler(
   req: Request,
   res: Response
 ) {
-  const { attemptId } = req.params;
+  const attemptId = Array.isArray(req.params.attemptId) ? req.params.attemptId[0] : req.params.attemptId ?? '';
   const userId = req.user?.id;
   if (!userId) {
     return res.status(401).json({
@@ -159,7 +159,7 @@ export async function getReviewHandler(
   req: Request,
   res: Response
 ) {
-  const { attemptId } = req.params;
+  const attemptId = Array.isArray(req.params.attemptId) ? req.params.attemptId[0] : req.params.attemptId ?? '';
   const userId = req.user?.id;
   if (!userId) {
     return res.status(401).json({

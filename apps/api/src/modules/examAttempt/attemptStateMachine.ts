@@ -1,25 +1,14 @@
 // modules/examAttempt/attemptStateMachine.ts
 
-export type AttemptStatus =
-  | 'created'
-  | 'inProgress'
-  | 'submitted'
-  | 'completed'
-  | 'expired';
+import type { ExamAttempt } from './attempt.model';
+
+export type AttemptStatus = ExamAttempt['status'];
 
 export type AttemptEvent =
   | 'START'
   | 'SAVE_ANSWER'
   | 'SUBMIT'
   | 'TIME_EXPIRED';
-
-export interface ExamAttempt {
-  id: string;
-  status: AttemptStatus;
-  startedAt?: number;
-  submittedAt?: number;
-  answers: Record<string, string>;
-}
 
 // ===== State machine =====
 

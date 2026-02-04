@@ -1,6 +1,6 @@
 // modules/attempts/createAttempt.ts
 
-import { evaluateAccess, AccessDecision } from '../policy/accessPolicy';
+import { evaluateAccess, AccessDecision } from '../../accessPolicy';
 
 // ===== Types =====
 
@@ -62,13 +62,13 @@ export function createAttempt(
     };
   }
 
-  // 🔐 attempt creation (temporary in-memory style)
+  // 🔐 attempt creation (temporary in-memory style); evaluateAccess(allow) never returns entitlementType 'none'
   const attempt: ExamAttempt = {
     id: crypto.randomUUID(),
     userId: input.user.id,
     examId: input.exam.id,
     status: 'created',
-    entitlementType: decision.entitlementType,
+    entitlementType: decision.entitlementType as 'subscription' | 'oneTime' | 'daily',
     createdAt: new Date(),
   };
 

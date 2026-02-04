@@ -140,6 +140,9 @@ async function run() {
         type: examType,
         timeLimitSeconds: timeLimit,
         categoryId: category.id,
+        profession: 'DOCTOR',
+        language: 'UZ',
+        direction: examTitle,
       },
     });
 

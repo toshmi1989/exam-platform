@@ -2,12 +2,15 @@
 
 import { prisma } from '../../db/prisma';
 
+export type ConsumableEntitlement = 'subscription' | 'oneTime' | 'daily';
+
 export async function consumeEntitlement(
   userId: string,
   examId: string,
-  entitlementType: 'subscription' | 'oneTime' | 'daily',
+  entitlementType: ConsumableEntitlement | 'none',
   idempotencyKey: string
 ): Promise<void> {
+  if (entitlementType === 'none') return;
   if (entitlementType === 'oneTime') {
     const now = new Date();
     const existing = await prisma.oneTimeAccess.findFirst({

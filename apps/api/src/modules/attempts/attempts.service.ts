@@ -197,7 +197,7 @@ export async function saveAnswer(
 
   attempt.answers = {
     ...attempt.answers,
-    [params.questionId]: params.answer,
+    [params.questionId]: params.answer != null ? String(params.answer) : '',
   };
 
   const saved = await saveAttemptRecord(attempt);
