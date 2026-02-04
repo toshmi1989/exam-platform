@@ -3,7 +3,6 @@
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import attemptsRouter from './modules/attempts/attempts.routes';
-import telegramAuthStub from './middlewares/telegramAuth.middleware';
 import categoriesRouter from './modules/categories/categories.routes';
 import adminRouter from './modules/admin/admin.routes';
 import chatRouter from './modules/chat/chat.routes';
@@ -36,9 +35,6 @@ app.use((req, res, next) => {
   }
   return next();
 });
-if (process.env.NODE_ENV !== 'production') {
-  app.use(telegramAuthStub);
-}
 app.use(attachUserFromHeader);
 app.use('/categories', categoriesRouter);
 app.use('/exams', examsRouter);
@@ -116,31 +112,14 @@ app.post('/payments/one-time', async (req, res, next) => {
 
 app.post('/auth/telegram', (req, res) => {
   const initData = req.body?.initData as string | undefined;
-  const isProduction = process.env.NODE_ENV === 'production';
+  if (!initData) {
+    return res.status(401).json({ ok: false });
+  }
+
   const adminAllowlist = (process.env.ADMIN_TELEGRAM_IDS ?? '')
     .split(',')
     .map((id) => id.trim())
     .filter(Boolean);
-
-  if (!initData || !isProduction) {
-    const devTelegramId = process.env.DEV_TELEGRAM_ID?.trim() || '123456';
-    const isAdmin = adminAllowlist.includes(devTelegramId);
-    if (isBlacklisted(devTelegramId)) {
-      return res.status(503).end();
-    }
-    req.user = {
-      id: `tg-${devTelegramId}`,
-      telegramId: devTelegramId,
-      role: isAdmin ? 'admin' : 'authorized',
-    };
-    return res.status(200).json({
-      ok: true,
-      isTelegramUser: false,
-      telegramId: devTelegramId,
-      role: isAdmin ? 'admin' : 'authorized',
-      isAdmin,
-    });
-  }
 
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (!botToken) {
@@ -161,6 +140,8 @@ app.post('/auth/telegram', (req, res) => {
   }
 
   const userId = `tg-${user.telegramId}`;
+  const isAdmin = adminAllowlist.includes(user.telegramId);
+
   prisma.user
     .upsert({
       where: { telegramId: user.telegramId },
@@ -176,11 +157,7 @@ app.post('/auth/telegram', (req, res) => {
         role: 'USER',
       },
     })
-    .then((dbUser) => {
-      const isAdmin =
-        dbUser.role === 'ADMIN' &&
-        adminAllowlist.includes(user.telegramId);
-
+    .then(() => {
       req.user = {
         id: userId,
         telegramId: user.telegramId,
