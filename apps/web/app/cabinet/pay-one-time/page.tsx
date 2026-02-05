@@ -16,6 +16,8 @@ import { getProfile, createPayment, getPaymentStatus } from '../../../lib/api';
 export const dynamic = 'force-dynamic';
 
 const PAYMENT_LOGOS = '/payments/';
+// Cache-busting version для логотипов (обновить при изменении файлов)
+const LOGO_VERSION = 'v2';
 const paymentMethods = [
   { id: 'anorbank', label: 'Anorbank', logo: 'anorbank.svg' },
   { id: 'click', label: 'Click', logo: 'click.svg' },
@@ -59,18 +61,26 @@ function PayOneTimeClient() {
 
   // Если есть «висящий» инвойс в sessionStorage, при открытии страницы проверяем его статус.
   // - paid    → сразу на страницу возврата / чека
-  // - created → показываем баннер с предложением продолжить ожидание или отменить
+  // - created → показываем баннер и начинаем опрос статуса (для Telegram WebView)
   useEffect(() => {
     if (!examId) return;
+    let cancelled = false;
+    const POLL_INTERVAL_MS = 3000; // 3 секунды
+    const MAX_POLL_ATTEMPTS = 40; // ~2 минуты
+
     try {
       const raw = sessionStorage.getItem('exam_one_time_return');
       if (!raw) return;
       const parsed = JSON.parse(raw) as { invoiceId?: string; examId?: string; mode?: string };
       if (!parsed.invoiceId || parsed.examId !== examId) return;
 
+      let pollCount = 0;
+
       void (async () => {
+        // Первая проверка сразу
         try {
           const status = await getPaymentStatus(parsed.invoiceId!);
+          if (cancelled) return;
           if (status.status === 'paid') {
             router.replace(
               `/cabinet/pay-one-time/return?invoiceId=${encodeURIComponent(
@@ -85,6 +95,27 @@ function PayOneTimeClient() {
               examId: parsed.examId!,
               mode: parsed.mode === 'practice' ? 'practice' : 'exam',
             });
+            // Начинаем опрос для Telegram WebView (когда пользователь вернулся после оплаты)
+            pollCount = 1;
+            while (!cancelled && pollCount < MAX_POLL_ATTEMPTS) {
+              await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+              if (cancelled) return;
+              try {
+                const pollStatus = await getPaymentStatus(parsed.invoiceId!);
+                if (cancelled) return;
+                if (pollStatus.status === 'paid') {
+                  router.replace(
+                    `/cabinet/pay-one-time/return?invoiceId=${encodeURIComponent(
+                      parsed.invoiceId!
+                    )}&examId=${encodeURIComponent(parsed.examId!)}&mode=${parsed.mode === 'practice' ? 'practice' : 'exam'}`
+                  );
+                  return;
+                }
+              } catch {
+                // Игнорируем ошибки и продолжаем опрос
+              }
+              pollCount += 1;
+            }
             return;
           }
           // Любой другой статус — считаем инвойс недействительным и очищаем.
@@ -93,6 +124,10 @@ function PayOneTimeClient() {
           // При ошибке просто продолжаем без баннера.
         }
       })();
+
+      return () => {
+        cancelled = true;
+      };
     } catch {
       // ignore
     }
@@ -262,7 +297,7 @@ function PayOneTimeClient() {
                 <div className="flex h-12 w-full items-center justify-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={`${PAYMENT_LOGOS}${method.logo}`}
+                    src={`${PAYMENT_LOGOS}${method.logo}?v=${LOGO_VERSION}`}
                     alt={method.label}
                     className="h-10 w-auto object-contain"
                     onError={(e) => {

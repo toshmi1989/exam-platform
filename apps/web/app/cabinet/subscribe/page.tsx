@@ -13,6 +13,8 @@ import { APP_BASE_URL } from '../../../lib/api/config';
 export const dynamic = 'force-dynamic';
 
 const PAYMENT_LOGOS = '/payments/';
+// Cache-busting version для логотипов (обновить при изменении файлов)
+const LOGO_VERSION = 'v2';
 const paymentMethods = [
   { id: 'anorbank', label: 'Anorbank', logo: 'anorbank.svg' },
   { id: 'click', label: 'Click', logo: 'click.svg' },
@@ -99,13 +101,21 @@ export default function SubscribePage() {
                   {assetBase ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img
-                      src={`${assetBase}${PAYMENT_LOGOS}${method.logo}`}
+                      src={`${assetBase}${PAYMENT_LOGOS}${method.logo}?v=${LOGO_VERSION}`}
                       alt={method.label}
                       className="h-10 w-auto object-contain"
+                      onError={(e) => {
+                        // Если изображение не загрузилось, скрываем его и показываем текст
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const fallback = target.nextElementSibling as HTMLElement;
+                        if (fallback) fallback.style.display = 'block';
+                      }}
                     />
                   ) : (
-                    <span className="h-10 text-slate-400" aria-hidden>{method.label}</span>
+                    <span className="h-10 text-slate-400 hidden" aria-hidden>{method.label}</span>
                   )}
+                  <span className="h-10 text-slate-400 hidden" aria-hidden>{method.label}</span>
                 </div>
                 <p className="text-sm font-medium text-slate-700">
                   {method.label}
