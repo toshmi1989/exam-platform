@@ -35,19 +35,22 @@ export async function previewQuestionBank(params: {
   const workbook = XLSX.read(buffer, { type: 'buffer' });
   const sheetNames = workbook.SheetNames;
 
-  const directions = sheetNames.map((name, index) => {
+  const directions: { name: string; language: Language; questionCount: number }[] = [];
+  for (let index = 0; index < sheetNames.length; index += 1) {
+    await yieldEventLoop();
+    const name = sheetNames[index];
     const sheet = workbook.Sheets[name];
     const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
       header: 1,
       defval: '',
     });
     const cleanedRows = rows.filter((row) => normalizeText(row[0]));
-    return {
+    directions.push({
       name,
       language: resolveLanguage(index),
       questionCount: cleanedRows.length,
-    };
-  });
+    });
+  }
 
   return {
     profession: params.profession,

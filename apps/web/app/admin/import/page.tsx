@@ -45,7 +45,7 @@ export default function AdminImportPage() {
         selectProfession: 'Select profession',
         noPreview: 'No directions detected.',
         statusIdle: 'Ready to import',
-        statusPreview: 'Checking file…',
+        statusPreview: 'Checking file… (large files may take up to 2 min)',
         statusImport: 'Importing directions… Please wait.',
         statusDone: 'Import completed.',
       };
@@ -64,7 +64,7 @@ export default function AdminImportPage() {
         selectProfession: 'Kasbni tanlang',
         noPreview: 'Yo‘nalishlar topilmadi.',
         statusIdle: 'Importga tayyor',
-        statusPreview: 'Fayl tekshirilmoqda…',
+        statusPreview: 'Fayl tekshirilmoqda… (katta fayllar 2 min gacha vaqt olishi mumkin)',
         statusImport: 'Yo‘nalishlar import qilinmoqda… Kuting.',
         statusDone: 'Import tugadi.',
       };
@@ -82,7 +82,7 @@ export default function AdminImportPage() {
       selectProfession: 'Выберите профессию',
       noPreview: 'Направления не найдены.',
       statusIdle: 'Готов к импорту',
-      statusPreview: 'Проверка файла…',
+      statusPreview: 'Проверка файла… (крупный файл — до 2 мин)',
       statusImport: 'Импорт направлений… Подождите.',
       statusDone: 'Импорт завершён.',
     };
@@ -107,22 +107,26 @@ export default function AdminImportPage() {
     setPreviewLoading(true);
     setErrorMessage(null);
     setStatusBar('preview');
-    const { response, data } = await apiFetch('/admin/import/preview', {
-      method: 'POST',
-      json: { profession, fileBase64 },
-    });
-    if (!response.ok) {
-      setErrorMessage('Import preview failed.');
+    try {
+      const { response, data } = await apiFetch('/admin/import/preview', {
+        method: 'POST',
+        json: { profession, fileBase64 },
+        timeoutMs: 120_000,
+      });
+      if (!response.ok) {
+        setErrorMessage('Import preview failed.');
+        return;
+      }
+      const payload = data as {
+        preview?: { directions?: { name: string; language: string; questionCount: number }[] };
+      } | null;
+      setPreview(payload?.preview?.directions ?? []);
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : 'Preview request failed.');
+    } finally {
       setPreviewLoading(false);
       setStatusBar('idle');
-      return;
     }
-    const payload = data as {
-      preview?: { directions?: { name: string; language: string; questionCount: number }[] };
-    } | null;
-    setPreview(payload?.preview?.directions ?? []);
-    setPreviewLoading(false);
-    setStatusBar('idle');
   }
 
   async function handleImport() {
@@ -130,19 +134,24 @@ export default function AdminImportPage() {
     setImportLoading(true);
     setErrorMessage(null);
     setStatusBar('import');
-    const { response, data } = await apiFetch('/admin/import/execute', {
-      method: 'POST',
-      json: { profession, fileBase64 },
-    });
-    if (!response.ok) {
-      const errDetail = typeof (data as { error?: string })?.error === 'string' ? (data as { error: string }).error : '';
-      setErrorMessage(errDetail ? `Import failed: ${errDetail}` : 'Import failed.');
-      setImportLoading(false);
+    try {
+      const { response, data } = await apiFetch('/admin/import/execute', {
+        method: 'POST',
+        json: { profession, fileBase64 },
+        timeoutMs: 300_000,
+      });
+      if (!response.ok) {
+        const errDetail = typeof (data as { error?: string })?.error === 'string' ? (data as { error: string }).error : '';
+        setErrorMessage(errDetail ? `Import failed: ${errDetail}` : 'Import failed.');
+        return;
+      }
+      setStatusBar('done');
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : 'Import request failed.');
       setStatusBar('idle');
-      return;
+    } finally {
+      setImportLoading(false);
     }
-    setImportLoading(false);
-    setStatusBar('done');
   }
 
   return (
