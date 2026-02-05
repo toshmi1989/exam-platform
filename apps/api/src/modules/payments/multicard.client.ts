@@ -115,6 +115,8 @@ export async function createMulticardPayment(params: CreatePaymentParams): Promi
     ...(params.billingId ? { billing_id: params.billingId } : {}),
   };
 
+  console.log('[Multicard] Sending payload:', JSON.stringify(payload, null, 2));
+
   let resp = await fetch(PAYMENT_URL, {
     method: 'POST',
     headers: {
