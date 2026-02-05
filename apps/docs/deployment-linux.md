@@ -383,16 +383,9 @@ server {
     listen 80;
     server_name ваш-домен.ru www.ваш-домен.ru;
 
-    # Статика из public/payments/ (только файлы: .svg, .png, .jpg и т.п.)
-    # Важно: это правило НЕ должно перехватывать API-роуты типа /payments/multicard/callback
-    location ~ ^/payments/.*\.(svg|png|jpg|jpeg|gif|webp|ico)$ {
-        alias /opt/exam/exam-platform/apps/web/public/payments/;
-        expires 7d;
-        add_header Cache-Control "public, immutable";
-        access_log off;
-    }
-    # Примечание: фронтенд использует cache-busting (?v=...) для логотипов,
-    # поэтому даже при кэшировании браузер подгрузит новые версии файлов.
+    # Статика из public/ обрабатывается Next.js автоматически
+    # Не нужно перехватывать /payments/* в Nginx - Next.js сам раздаст из public/payments/
+    # Это избегает проблем с редиректами и конфликтами правил
 
     location / {
         proxy_pass http://127.0.0.1:3000;

@@ -44,6 +44,7 @@ function PayOneTimeClient() {
     examId: string;
     mode: 'exam' | 'practice';
   } | null>(null);
+  const [hasStoredInvoice, setHasStoredInvoice] = useState(false);
   // Используем относительные пути для статики - Next.js автоматически раздаст из public/
   // Для Telegram Mini App это работает корректно, так как статика раздается с того же домена
 
@@ -58,6 +59,29 @@ function PayOneTimeClient() {
       .then((p) => setOneTimePrice(p.oneTimePrice ?? null))
       .catch(() => setOneTimePrice(null));
   }, []);
+
+  // Проверяем наличие незавершённого инвойса в sessionStorage для отображения кнопки
+  useEffect(() => {
+    if (!examId) {
+      setHasStoredInvoice(false);
+      return;
+    }
+    try {
+      const raw = sessionStorage.getItem('exam_one_time_return');
+      if (!raw) {
+        setHasStoredInvoice(false);
+        return;
+      }
+      const parsed = JSON.parse(raw) as { invoiceId?: string; examId?: string; mode?: string };
+      if (parsed.invoiceId && parsed.examId === examId) {
+        setHasStoredInvoice(true);
+      } else {
+        setHasStoredInvoice(false);
+      }
+    } catch {
+      setHasStoredInvoice(false);
+    }
+  }, [examId]);
 
   // Если есть «висящий» инвойс в sessionStorage, при открытии страницы проверяем его статус.
   // - paid    → сразу на страницу возврата / чека
@@ -95,6 +119,7 @@ function PayOneTimeClient() {
               examId: parsed.examId!,
               mode: parsed.mode === 'practice' ? 'practice' : 'exam',
             });
+            setHasStoredInvoice(true);
             // Начинаем опрос для Telegram WebView (когда пользователь вернулся после оплаты)
             pollCount = 1;
             while (!cancelled && pollCount < MAX_POLL_ATTEMPTS) {
@@ -120,6 +145,7 @@ function PayOneTimeClient() {
           }
           // Любой другой статус — считаем инвойс недействительным и очищаем.
           sessionStorage.removeItem('exam_one_time_return');
+          setHasStoredInvoice(false);
         } catch {
           // При ошибке просто продолжаем без баннера.
         }
@@ -144,6 +170,7 @@ function PayOneTimeClient() {
         back: 'Back to exams',
         noExam: 'Exam not selected. Choose a direction and try again.',
         errorPay: 'Payment failed. Please try again.',
+        checkPayment: 'Check payment',
       };
     }
     if (language === 'Узбекский') {
@@ -156,6 +183,7 @@ function PayOneTimeClient() {
         back: 'Imtihonlarga qaytish',
         noExam: 'Imtihon tanlanmagan. Yo‘nalishni tanlang va qayta urinib ko‘ring.',
         errorPay: 'To‘lov amalga oshmadi. Qayta urinib ko‘ring.',
+        checkPayment: 'To‘lovni tekshirish',
       };
     }
     return {
@@ -167,6 +195,7 @@ function PayOneTimeClient() {
       back: 'Назад к экзаменам',
       noExam: 'Экзамен не выбран. Выберите направление и попробуйте снова.',
       errorPay: 'Оплата не прошла. Попробуйте снова.',
+      checkPayment: 'Проверить платеж',
     };
   }, [language]);
 
@@ -267,6 +296,7 @@ function PayOneTimeClient() {
                       // ignore
                     }
                     setPendingInvoice(null);
+                    setHasStoredInvoice(false);
                   }}
                 >
                   Отменить
@@ -285,6 +315,35 @@ function PayOneTimeClient() {
                 ? `${oneTimePrice.toLocaleString('ru-UZ')} ${copy.sum}`
                 : '—'}
             </p>
+            {hasStoredInvoice && !pendingInvoice && (
+              <Button
+                className="mt-2 w-full"
+                onClick={() => {
+                  try {
+                    const raw = sessionStorage.getItem('exam_one_time_return');
+                    if (!raw) return;
+                    const parsed = JSON.parse(raw) as {
+                      invoiceId?: string;
+                      examId?: string;
+                      mode?: string;
+                    };
+                    if (parsed.invoiceId && parsed.examId === examId) {
+                      router.push(
+                        `/cabinet/pay-one-time/return?invoiceId=${encodeURIComponent(
+                          parsed.invoiceId
+                        )}&examId=${encodeURIComponent(parsed.examId)}&mode=${
+                          parsed.mode === 'practice' ? 'practice' : 'exam'
+                        }`
+                      );
+                    }
+                  } catch {
+                    // ignore
+                  }
+                }}
+              >
+                {copy.checkPayment}
+              </Button>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
