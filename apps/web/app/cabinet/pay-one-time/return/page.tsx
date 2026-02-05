@@ -32,7 +32,7 @@ function PayOneTimeReturnClient() {
   );
   const [restored, setRestored] = useState(false);
 
-  const [status, setStatus] = useState<'polling' | 'starting' | 'done' | 'error'>('polling');
+  const [status, setStatus] = useState<'polling' | 'paid' | 'starting' | 'done' | 'error'>('polling');
   const [message, setMessage] = useState<string>('Ожидание подтверждения оплаты…');
   const pollCount = useRef(0);
 
@@ -97,14 +97,9 @@ function PayOneTimeReturnClient() {
           const result = await getPaymentStatus(invoiceId);
           if (cancelled) return;
           if (result.status === 'paid') {
-            setStatus('starting');
-            setMessage('Оплата получена. Запускаем тест…');
-            const started = await startTestAfterPaid();
-            if (cancelled) return;
-            if (!started) {
-              setStatus('error');
-              setMessage('Не удалось запустить тест. Доступ уже оформлен — перейдите в «Мои экзамены» и начните тест.');
-            }
+            // Оплата подтверждена — показываем экран чека и даём пользователю явно нажать «Начать тест»
+            setStatus('paid');
+            setMessage('Оплата успешно получена.');
             return;
           }
         } catch {
@@ -125,6 +120,31 @@ function PayOneTimeReturnClient() {
     };
   }, [restored, invoiceId, examId, mode, router]);
 
+  async function handleStartClick() {
+    setStatus('starting');
+    setMessage('Запускаем тест…');
+    const ok = await (async () => {
+      try {
+        await new Promise((r) => setTimeout(r, PAID_START_DELAY_MS));
+        const attempt = await createAttempt(examId, mode);
+        await startAttempt(attempt.attemptId);
+        try {
+          sessionStorage.removeItem(STORAGE_KEY);
+        } catch {
+          // ignore
+        }
+        router.replace(`/attempt/${attempt.attemptId}`);
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+    if (!ok) {
+      setStatus('error');
+      setMessage('Не удалось запустить тест. Доступ уже оформлен — перейдите в «Мои экзамены» и начните тест.');
+    }
+  }
+
   return (
     <>
       <AnimatedPage>
@@ -133,6 +153,23 @@ function PayOneTimeReturnClient() {
           <Card className="flex flex-col items-center gap-4 py-8">
             {(status === 'polling' || status === 'starting') && (
               <p className="text-center text-slate-600">{message}</p>
+            )}
+            {status === 'paid' && (
+              <>
+                <p className="text-center text-slate-700">
+                  Оплата успешно подтверждена. Нажмите кнопку ниже, чтобы начать тест.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleStartClick}
+                  className="mt-4 rounded-lg bg-emerald-500 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-600 active:scale-95"
+                >
+                  Начать тест
+                </button>
+                <p className="mt-2 text-center text-xs text-slate-500">
+                  Если кнопка не срабатывает, откройте раздел «Мои экзамены» и запустите тест вручную.
+                </p>
+              </>
             )}
             {status === 'error' && (
               <>
