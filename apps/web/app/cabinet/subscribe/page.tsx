@@ -1,20 +1,21 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import AnimatedPage from '../../../components/AnimatedPage';
 import BackButton from '../../../components/BackButton';
 import BottomNav from '../../../components/BottomNav';
 import Card from '../../../components/Card';
 import PageHeader from '../../../components/PageHeader';
 import { readSettings, Language } from '../../../lib/uiSettings';
-import { createPayment } from '../../../lib/api';
+import { createPayment, getPaymentStatus } from '../../../lib/api';
 import { APP_BASE_URL } from '../../../lib/api/config';
 
 export const dynamic = 'force-dynamic';
 
 const PAYMENT_LOGOS = '/payments/';
-// Cache-busting version для логотипов (обновить при изменении файлов)
 const LOGO_VERSION = 'v2';
+const SUBSCRIBE_STORAGE_KEY = 'exam_subscribe_return';
 const paymentMethods = [
   { id: 'anorbank', label: 'Anorbank', logo: 'anorbank.svg' },
   { id: 'click', label: 'Click', logo: 'click.svg' },
@@ -27,12 +28,15 @@ const paymentMethods = [
 ];
 
 export default function SubscribePage() {
+  const router = useRouter();
   const [language, setLanguage] = useState<Language>(readSettings().language);
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [assetBase, setAssetBase] = useState(() =>
     (APP_BASE_URL || '').replace(/\/$/, '')
   );
+  const [hasStoredInvoice, setHasStoredInvoice] = useState(false);
+  const [hasRedirected, setHasRedirected] = useState(false);
 
   useEffect(() => {
     const base = (APP_BASE_URL || '').replace(/\/$/, '');
@@ -46,12 +50,48 @@ export default function SubscribePage() {
     return () => window.removeEventListener('ui-settings-changed', update);
   }, []);
 
+  const checkStoredInvoice = useCallback((shouldAutoRedirect = false) => {
+    try {
+      const raw = sessionStorage.getItem(SUBSCRIBE_STORAGE_KEY);
+      if (!raw) {
+        setHasStoredInvoice(false);
+        return;
+      }
+      const parsed = JSON.parse(raw) as { invoiceId?: string };
+      if (parsed.invoiceId) {
+        setHasStoredInvoice(true);
+        if (shouldAutoRedirect && !hasRedirected) {
+          setHasRedirected(true);
+          router.replace(`/cabinet/subscribe/return?invoiceId=${encodeURIComponent(parsed.invoiceId)}`);
+        }
+      } else {
+        setHasStoredInvoice(false);
+      }
+    } catch {
+      setHasStoredInvoice(false);
+    }
+  }, [hasRedirected, router]);
+
+  useEffect(() => {
+    checkStoredInvoice(true);
+    const handleFocus = () => checkStoredInvoice(true);
+    const intervalId = setInterval(() => checkStoredInvoice(false), 2000);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('pageshow', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('pageshow', handleFocus);
+      clearInterval(intervalId);
+    };
+  }, [checkStoredInvoice]);
+
   const copy = useMemo(() => {
     if (language === 'Английский') {
       return {
         title: 'Choose payment method',
         subtitle: 'Select a convenient way to purchase your subscription.',
         errorPay: 'Payment failed. Please try again.',
+        checkPayment: 'Check payment',
       };
     }
     if (language === 'Узбекский') {
@@ -59,12 +99,14 @@ export default function SubscribePage() {
         title: "To'lov usulini tanlang",
         subtitle: 'Obunani sotib olish uchun qulay usulni tanlang.',
         errorPay: "To'lov amalga oshmadi. Qayta urinib ko'ring.",
+        checkPayment: "To'lovni tekshirish",
       };
     }
     return {
       title: 'Выберите способ оплаты',
       subtitle: 'Выберите удобный способ оплаты подписки.',
       errorPay: 'Оплата не прошла. Попробуйте снова.',
+      checkPayment: 'Проверить платеж',
     };
   }, [language]);
 
@@ -72,11 +114,23 @@ export default function SubscribePage() {
     setError(null);
     setPaying(true);
     try {
-      const { checkout_url } = await createPayment({
+      const { checkout_url, invoiceId } = await createPayment({
         kind: 'subscription',
         paymentSystem,
       });
-      window.location.href = checkout_url;
+      if (invoiceId) {
+        try {
+          sessionStorage.setItem(SUBSCRIBE_STORAGE_KEY, JSON.stringify({ invoiceId }));
+        } catch {
+          // ignore
+        }
+      }
+      if (checkout_url) {
+        window.location.href = checkout_url;
+      } else {
+        setError(copy.errorPay);
+        setPaying(false);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : copy.errorPay);
       setPaying(false);
@@ -89,6 +143,32 @@ export default function SubscribePage() {
         <main className="flex flex-col gap-6 pb-28 pt-[3.75rem]">
           <BackButton placement="bottom" />
           <PageHeader title={copy.title} subtitle={copy.subtitle} />
+
+          {hasStoredInvoice && (
+            <Card className="flex flex-col gap-3 border-amber-300 bg-amber-50">
+              <p className="text-sm font-medium text-amber-900">
+                У вас есть незавершённая оплата подписки.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    const raw = sessionStorage.getItem(SUBSCRIBE_STORAGE_KEY);
+                    if (!raw) return;
+                    const parsed = JSON.parse(raw) as { invoiceId?: string };
+                    if (parsed.invoiceId) {
+                      router.push(`/cabinet/subscribe/return?invoiceId=${encodeURIComponent(parsed.invoiceId)}`);
+                    }
+                  } catch {
+                    // ignore
+                  }
+                }}
+                className="w-full rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 active:scale-[0.98]"
+              >
+                {copy.checkPayment}
+              </button>
+            </Card>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             {paymentMethods.map((method) => (

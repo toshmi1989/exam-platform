@@ -257,7 +257,7 @@ router.post('/multicard/callback', async (req: Request, res: Response) => {
 
 /**
  * GET /payments/status/:invoiceId
- * Returns { status: 'created' | 'paid' } for polling after redirect.
+ * Returns { status, kind, examId } and when paid: receiptUrl, amountTiyin, subscriptionEndsAt (for subscription).
  */
 router.get('/status/:invoiceId', async (req: Request, res: Response) => {
   const raw = req.params.invoiceId;
@@ -268,18 +268,43 @@ router.get('/status/:invoiceId', async (req: Request, res: Response) => {
 
   const inv = await prisma.paymentInvoice.findUnique({
     where: { invoiceId },
-    select: { status: true, kind: true, examId: true },
+    select: { status: true, kind: true, examId: true, amountTiyin: true, mcUuid: true, userId: true },
   });
   if (!inv) {
     return res.status(404).json({ ok: false, reasonCode: 'NOT_FOUND' });
   }
 
-  return res.json({
+  const payload: {
+    ok: boolean;
+    status: string;
+    kind?: string;
+    examId?: string | null;
+    receiptUrl?: string;
+    amountTiyin?: number;
+    subscriptionEndsAt?: string | null;
+  } = {
     ok: true,
     status: inv.status,
     kind: inv.kind,
     examId: inv.examId,
-  });
+  };
+
+  if (inv.status === 'paid') {
+    if (inv.mcUuid) {
+      payload.receiptUrl = `https://checkout.multicard.uz/check/${inv.mcUuid}`;
+    }
+    payload.amountTiyin = inv.amountTiyin;
+    if (inv.kind === 'subscription') {
+      const sub = await prisma.userSubscription.findFirst({
+        where: { userId: inv.userId },
+        orderBy: { endsAt: 'desc' },
+        select: { endsAt: true },
+      });
+      payload.subscriptionEndsAt = sub?.endsAt?.toISOString() ?? null;
+    }
+  }
+
+  return res.json(payload);
 });
 
 export default router;

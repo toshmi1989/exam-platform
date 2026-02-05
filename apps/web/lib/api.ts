@@ -239,16 +239,28 @@ export async function createPayment(params: CreatePaymentParams): Promise<Create
   return { checkout_url, invoiceId };
 }
 
-export async function getPaymentStatus(invoiceId: string): Promise<{ status: string; kind?: string; examId?: string }> {
+export interface PaymentStatusResult {
+  status: string;
+  kind?: string;
+  examId?: string | null;
+  receiptUrl?: string;
+  amountTiyin?: number;
+  subscriptionEndsAt?: string | null;
+}
+
+export async function getPaymentStatus(invoiceId: string): Promise<PaymentStatusResult> {
   const { response, data } = await apiFetch(`/payments/status/${encodeURIComponent(invoiceId)}`);
   if (!response.ok) {
     throw data as ApiError;
   }
-  const payload = data as { status?: string; kind?: string; examId?: string } | null;
+  const payload = data as PaymentStatusResult | null;
   return {
     status: payload?.status ?? 'created',
     kind: payload?.kind,
     examId: payload?.examId,
+    receiptUrl: payload?.receiptUrl,
+    amountTiyin: payload?.amountTiyin,
+    subscriptionEndsAt: payload?.subscriptionEndsAt,
   };
 }
 

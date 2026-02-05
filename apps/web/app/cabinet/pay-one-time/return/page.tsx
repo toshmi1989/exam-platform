@@ -34,6 +34,7 @@ function PayOneTimeReturnClient() {
 
   const [status, setStatus] = useState<'polling' | 'paid' | 'starting' | 'done' | 'error'>('polling');
   const [message, setMessage] = useState<string>('Ожидание подтверждения оплаты…');
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const pollCount = useRef(0);
 
   // Восстановить invoiceId/examId/mode из sessionStorage, если в URL нет (редирект шлюза мог обрезать query)
@@ -97,7 +98,7 @@ function PayOneTimeReturnClient() {
           const result = await getPaymentStatus(invoiceId);
           if (cancelled) return;
           if (result.status === 'paid') {
-            // Оплата подтверждена — показываем экран чека и даём пользователю явно нажать «Начать тест»
+            setReceiptUrl(result.receiptUrl ?? null);
             setStatus('paid');
             setMessage('Оплата успешно получена.');
             return;
@@ -152,6 +153,7 @@ function PayOneTimeReturnClient() {
       setMessage('Повторная проверка оплаты…');
       const result = await getPaymentStatus(invoiceId);
       if (result.status === 'paid') {
+        setReceiptUrl(result.receiptUrl ?? null);
         setStatus('paid');
         setMessage('Оплата успешно подтверждена.');
       } else {
@@ -191,13 +193,25 @@ function PayOneTimeReturnClient() {
                 <p className="text-center text-slate-700">
                   Оплата успешно подтверждена. Нажмите кнопку ниже, чтобы начать тест.
                 </p>
-                <button
-                  type="button"
-                  onClick={handleStartClick}
-                  className="mt-4 rounded-lg bg-emerald-500 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-600 active:scale-95"
-                >
-                  Начать тест
-                </button>
+                <div className="mt-4 flex flex-col gap-2">
+                  {receiptUrl && (
+                    <a
+                      href={receiptUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+                    >
+                      Чек оплаты
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleStartClick}
+                    className="rounded-lg bg-emerald-500 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-600 active:scale-95"
+                  >
+                    Начать тест
+                  </button>
+                </div>
                 <p className="mt-2 text-center text-xs text-slate-500">
                   Если кнопка не срабатывает, откройте раздел «Мои экзамены» и запустите тест вручную.
                 </p>
