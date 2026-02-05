@@ -65,11 +65,15 @@ export default function ExamStartPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function initAttempt() {
       try {
         const created = await createAttempt(params.examId, 'exam');
+        if (cancelled) return;
         setAttempt(created);
       } catch (err) {
+        if (cancelled) return;
         const apiError = err as ApiError;
         // Нет доступа (нет подписки / разового доступа / бесплатной попытки) — отправляем на страницу разовой оплаты.
         if (apiError?.reasonCode === 'ACCESS_DENIED') {
@@ -78,12 +82,18 @@ export default function ExamStartPage() {
         }
         setError(apiError);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
     initAttempt();
-  }, [params.examId]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [params.examId, router]);
 
   async function handleStart() {
     if (!attempt) return;
