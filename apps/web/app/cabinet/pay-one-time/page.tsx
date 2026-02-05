@@ -37,9 +37,11 @@ function PayOneTimeClient() {
   const [oneTimePrice, setOneTimePrice] = useState<number | null>(null);
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [assetBase] = useState(() =>
-    typeof window !== 'undefined' ? window.location.origin : ''
-  );
+  const [assetBase, setAssetBase] = useState('');
+
+  useEffect(() => {
+    setAssetBase(typeof window !== 'undefined' ? window.location.origin : '');
+  }, []);
 
   useEffect(() => {
     const update = () => setLanguage(readSettings().language);
@@ -166,12 +168,16 @@ function PayOneTimeClient() {
                 onClick={() => !paying && handlePay(method.id)}
               >
                 <div className="flex h-12 w-full items-center justify-center">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={assetBase ? `${assetBase}${PAYMENT_LOGOS}${method.logo}` : `${PAYMENT_LOGOS}${method.logo}`}
-                    alt={method.label}
-                    className="h-10 w-auto object-contain"
-                  />
+                  {assetBase ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={`${assetBase}${PAYMENT_LOGOS}${method.logo}`}
+                      alt={method.label}
+                      className="h-10 w-auto object-contain"
+                    />
+                  ) : (
+                    <span className="h-10 text-slate-400" aria-hidden>{method.label}</span>
+                  )}
                 </div>
                 <p className="text-sm font-medium text-slate-700">{method.label}</p>
               </Card>

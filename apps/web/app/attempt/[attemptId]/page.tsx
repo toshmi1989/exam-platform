@@ -153,6 +153,7 @@ export default function AttemptPage() {
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cardRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const questionsScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     async function loadQuestions() {
@@ -174,9 +175,20 @@ export default function AttemptPage() {
 
   useEffect(() => {
     const current = questions[currentIndex];
-    if (!current) return;
-    const button = cardRefs.current[current.id];
-    button?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    const button = current ? cardRefs.current[current.id] : null;
+    const container = questionsScrollRef.current;
+    if (!button || !container) return;
+    const containerWidth = container.offsetWidth;
+    const scrollWidth = container.scrollWidth;
+    // Горизонтальный скролл: центрируем активную карточку (мобильный вид)
+    if (scrollWidth > containerWidth) {
+      const btnLeft = button.offsetLeft;
+      const btnWidth = button.offsetWidth;
+      const targetScroll = btnLeft - containerWidth / 2 + btnWidth / 2;
+      container.scrollTo({ left: Math.max(0, targetScroll), behavior: 'smooth' });
+    } else {
+      button.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    }
   }, [currentIndex, questions]);
 
   function handleAnswerChange(questionId: string, value: string, isChoice?: boolean) {
@@ -252,9 +264,12 @@ export default function AttemptPage() {
             <Timer label={copy.timer} remainingSeconds={remainingSeconds} />
           </div>
 
-          {/* На мобильном — одна строка с горизонтальным скроллом и центрированием активного вопроса; на md+ — сетка */}
-          <div className="-mx-4 overflow-x-auto overflow-y-hidden px-4 md:mx-0 md:overflow-visible md:px-0">
-            <div className="flex gap-2 pb-1 flex-nowrap md:flex-wrap">
+          {/* На мобильном — одна строка с горизонтальным скроллом, активный по центру; с md — сетка */}
+          <div
+            ref={questionsScrollRef}
+            className="-mx-4 max-w-[100vw] overflow-x-auto overflow-y-hidden px-4 scroll-smooth md:mx-0 md:max-w-none md:overflow-visible md:px-0"
+          >
+            <div className="flex min-w-max gap-2 pb-1 flex-nowrap md:min-w-0 md:flex-wrap">
               {questions.map((question, index) => {
                 const answered = Boolean(answers[question.id]);
                 const active = index === currentIndex;
