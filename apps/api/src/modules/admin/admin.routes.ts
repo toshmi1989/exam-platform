@@ -561,6 +561,7 @@ router.post('/settings/access', async (req, res) => {
 });
 
 router.post('/import/preview', async (req, res) => {
+  req.setTimeout(120000); // 2 min for large Excel preview
   const profession = String(req.body?.profession ?? '').toUpperCase();
   const fileBase64 = String(req.body?.fileBase64 ?? '');
   if (!profession || !fileBase64) {
@@ -574,6 +575,7 @@ router.post('/import/preview', async (req, res) => {
 });
 
 router.post('/import/execute', async (req, res) => {
+  req.setTimeout(300000); // 5 min for large Excel (many directions)
   const profession = String(req.body?.profession ?? '').toUpperCase();
   const fileBase64 = String(req.body?.fileBase64 ?? '');
   if (!profession || !fileBase64) {

@@ -110,48 +110,53 @@ export async function importQuestionBank(params: {
       },
     });
 
-    await prisma.$transaction(async (tx) => {
-      await tx.question.deleteMany({ where: { examId: exam.id } });
+    await prisma.question.deleteMany({ where: { examId: exam.id } });
 
-      for (let rowIndex = 0; rowIndex < cleanedRows.length; rowIndex += 1) {
-        const row = cleanedRows[rowIndex];
-        const questionText = normalizeText(row[0]);
-        const rawOptions = row.slice(1, row.length - 1);
-        const correctText = normalizeText(row[row.length - 1]);
-        const options = rawOptions
-          .map((cell) => normalizeText(cell))
-          .filter(Boolean);
+    const BATCH_SIZE = 100;
+    for (let start = 0; start < cleanedRows.length; start += BATCH_SIZE) {
+      const batch = cleanedRows.slice(start, start + BATCH_SIZE);
+      await prisma.$transaction(async (tx) => {
+        for (let i = 0; i < batch.length; i += 1) {
+          const row = batch[i];
+          const rowIndex = start + i;
+          const questionText = normalizeText(row[0]);
+          const rawOptions = row.slice(1, row.length - 1);
+          const correctText = normalizeText(row[row.length - 1]);
+          const options = rawOptions
+            .map((cell) => normalizeText(cell))
+            .filter(Boolean);
 
-        if (!questionText || options.length === 0 || !correctText) {
-          continue;
-        }
+          if (!questionText || options.length === 0 || !correctText) {
+            continue;
+          }
 
-        const correctIndex = options.findIndex(
-          (option) => option === correctText
-        );
-        if (correctIndex === -1) {
-          continue;
-        }
+          const correctIndex = options.findIndex(
+            (option) => option === correctText
+          );
+          if (correctIndex === -1) {
+            continue;
+          }
 
-        await tx.question.create({
-          data: {
-            examId: exam.id,
-            type: 'TEST',
-            prompt: questionText,
-            order: rowIndex + 1,
-            options: {
-              create: options.map((label, index) => ({
-                label,
-                isCorrect: index === correctIndex,
-                order: index + 1,
-              })),
+          await tx.question.create({
+            data: {
+              examId: exam.id,
+              type: 'TEST',
+              prompt: questionText,
+              order: rowIndex + 1,
+              options: {
+                create: options.map((label, index) => ({
+                  label,
+                  isCorrect: index === correctIndex,
+                  order: index + 1,
+                })),
+              },
             },
-          },
-        });
+          });
 
-        importedQuestions += 1;
-      }
-    });
+          importedQuestions += 1;
+        }
+      });
+    }
   }
 
   return {

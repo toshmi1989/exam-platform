@@ -423,6 +423,10 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         client_max_body_size 10M;
+        # Для импорта базы вопросов (Excel 4+ МБ) при 413 увеличьте до 25M
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
     }
 }
 ```

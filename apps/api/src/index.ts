@@ -26,7 +26,7 @@ import { AGREEMENT_VERSION } from './constants/agreement';
 const app = express();
 
 app.use(compression());
-app.use(express.json({ limit: '6mb' })); // chat images (base64) up to ~4 MB
+app.use(express.json({ limit: '20mb' })); // chat images + admin Excel import (base64 ~+33%)
 app.use((req, res, next) => {
   res.setHeader(
     'Access-Control-Allow-Origin',
