@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { readTelegramUser } from '../lib/telegramUser';
-import { getProfile, type UserProfile } from '../lib/api';
+import { getProfile } from '../lib/api';
+import type { UserProfile } from '../lib/types';
 import AgreementModal from './AgreementModal';
 
 interface AgreementGuardProps {
