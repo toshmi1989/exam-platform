@@ -198,7 +198,7 @@ export default function ChatPage() {
       ) : null}
       <AnimatedPage>
         <main className="flex flex-col gap-6 pb-28 pt-[3.75rem]">
-          <BackButton placement="bottom" />
+          {!isInputFocused && <BackButton placement="bottom" />}
           <PageHeader title={copy.title} subtitle={copy.subtitle} />
 
           <Card className="flex min-h-[320px] flex-col gap-4">
@@ -266,47 +266,54 @@ export default function ChatPage() {
               </div>
             ) : null}
 
-            {/* Поле ввода внизу карточки */}
+            {/* Поле ввода + кнопки справа, как в Telegram */}
             <div className="mt-auto pt-2">
-              <input
-                ref={inputRef}
-                type="text"
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-                onFocus={() => setIsInputFocused(true)}
-                onBlur={(e) => {
-                  // Не закрываем клавиатуру если клик был на нав панель
-                  const relatedTarget = e.relatedTarget as HTMLElement | null;
-                  if (relatedTarget?.closest('nav')) {
-                    return;
-                  }
-                  setIsInputFocused(false);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey && (text.trim() || selectedImage)) {
-                    e.preventDefault();
-                    void handleSend();
-                  }
-                }}
-                placeholder={copy.placeholder}
-                className="w-full min-w-0 rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#2AABEE]"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={text}
+                  onChange={(event) => setText(event.target.value)}
+                  onFocus={() => setIsInputFocused(true)}
+                  onBlur={() => setIsInputFocused(false)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey && (text.trim() || selectedImage)) {
+                      e.preventDefault();
+                      void handleSend();
+                    }
+                  }}
+                  placeholder={copy.placeholder}
+                  className="w-full min-w-0 rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#2AABEE]"
+                />
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={handleAddPhoto}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm active:scale-95 touch-manipulation"
+                  aria-label={copy.upload}
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>
+                </button>
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.preventDefault()}
+                  onClick={() => void handleSend()}
+                  disabled={!(text.trim() || selectedImage) || isSending}
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full shadow-sm active:scale-95 touch-manipulation ${
+                    (text.trim() || selectedImage) && !isSending
+                      ? 'bg-[#2AABEE] text-white'
+                      : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  }`}
+                  aria-label={copy.send}
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
+                </button>
+              </div>
             </div>
           </Card>
         </main>
       </AnimatedPage>
-      <BottomNav
-        chatMode={isInputFocused}
-        chatActions={useMemo(
-          () => ({
-            onSend: handleSend,
-            onAddPhoto: handleAddPhoto,
-            canSend: Boolean(text.trim() || selectedImage) && !isSending,
-            hasImage: Boolean(selectedImage),
-          }),
-          [handleSend, handleAddPhoto, text, selectedImage, isSending]
-        )}
-      />
+      {!isInputFocused && <BottomNav />}
     </>
   );
 }

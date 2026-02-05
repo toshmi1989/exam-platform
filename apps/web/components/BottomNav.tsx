@@ -6,22 +6,9 @@ import { usePathname } from 'next/navigation';
 import { readSettings, Language } from '../lib/uiSettings';
 import { readTelegramUser, TelegramUserSnapshot } from '../lib/telegramUser';
 
-
 const activeColor = '#2AABEE';
 
-interface ChatActions {
-  onSend: () => void;
-  onAddPhoto: () => void;
-  canSend: boolean;
-  hasImage: boolean;
-}
-
-interface BottomNavProps {
-  chatMode?: boolean;
-  chatActions?: ChatActions;
-}
-
-export default function BottomNav({ chatMode = false, chatActions }: BottomNavProps) {
+export default function BottomNav() {
   const pathname = usePathname();
   const [language, setLanguage] = useState<Language>(readSettings().language);
   const [user, setUser] = useState<TelegramUserSnapshot | null>(
@@ -80,58 +67,12 @@ export default function BottomNav({ chatMode = false, chatActions }: BottomNavPr
     return Math.max(0, bestIndex);
   })();
 
-  const chatCopy = useMemo(() => {
-    if (language === 'Английский') {
-      return { addPhoto: 'Add photo', send: 'Send' };
-    }
-    if (language === 'Узбекский') {
-      return { addPhoto: 'Rasm qo‘shish', send: 'Yuborish' };
-    }
-    return { addPhoto: 'Добавить фото', send: 'Отправить' };
-  }, [language]);
-
   return (
     <nav
-      className={`fixed left-0 right-0 z-50 ${
-        chatMode ? 'bottom-0' : 'bottom-3'
-      } transition-all duration-300 ease-out`}
-      style={
-        chatMode
-          ? {
-              bottom: 'calc(env(keyboard-inset-height, 0px) + env(safe-area-inset-bottom, 0px) + 0.75rem)',
-            }
-          : undefined
-      }
+      className="fixed left-0 right-0 bottom-3 z-50 transition-all duration-300 ease-out"
     >
       <div className="mx-auto w-full max-w-3xl px-4">
         <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.25rem)] pt-2 shadow-[0_18px_35px_rgba(15,23,42,0.18)] ring-1 ring-[#2AABEE]/20 backdrop-blur-md">
-          {chatMode && chatActions ? (
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => chatActions.onAddPhoto()}
-                className="flex h-10 items-center justify-center rounded-xl text-[13px] font-medium text-slate-600 transition-all duration-150 hover:bg-slate-100 active:scale-[0.98]"
-              >
-                {chatCopy.addPhoto}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (chatActions.canSend) {
-                    chatActions.onSend();
-                  }
-                }}
-                disabled={!chatActions.canSend}
-                className={`flex h-10 items-center justify-center rounded-xl text-[13px] font-medium transition-all duration-150 active:scale-[0.98] ${
-                  chatActions.canSend
-                    ? 'bg-[#2AABEE] text-white hover:bg-[#2299DD]'
-                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                }`}
-              >
-                {chatCopy.send}
-              </button>
-            </div>
-          ) : (
             <>
               <div
                 className="pointer-events-none absolute left-2 top-2 h-10 transition-transform duration-300 ease-out"
