@@ -22,6 +22,7 @@ export default function AdminImportPage() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [statusBar, setStatusBar] = useState<'idle' | 'preview' | 'import' | 'done'>('idle');
 
   useEffect(() => {
     const update = () => setLanguage(readSettings().language);
@@ -43,6 +44,10 @@ export default function AdminImportPage() {
         import: 'Import',
         selectProfession: 'Select profession',
         noPreview: 'No directions detected.',
+        statusIdle: 'Ready to import',
+        statusPreview: 'Checking file…',
+        statusImport: 'Importing directions… Please wait.',
+        statusDone: 'Import completed.',
       };
     }
     if (language === 'Узбекский') {
@@ -58,6 +63,10 @@ export default function AdminImportPage() {
         import: 'Import qilish',
         selectProfession: 'Kasbni tanlang',
         noPreview: 'Yo‘nalishlar topilmadi.',
+        statusIdle: 'Importga tayyor',
+        statusPreview: 'Fayl tekshirilmoqda…',
+        statusImport: 'Yo‘nalishlar import qilinmoqda… Kuting.',
+        statusDone: 'Import tugadi.',
       };
     }
     return {
@@ -72,6 +81,10 @@ export default function AdminImportPage() {
       import: 'Импортировать',
       selectProfession: 'Выберите профессию',
       noPreview: 'Направления не найдены.',
+      statusIdle: 'Готов к импорту',
+      statusPreview: 'Проверка файла…',
+      statusImport: 'Импорт направлений… Подождите.',
+      statusDone: 'Импорт завершён.',
     };
   }, [language]);
 
@@ -93,6 +106,7 @@ export default function AdminImportPage() {
     if (!fileBase64 || !profession) return;
     setPreviewLoading(true);
     setErrorMessage(null);
+    setStatusBar('preview');
     const { response, data } = await apiFetch('/admin/import/preview', {
       method: 'POST',
       json: { profession, fileBase64 },
@@ -100,6 +114,7 @@ export default function AdminImportPage() {
     if (!response.ok) {
       setErrorMessage('Import preview failed.');
       setPreviewLoading(false);
+      setStatusBar('idle');
       return;
     }
     const payload = data as {
@@ -107,12 +122,14 @@ export default function AdminImportPage() {
     } | null;
     setPreview(payload?.preview?.directions ?? []);
     setPreviewLoading(false);
+    setStatusBar('idle');
   }
 
   async function handleImport() {
     if (!fileBase64 || !profession) return;
     setImportLoading(true);
     setErrorMessage(null);
+    setStatusBar('import');
     const { response, data } = await apiFetch('/admin/import/execute', {
       method: 'POST',
       json: { profession, fileBase64 },
@@ -121,9 +138,11 @@ export default function AdminImportPage() {
       const errDetail = typeof (data as { error?: string })?.error === 'string' ? (data as { error: string }).error : '';
       setErrorMessage(errDetail ? `Import failed: ${errDetail}` : 'Import failed.');
       setImportLoading(false);
+      setStatusBar('idle');
       return;
     }
     setImportLoading(false);
+    setStatusBar('done');
   }
 
   return (
@@ -184,6 +203,19 @@ export default function AdminImportPage() {
               {errorMessage ? (
                 <p className="text-xs text-rose-500">{errorMessage}</p>
               ) : null}
+              <div
+                className="mt-4 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600"
+                role="status"
+                aria-live="polite"
+              >
+                {(statusBar === 'preview' || statusBar === 'import') && (
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" aria-hidden />
+                )}
+                {statusBar === 'idle' && copy.statusIdle}
+                {statusBar === 'preview' && copy.statusPreview}
+                {statusBar === 'import' && copy.statusImport}
+                {statusBar === 'done' && copy.statusDone}
+              </div>
             </Card>
 
             <Card title={copy.preview}>
