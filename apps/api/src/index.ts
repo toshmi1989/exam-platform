@@ -11,6 +11,7 @@ import broadcastsRouter from './modules/broadcasts/broadcasts.routes';
 import examsRouter from './modules/exams/exams.routes';
 import paymentsRouter from './modules/payments/payments.routes';
 import { attachUserFromHeader } from './middlewares/attachUser.middleware';
+import { requireAcceptedTerms } from './middlewares/requireAcceptedTerms.middleware';
 import {
   parseTelegramUser,
   parseTelegramUserFromWidget,
@@ -20,6 +21,7 @@ import {
 import { prisma } from './db/prisma';
 import { isBlacklisted } from './modules/admin/admin.store';
 import { getAccessSettings } from './modules/settings/accessSettings.service';
+import { AGREEMENT_VERSION } from './constants/agreement';
 
 const app = express();
 
@@ -40,6 +42,9 @@ app.use((req, res, next) => {
   return next();
 });
 app.use(attachUserFromHeader);
+app.use((req, res, next) => {
+  requireAcceptedTerms(req, res, next).catch(next);
+});
 app.use('/categories', categoriesRouter);
 app.use('/exams', examsRouter);
 
@@ -60,7 +65,11 @@ app.get('/me', async (req, res, next) => {
   }
   try {
     const now = new Date();
-    const [subscription, settings] = await Promise.all([
+    const [user, subscription, settings] = await Promise.all([
+      prisma.user.findUnique({
+        where: { telegramId },
+        select: { acceptedTerms: true, acceptedAt: true, agreementVersion: true },
+      }),
       prisma.userSubscription.findFirst({
         where: {
           userId,
@@ -74,11 +83,36 @@ app.get('/me', async (req, res, next) => {
     ]);
     return res.json({
       telegramId,
+      acceptedTerms: user?.acceptedTerms ?? false,
+      acceptedAt: user?.acceptedAt?.toISOString() ?? null,
+      agreementVersion: user?.agreementVersion ?? null,
       subscriptionActive: Boolean(subscription),
       subscriptionEndsAt: subscription?.endsAt?.toISOString(),
       oneTimePrice: settings.oneTimePrice,
       subscriptionPrice: settings.subscriptionPrice,
     });
+  } catch (e) {
+    next(e);
+  }
+});
+
+app.post('/accept-agreement', async (req, res, next) => {
+  const userId = req.user?.id;
+  const telegramId = req.user?.telegramId;
+  if (!userId || !telegramId) {
+    return res.status(401).json({ ok: false, reasonCode: 'AUTH_REQUIRED' });
+  }
+  try {
+    const now = new Date();
+    await prisma.user.update({
+      where: { telegramId },
+      data: {
+        acceptedTerms: true,
+        acceptedAt: now,
+        agreementVersion: AGREEMENT_VERSION,
+      },
+    });
+    return res.status(200).json({ ok: true });
   } catch (e) {
     next(e);
   }

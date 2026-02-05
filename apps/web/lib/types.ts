@@ -36,6 +36,9 @@ export interface ExamReview {
 
 export interface UserProfile {
   telegramId: string;
+  acceptedTerms?: boolean;
+  acceptedAt?: string | null;
+  agreementVersion?: string | null;
   subscriptionActive?: boolean;
   subscriptionEndsAt?: string;
   oneTimePrice?: number;

@@ -125,6 +125,16 @@ export async function getProfile(): Promise<UserProfile> {
   return data as UserProfile;
 }
 
+export async function acceptAgreement(): Promise<void> {
+  const { response, data } = await apiFetch('/accept-agreement', {
+    method: 'POST',
+    json: {},
+  });
+  if (!response.ok) {
+    throw data as ApiError;
+  }
+}
+
 export async function getAttemptHistory(): Promise<AttemptHistoryItem[]> {
   // TODO: replace with actual attempt history endpoint.
   const { response, data } = await apiFetch('/me/attempts');
