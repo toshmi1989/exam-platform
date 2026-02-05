@@ -145,6 +145,38 @@ function PayOneTimeReturnClient() {
     }
   }
 
+  async function handleRetryCheck() {
+    if (!invoiceId) return;
+    try {
+      setStatus('polling');
+      setMessage('Повторная проверка оплаты…');
+      const result = await getPaymentStatus(invoiceId);
+      if (result.status === 'paid') {
+        setStatus('paid');
+        setMessage('Оплата успешно подтверждена.');
+      } else {
+        setStatus('error');
+        setMessage('Оплата всё ещё не подтверждена. Если вы оплачивали, подождите немного и попробуйте ещё раз.');
+      }
+    } catch {
+      setStatus('error');
+      setMessage('Не удалось проверить оплату. Проверьте соединение и попробуйте ещё раз.');
+    }
+  }
+
+  function handleRestartPayment() {
+    try {
+      sessionStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    if (examId) {
+      router.replace(`/cabinet/pay-one-time?examId=${encodeURIComponent(examId)}&mode=${mode}`);
+    } else {
+      router.replace('/cabinet/my-exams');
+    }
+  }
+
   return (
     <>
       <AnimatedPage>
@@ -174,12 +206,28 @@ function PayOneTimeReturnClient() {
             {status === 'error' && (
               <>
                 <p className="text-center text-slate-700">{message}</p>
-                <a
-                  href="/cabinet/my-exams"
-                  className="mt-2 inline-block rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-800"
-                >
-                  К экзаменам
-                </a>
+                <div className="mt-4 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={handleRetryCheck}
+                    className="w-full rounded-lg bg-slate-800 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-900 active:scale-95"
+                  >
+                    Проверить ещё раз
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRestartPayment}
+                    className="w-full rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-300 active:scale-95"
+                  >
+                    Выбрать способ оплаты заново
+                  </button>
+                  <a
+                    href="/cabinet/my-exams"
+                    className="mt-1 block text-center text-xs text-slate-500 underline-offset-2 hover:underline"
+                  >
+                    Перейти в «Мои экзамены»
+                  </a>
+                </div>
               </>
             )}
           </Card>

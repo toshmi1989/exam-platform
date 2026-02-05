@@ -38,6 +38,11 @@ function PayOneTimeClient() {
   const [oneTimePrice, setOneTimePrice] = useState<number | null>(null);
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingInvoice, setPendingInvoice] = useState<{
+    invoiceId: string;
+    examId: string;
+    mode: 'exam' | 'practice';
+  } | null>(null);
   const [assetBase, setAssetBase] = useState(() =>
     (APP_BASE_URL || '').replace(/\/$/, '')
   );
@@ -59,21 +64,42 @@ function PayOneTimeClient() {
       .catch(() => setOneTimePrice(null));
   }, []);
 
-  // Если есть «висящий» инвойс в sessionStorage, при открытии страницы сразу уводим
-  // на экран ожидания оплаты, чтобы пользователь не застревал на повторном выборе оплаты.
+  // Если есть «висящий» инвойс в sessionStorage, при открытии страницы проверяем его статус.
+  // - paid    → сразу на страницу возврата / чека
+  // - created → показываем баннер с предложением продолжить ожидание или отменить
   useEffect(() => {
     if (!examId) return;
     try {
       const raw = sessionStorage.getItem('exam_one_time_return');
       if (!raw) return;
       const parsed = JSON.parse(raw) as { invoiceId?: string; examId?: string; mode?: string };
-      if (parsed.invoiceId && parsed.examId === examId) {
-        router.replace(
-          `/cabinet/pay-one-time/return?invoiceId=${encodeURIComponent(
-            parsed.invoiceId
-          )}&examId=${encodeURIComponent(parsed.examId)}&mode=${parsed.mode === 'practice' ? 'practice' : 'exam'}`
-        );
-      }
+      if (!parsed.invoiceId || parsed.examId !== examId) return;
+
+      void (async () => {
+        try {
+          const status = await getPaymentStatus(parsed.invoiceId!);
+          if (status.status === 'paid') {
+            router.replace(
+              `/cabinet/pay-one-time/return?invoiceId=${encodeURIComponent(
+                parsed.invoiceId!
+              )}&examId=${encodeURIComponent(parsed.examId!)}&mode=${parsed.mode === 'practice' ? 'practice' : 'exam'}`
+            );
+            return;
+          }
+          if (status.status === 'created') {
+            setPendingInvoice({
+              invoiceId: parsed.invoiceId!,
+              examId: parsed.examId!,
+              mode: parsed.mode === 'practice' ? 'practice' : 'exam',
+            });
+            return;
+          }
+          // Любой другой статус — считаем инвойс недействительным и очищаем.
+          sessionStorage.removeItem('exam_one_time_return');
+        } catch {
+          // При ошибке просто продолжаем без баннера.
+        }
+      })();
     } catch {
       // ignore
     }
@@ -171,6 +197,49 @@ function PayOneTimeClient() {
         <main className="flex flex-col gap-6 pb-28 pt-[3.75rem]">
           <BackButton placement="bottom" />
           <PageHeader title={copy.title} subtitle={copy.subtitle} />
+
+          {pendingInvoice ? (
+            <Card className="flex flex-col gap-3 border-amber-300 bg-amber-50">
+              <p className="text-sm font-medium text-amber-900">
+                У вас уже есть незавершённая оплата для этого экзамена.
+              </p>
+              <p className="text-xs text-amber-800">
+                Вы можете продолжить ожидание подтверждения оплаты или отменить и выбрать способ оплаты заново.
+              </p>
+              <div className="mt-1 flex gap-2">
+                <Button
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => {
+                    router.push(
+                      `/cabinet/pay-one-time/return?invoiceId=${encodeURIComponent(
+                        pendingInvoice.invoiceId
+                      )}&examId=${encodeURIComponent(
+                        pendingInvoice.examId
+                      )}&mode=${pendingInvoice.mode}`
+                    );
+                  }}
+                >
+                  Продолжить
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => {
+                    try {
+                      sessionStorage.removeItem('exam_one_time_return');
+                    } catch {
+                      // ignore
+                    }
+                    setPendingInvoice(null);
+                  }}
+                >
+                  Отменить
+                </Button>
+              </div>
+            </Card>
+          ) : null}
 
           <div
             className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 shadow-sm"

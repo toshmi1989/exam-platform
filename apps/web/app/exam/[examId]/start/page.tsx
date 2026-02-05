@@ -70,7 +70,13 @@ export default function ExamStartPage() {
         const created = await createAttempt(params.examId, 'exam');
         setAttempt(created);
       } catch (err) {
-        setError(err as ApiError);
+        const apiError = err as ApiError;
+        // Нет доступа (нет подписки / разового доступа / бесплатной попытки) — отправляем на страницу разовой оплаты.
+        if (apiError?.reasonCode === 'ACCESS_DENIED') {
+          router.replace(`/cabinet/pay-one-time?examId=${encodeURIComponent(String(params.examId))}&mode=exam`);
+          return;
+        }
+        setError(apiError);
       } finally {
         setLoading(false);
       }
