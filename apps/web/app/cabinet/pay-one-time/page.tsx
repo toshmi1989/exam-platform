@@ -59,6 +59,26 @@ function PayOneTimeClient() {
       .catch(() => setOneTimePrice(null));
   }, []);
 
+  // Если есть «висящий» инвойс в sessionStorage, при открытии страницы сразу уводим
+  // на экран ожидания оплаты, чтобы пользователь не застревал на повторном выборе оплаты.
+  useEffect(() => {
+    if (!examId) return;
+    try {
+      const raw = sessionStorage.getItem('exam_one_time_return');
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { invoiceId?: string; examId?: string; mode?: string };
+      if (parsed.invoiceId && parsed.examId === examId) {
+        router.replace(
+          `/cabinet/pay-one-time/return?invoiceId=${encodeURIComponent(
+            parsed.invoiceId
+          )}&examId=${encodeURIComponent(parsed.examId)}&mode=${parsed.mode === 'practice' ? 'practice' : 'exam'}`
+        );
+      }
+    } catch {
+      // ignore
+    }
+  }, [examId, router]);
+
   const copy = useMemo(() => {
     if (language === 'Английский') {
       return {
