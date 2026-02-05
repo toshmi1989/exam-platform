@@ -104,9 +104,16 @@ app.post('/accept-agreement', async (req, res, next) => {
   }
   try {
     const now = new Date();
-    await prisma.user.update({
+    await prisma.user.upsert({
       where: { telegramId },
-      data: {
+      update: {
+        acceptedTerms: true,
+        acceptedAt: now,
+        agreementVersion: AGREEMENT_VERSION,
+      },
+      create: {
+        id: userId,
+        telegramId,
         acceptedTerms: true,
         acceptedAt: now,
         agreementVersion: AGREEMENT_VERSION,
