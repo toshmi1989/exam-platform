@@ -74,7 +74,7 @@ export default function BottomNav() {
       <div className="mx-auto w-full max-w-3xl px-4">
         <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.25rem)] pt-2 shadow-[0_18px_35px_rgba(15,23,42,0.18)] ring-1 ring-[#2AABEE]/20 backdrop-blur-md">
           <div
-            className="pointer-events-none absolute left-2 top-2 h-10 transition-transform duration-300 ease-out"
+            className="pointer-events-none absolute left-2 top-2 h-12 transition-transform duration-300 ease-out"
             style={{
               width: `calc((100% - 1rem) / ${navItems.length})`,
               transform: `translateX(${activeIndex * 100}%)`,
@@ -96,7 +96,7 @@ export default function BottomNav() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`relative z-10 flex h-10 items-center justify-center rounded-xl text-[13px] font-medium transition-all duration-150 active:scale-[0.98] ${
+                  className={`relative z-10 flex h-12 items-center justify-center rounded-xl text-sm font-medium transition-all duration-150 active:scale-[0.98] ${
                     isActive
                       ? 'text-white'
                       : 'text-slate-600 hover:bg-slate-100'

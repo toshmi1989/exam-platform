@@ -1,13 +1,13 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
 import AnimatedPage from '../../../../components/AnimatedPage';
 import BottomNav from '../../../../components/BottomNav';
 import Card from '../../../../components/Card';
 import PageHeader from '../../../../components/PageHeader';
 import { getPaymentStatus, type PaymentStatusResult } from '../../../../lib/api';
+import { readSettings, type Language } from '../../../../lib/uiSettings';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,20 +30,89 @@ function formatDate(iso: string): string {
 function SubscribeReturnClient() {
   const searchParams = useSearchParams();
   const invoiceId = searchParams.get('invoiceId') ?? '';
+  const [language, setLanguage] = useState<Language>(() => readSettings().language);
 
   const [status, setStatus] = useState<'polling' | 'paid' | 'error'>('polling');
-  const [message, setMessage] = useState<string>('Ожидание подтверждения оплаты…');
+  const [message, setMessage] = useState<string>('');
   const [paidDetails, setPaidDetails] = useState<PaymentStatusResult | null>(null);
   const pollCount = useRef(0);
 
   useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'calmexam.uiSettings' && e.newValue) {
+        try {
+          const next = JSON.parse(e.newValue) as { language?: Language };
+          if (next.language) setLanguage(next.language);
+        } catch {
+          // ignore
+        }
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  const copy = useMemo(() => {
+    if (language === 'Английский') {
+      return {
+        title: 'Return after payment',
+        waiting: 'Waiting for payment confirmation…',
+        errorNoInvoice: 'Invoice not specified.',
+        paidMessage: 'Subscription activated.',
+        paidConfirm: 'Payment confirmed successfully.',
+        subscriptionLabel: 'Subscription',
+        subscriptionAll: 'to all exams',
+        amount: 'Amount:',
+        validUntil: 'Valid until',
+        receipt: 'Payment receipt',
+        toCabinet: 'To cabinet',
+        timeout: 'Confirmation timed out. Check your subscription or try again.',
+      };
+    }
+    if (language === 'Узбекский') {
+      return {
+        title: "To'lovdan keyin qaytish",
+        waiting: "To'lov tasdiqlanishi kutilmoqda…",
+        errorNoInvoice: "Hisob-faktura ko'rsatilmagan.",
+        paidMessage: "Obuna faollashtirildi.",
+        paidConfirm: "To'lov muvaffaqiyatli tasdiqlandi.",
+        subscriptionLabel: "Obuna",
+        subscriptionAll: "barcha imtihonlar uchun",
+        amount: "Summa:",
+        validUntil: "Amal qilish muddati",
+        receipt: "To'lov kvitansiyasi",
+        toCabinet: "Kabinetga",
+        timeout: "Tasdiqlash muddati tugadi. Obunani tekshiring yoki qayta urinib ko'ring.",
+      };
+    }
+    return {
+      title: 'Возврат после оплаты',
+      waiting: 'Ожидание подтверждения оплаты…',
+      errorNoInvoice: 'Не указан счёт.',
+      paidMessage: 'Подписка оформлена.',
+      paidConfirm: 'Оплата успешно подтверждена.',
+      subscriptionLabel: 'Подписка',
+      subscriptionAll: 'на все экзамены',
+      amount: 'Сумма:',
+      validUntil: 'Срок действия: до',
+      receipt: 'Чек оплаты',
+      toCabinet: 'В кабинет',
+      timeout: 'Ожидание подтверждения истекло. Проверьте подписку или попробуйте снова.',
+    };
+  }, [language]);
+
+  const copyRef = useRef(copy);
+  copyRef.current = copy;
+
+  useEffect(() => {
     if (!invoiceId) {
       setStatus('error');
-      setMessage('Не указан счёт.');
+      setMessage(copyRef.current.errorNoInvoice);
       return;
     }
 
     let cancelled = false;
+    setMessage(copyRef.current.waiting);
 
     async function poll() {
       while (!cancelled && pollCount.current < MAX_POLL_ATTEMPTS) {
@@ -53,7 +122,7 @@ function SubscribeReturnClient() {
           if (result.status === 'paid') {
             setPaidDetails(result);
             setStatus('paid');
-            setMessage('Подписка оформлена.');
+            setMessage(copyRef.current.paidMessage);
             try {
               sessionStorage.removeItem(SUBSCRIBE_STORAGE_KEY);
             } catch {
@@ -69,7 +138,7 @@ function SubscribeReturnClient() {
       }
       if (!cancelled) {
         setStatus('error');
-        setMessage('Ожидание подтверждения истекло. Проверьте подписку или попробуйте снова.');
+        setMessage(copyRef.current.timeout);
       }
     }
 
@@ -83,7 +152,7 @@ function SubscribeReturnClient() {
     <>
       <AnimatedPage>
         <main className="flex flex-col gap-6 pb-28 pt-[3.75rem]">
-          <PageHeader title="Возврат после оплаты" subtitle="" />
+          <PageHeader title={copy.title} subtitle="" />
           <Card className="flex flex-col items-center gap-4 py-8">
             {status === 'polling' && (
               <p className="text-center text-slate-600">{message}</p>
@@ -91,33 +160,33 @@ function SubscribeReturnClient() {
             {status === 'paid' && paidDetails && (
               <>
                 <p className="text-center font-medium text-slate-800">
-                  Оплата успешно подтверждена.
+                  {copy.paidConfirm}
                 </p>
                 <div className="w-full space-y-2 rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                  <p><strong>Подписка</strong> на все экзамены</p>
+                  <p><strong>{copy.subscriptionLabel}</strong> {copy.subscriptionAll}</p>
                   {paidDetails.amountTiyin != null && (
-                    <p>Сумма: {formatAmount(paidDetails.amountTiyin)} сум</p>
+                    <p>{copy.amount} {formatAmount(paidDetails.amountTiyin)} сум</p>
                   )}
                   {paidDetails.subscriptionEndsAt && (
-                    <p>Срок действия: до {formatDate(paidDetails.subscriptionEndsAt)}</p>
+                    <p>{copy.validUntil} {formatDate(paidDetails.subscriptionEndsAt)}</p>
                   )}
                 </div>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-3">
                   {paidDetails.receiptUrl && (
                     <a
                       href={paidDetails.receiptUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+                      className="inline-flex justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-base font-medium text-slate-800 hover:bg-slate-50"
                     >
-                      Чек оплаты
+                      {copy.receipt}
                     </a>
                   )}
                   <a
                     href="/cabinet"
-                    className="inline-flex justify-center rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600"
+                    className="inline-flex justify-center rounded-xl bg-emerald-500 px-5 py-3 text-base font-semibold text-white hover:bg-emerald-600"
                   >
-                    В кабинет
+                    {copy.toCabinet}
                   </a>
                 </div>
               </>
@@ -127,9 +196,9 @@ function SubscribeReturnClient() {
                 <p className="text-center text-rose-600">{message}</p>
                 <a
                   href="/cabinet"
-                  className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-800"
+                  className="rounded-xl bg-slate-200 px-5 py-3 text-base font-medium text-slate-800 hover:bg-slate-300"
                 >
-                  В кабинет
+                  {copy.toCabinet}
                 </a>
               </>
             )}

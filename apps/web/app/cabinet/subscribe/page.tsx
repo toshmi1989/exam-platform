@@ -92,6 +92,7 @@ export default function SubscribePage() {
         subtitle: 'Select a convenient way to purchase your subscription.',
         errorPay: 'Payment failed. Please try again.',
         checkPayment: 'Check payment',
+        unfinishedPayment: 'You have an incomplete subscription payment.',
       };
     }
     if (language === 'Узбекский') {
@@ -100,6 +101,7 @@ export default function SubscribePage() {
         subtitle: 'Obunani sotib olish uchun qulay usulni tanlang.',
         errorPay: "To'lov amalga oshmadi. Qayta urinib ko'ring.",
         checkPayment: "To'lovni tekshirish",
+        unfinishedPayment: "Sizda tugallanmagan obuna to'lovi mavjud.",
       };
     }
     return {
@@ -107,6 +109,7 @@ export default function SubscribePage() {
       subtitle: 'Выберите удобный способ оплаты подписки.',
       errorPay: 'Оплата не прошла. Попробуйте снова.',
       checkPayment: 'Проверить платеж',
+      unfinishedPayment: 'У вас есть незавершённая оплата подписки.',
     };
   }, [language]);
 
@@ -147,7 +150,7 @@ export default function SubscribePage() {
           {hasStoredInvoice && (
             <Card className="flex flex-col gap-3 border-amber-300 bg-amber-50">
               <p className="text-sm font-medium text-amber-900">
-                У вас есть незавершённая оплата подписки.
+                {copy.unfinishedPayment}
               </p>
               <button
                 type="button"
