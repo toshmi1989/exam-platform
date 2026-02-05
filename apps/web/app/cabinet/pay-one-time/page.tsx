@@ -11,7 +11,7 @@ import Button from '../../../components/Button';
 import Card from '../../../components/Card';
 import PageHeader from '../../../components/PageHeader';
 import { readSettings, Language } from '../../../lib/uiSettings';
-import { getProfile, createPayment, getPaymentStatus, createAttempt, startAttempt } from '../../../lib/api';
+import { getProfile, createPayment, getPaymentStatus } from '../../../lib/api';
 import { APP_BASE_URL } from '../../../lib/api/config';
 
 export const dynamic = 'force-dynamic';
@@ -150,12 +150,17 @@ function PayOneTimeClient() {
     setError(null);
     setPaying(true);
     try {
+      console.log('[pay-one-time] Starting payment creation:', { examId, paymentSystem, mode });
       const { checkout_url, invoiceId } = await createPayment({
         kind: 'one-time',
         examId,
         paymentSystem,
         mode,
       });
+      console.log('[pay-one-time] Payment created:', { checkout_url, invoiceId });
+      if (!checkout_url || !invoiceId) {
+        throw new Error('Неверный ответ от сервера: отсутствует ссылка на оплату.');
+      }
       try {
         sessionStorage.setItem(
           'exam_one_time_return',
@@ -164,9 +169,12 @@ function PayOneTimeClient() {
       } catch {
         // ignore if sessionStorage unavailable
       }
+      console.log('[pay-one-time] Redirecting to:', checkout_url);
       window.location.href = checkout_url;
     } catch (e) {
-      setError(e instanceof Error ? e.message : copy.errorPay);
+      console.error('[pay-one-time] handlePay error:', e);
+      const errorMessage = e instanceof Error ? e.message : copy.errorPay;
+      setError(errorMessage);
       setPaying(false);
     }
   }
