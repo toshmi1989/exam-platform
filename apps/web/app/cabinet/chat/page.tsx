@@ -144,9 +144,12 @@ export default function ChatPage() {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
+    input.style.display = 'none';
+    document.body.appendChild(input);
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       handleImageChange(file ?? null);
+      document.body.removeChild(input);
       // Возвращаем фокус на input после выбора файла
       setTimeout(() => {
         if (inputRef.current) {
@@ -156,6 +159,7 @@ export default function ChatPage() {
       }, 100);
     };
     input.oncancel = () => {
+      document.body.removeChild(input);
       // Если пользователь отменил выбор, возвращаем фокус
       setTimeout(() => {
         if (inputRef.current) {

@@ -112,7 +112,9 @@ export default function BottomNav({ chatMode = false, chatActions }: BottomNavPr
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  chatActions.onAddPhoto();
+                  if (chatActions?.onAddPhoto) {
+                    chatActions.onAddPhoto();
+                  }
                 }}
                 className="flex h-10 items-center justify-center rounded-xl text-[13px] font-medium text-slate-600 transition-all duration-150 hover:bg-slate-100 active:scale-[0.98]"
               >
@@ -123,8 +125,8 @@ export default function BottomNav({ chatMode = false, chatActions }: BottomNavPr
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  if (chatActions.canSend) {
-                    chatActions.onSend();
+                  if (chatActions?.canSend && chatActions?.onSend) {
+                    void chatActions.onSend();
                   }
                 }}
                 disabled={!chatActions.canSend}
