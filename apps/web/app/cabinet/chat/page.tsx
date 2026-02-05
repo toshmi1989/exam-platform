@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AnimatedPage from '../../../components/AnimatedPage';
 import BackButton from '../../../components/BackButton';
 import BottomNav from '../../../components/BottomNav';
@@ -92,7 +92,7 @@ export default function ChatPage() {
     setMessages(payload?.messages ?? []);
   }
 
-  function handleImageChange(file?: File | null) {
+  const handleImageChange = useCallback((file?: File | null) => {
     if (!file) {
       setSelectedImage(null);
       return;
@@ -108,9 +108,9 @@ export default function ChatPage() {
       setSelectedImage(typeof reader.result === 'string' ? reader.result : null);
     };
     reader.readAsDataURL(file);
-  }
+  }, [copy.imageTooLarge]);
 
-  async function handleSend() {
+  const handleSend = useCallback(async () => {
     const trimmed = text.trim();
     if (!trimmed && !selectedImage) return;
     if (isSending) return;
@@ -138,9 +138,9 @@ export default function ChatPage() {
     } finally {
       setIsSending(false);
     }
-  }
+  }, [text, selectedImage, isSending]);
 
-  function handleAddPhoto() {
+  const handleAddPhoto = useCallback(() => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
@@ -169,7 +169,7 @@ export default function ChatPage() {
       }, 100);
     };
     input.click();
-  }
+  }, [handleImageChange]);
 
   return (
     <>
@@ -297,12 +297,15 @@ export default function ChatPage() {
       </AnimatedPage>
       <BottomNav
         chatMode={isInputFocused}
-        chatActions={{
-          onSend: handleSend,
-          onAddPhoto: handleAddPhoto,
-          canSend: Boolean(text.trim() || selectedImage) && !isSending,
-          hasImage: Boolean(selectedImage),
-        }}
+        chatActions={useMemo(
+          () => ({
+            onSend: handleSend,
+            onAddPhoto: handleAddPhoto,
+            canSend: Boolean(text.trim() || selectedImage) && !isSending,
+            hasImage: Boolean(selectedImage),
+          }),
+          [handleSend, handleAddPhoto, text, selectedImage, isSending]
+        )}
       />
     </>
   );

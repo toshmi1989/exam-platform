@@ -21,7 +21,7 @@ interface BottomNavProps {
   chatActions?: ChatActions;
 }
 
-export default function BottomNav({ chatMode = false, chatActions }: BottomNavProps = {}) {
+export default function BottomNav({ chatMode = false, chatActions }: BottomNavProps) {
   const pathname = usePathname();
   const [language, setLanguage] = useState<Language>(readSettings().language);
   const [user, setUser] = useState<TelegramUserSnapshot | null>(
@@ -109,24 +109,16 @@ export default function BottomNav({ chatMode = false, chatActions }: BottomNavPr
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (chatActions?.onAddPhoto) {
-                    chatActions.onAddPhoto();
-                  }
-                }}
+                onClick={() => chatActions.onAddPhoto()}
                 className="flex h-10 items-center justify-center rounded-xl text-[13px] font-medium text-slate-600 transition-all duration-150 hover:bg-slate-100 active:scale-[0.98]"
               >
                 {chatCopy.addPhoto}
               </button>
               <button
                 type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (chatActions?.canSend && chatActions?.onSend) {
-                    void chatActions.onSend();
+                onClick={() => {
+                  if (chatActions.canSend) {
+                    chatActions.onSend();
                   }
                 }}
                 disabled={!chatActions.canSend}
