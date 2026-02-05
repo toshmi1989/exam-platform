@@ -208,7 +208,7 @@ router.post('/multicard/callback', async (req: Request, res: Response) => {
         // Send Telegram notification (non-blocking)
         void (async () => {
           try {
-            // Get user information
+            console.log('[payments/callback] Preparing Telegram notification for invoice:', invoiceId);
             const user = await prisma.user.findUnique({
               where: { id: inv.userId },
               select: { telegramId: true, firstName: true, username: true },
