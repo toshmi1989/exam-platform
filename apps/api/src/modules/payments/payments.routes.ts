@@ -11,6 +11,7 @@ import {
   verifyCallbackSignFixedOrder,
   isMulticardConfigured,
 } from './multicard.client';
+import { sendPaymentNotification } from '../../services/telegramNotification.service';
 import { randomUUID } from 'crypto';
 
 const router = Router();
@@ -159,30 +160,92 @@ router.post('/multicard/callback', async (req: Request, res: Response) => {
     try {
       const inv = await prisma.paymentInvoice.findUnique({
         where: { invoiceId },
-        select: { id: true, kind: true, userId: true, examId: true, status: true },
+        select: {
+          id: true,
+          kind: true,
+          userId: true,
+          examId: true,
+          status: true,
+          amountTiyin: true,
+          mcUuid: true,
+        },
       });
       if (inv && inv.status !== 'paid') {
+        // Update payment invoice status and mcUuid if provided
+        const updateData: { status: string; paidAt: Date; mcUuid?: string } = {
+          status: 'paid',
+          paidAt: new Date(),
+        };
+        if (uuid && !inv.mcUuid) {
+          updateData.mcUuid = uuid;
+        }
+
         await prisma.paymentInvoice.update({
           where: { invoiceId },
-          data: { status: 'paid', paidAt: new Date() },
+          data: updateData,
         });
+
         const settings = await getAccessSettings();
+        let subscriptionEndsAt: Date | null = null;
+
         if (inv.kind === 'one-time' && inv.examId) {
           await prisma.oneTimeAccess.create({
             data: { userId: inv.userId, examId: inv.examId },
           });
         } else if (inv.kind === 'subscription') {
           const now = new Date();
-          const endsAt = new Date(now);
-          endsAt.setDate(endsAt.getDate() + settings.subscriptionDurationDays);
+          subscriptionEndsAt = new Date(now);
+          subscriptionEndsAt.setDate(subscriptionEndsAt.getDate() + settings.subscriptionDurationDays);
           await prisma.userSubscription.create({
             data: {
               userId: inv.userId,
-              endsAt,
+              endsAt: subscriptionEndsAt,
               status: 'ACTIVE',
             },
           });
         }
+
+        // Send Telegram notification (non-blocking)
+        void (async () => {
+          try {
+            // Get user information
+            const user = await prisma.user.findUnique({
+              where: { id: inv.userId },
+              select: { telegramId: true, firstName: true, username: true },
+            });
+
+            if (!user) {
+              console.warn('[payments/callback] User not found for notification:', inv.userId);
+              return;
+            }
+
+            // Get exam information if one-time payment
+            let examTitle: string | null = null;
+            if (inv.kind === 'one-time' && inv.examId) {
+              const exam = await prisma.exam.findUnique({
+                where: { id: inv.examId },
+                select: { title: true },
+              });
+              examTitle = exam?.title ?? null;
+            }
+
+            // Send notification
+            await sendPaymentNotification({
+              userId: inv.userId,
+              telegramId: user.telegramId,
+              firstName: user.firstName,
+              username: user.username,
+              kind: inv.kind as 'one-time' | 'subscription',
+              amountTiyin: inv.amountTiyin,
+              mcUuid: updateData.mcUuid ?? inv.mcUuid,
+              examTitle,
+              subscriptionEndsAt,
+            });
+          } catch (notifErr) {
+            console.error('[payments/callback] Notification failed:', notifErr);
+            // Don't throw - payment is already processed
+          }
+        })();
       }
     } catch (err) {
       console.error('[payments/callback] update failed', err);
