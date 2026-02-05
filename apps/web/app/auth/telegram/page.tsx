@@ -125,7 +125,8 @@ export default function TelegramAuthPage() {
             role: data?.role,
             isAdmin: data?.isAdmin,
           });
-          routerRef.current.replace('/cabinet');
+          // Full redirect: callback runs in widget context where router may not navigate
+          window.location.replace('/cabinet');
         } catch {
           setErrorMessage(copyRef.current?.errorNetwork ?? 'Network error.');
           setAuthStatus('error');
