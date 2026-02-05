@@ -47,6 +47,7 @@ router.post('/create', async (req: Request, res: Response) => {
   }
 
   if (!ps) {
+    console.error('[payments/create] Invalid paymentSystem:', { raw: req.body?.paymentSystem, psRaw, ps, available: Object.keys(PS_MAP) });
     return res.status(400).json({ ok: false, reasonCode: 'INVALID_PAYMENT_SYSTEM' });
   }
   if (kind === 'one-time' && !examId) {
@@ -81,6 +82,7 @@ router.post('/create', async (req: Request, res: Response) => {
   }
 
   try {
+    console.log('[payments/create] Creating payment:', { psRaw, ps, invoiceId, kind });
     const payment = await createMulticardPayment({
       amount: amountTiyin,
       invoiceId,
