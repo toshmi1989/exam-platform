@@ -20,18 +20,15 @@ export default function AgreementGuard({ children }: AgreementGuardProps) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(hasTelegramUser);
   const [showModal, setShowModal] = useState(false);
-  const [isGuest, setIsGuest] = useState(false);
 
   const checkAgreement = useCallback(async () => {
     const user = readTelegramUser();
     if (!user?.telegramId) {
       setProfile(null);
-      setIsGuest(true);
       setLoading(false);
       setShowModal(!hasGuestAcceptedAgreement());
       return;
     }
-    setIsGuest(false);
     setLoading(true);
     try {
       const data = await getProfile();
@@ -67,7 +64,7 @@ export default function AgreementGuard({ children }: AgreementGuardProps) {
   }
 
   if (showModal) {
-    return <AgreementModal onAccepted={handleAccepted} isGuest={isGuest} />;
+    return <AgreementModal onAccepted={handleAccepted} isGuest={profile === null} />;
   }
 
   return <>{children}</>;
