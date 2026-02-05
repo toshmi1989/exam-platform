@@ -4,15 +4,18 @@ import { useState, useCallback, useEffect } from 'react';
 import Button from './Button';
 import { USER_AGREEMENT_TEXT } from '../data/agreementText';
 import { acceptAgreement } from '../lib/api';
+import { setGuestAgreement } from '../lib/agreementStorage';
 
 const CHECKBOX_LABEL = 'Я принимаю условия пользовательского соглашения';
 const SUBMIT_LABEL = 'Продолжить';
 
 interface AgreementModalProps {
   onAccepted: () => void;
+  /** Гость без авторизации: соглашение сохраняется только в localStorage */
+  isGuest?: boolean;
 }
 
-export default function AgreementModal({ onAccepted }: AgreementModalProps) {
+export default function AgreementModal({ onAccepted, isGuest = false }: AgreementModalProps) {
   const [checked, setChecked] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,19 +33,26 @@ export default function AgreementModal({ onAccepted }: AgreementModalProps) {
     setLoading(true);
     setError(null);
     try {
-      await acceptAgreement();
-      onAccepted();
+      if (isGuest) {
+        setGuestAgreement();
+        onAccepted();
+      } else {
+        await acceptAgreement();
+        onAccepted();
+      }
     } catch (err: unknown) {
       const apiErr = err as { reasonCode?: string; message?: string };
       if (apiErr?.reasonCode === 'AUTH_REQUIRED') {
         setError('Сессия истекла. Откройте приложение заново или войдите снова.');
+      } else if (apiErr?.reasonCode === 'PROXY_ERROR' && apiErr?.message) {
+        setError(apiErr.message);
       } else {
         setError(apiErr?.message ?? 'Не удалось сохранить. Попробуйте снова.');
       }
     } finally {
       setLoading(false);
     }
-  }, [checked, loading, onAccepted]);
+  }, [checked, loading, onAccepted, isGuest]);
 
   return (
     <div

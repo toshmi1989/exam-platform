@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { readTelegramUser } from '../lib/telegramUser';
 import { getProfile } from '../lib/api';
 import type { UserProfile } from '../lib/types';
+import { hasGuestAcceptedAgreement } from '../lib/agreementStorage';
 import AgreementModal from './AgreementModal';
 
 interface AgreementGuardProps {
@@ -19,15 +20,18 @@ export default function AgreementGuard({ children }: AgreementGuardProps) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(hasTelegramUser);
   const [showModal, setShowModal] = useState(false);
+  const [isGuest, setIsGuest] = useState(false);
 
   const checkAgreement = useCallback(async () => {
     const user = readTelegramUser();
     if (!user?.telegramId) {
       setProfile(null);
-      setShowModal(false);
+      setIsGuest(true);
       setLoading(false);
+      setShowModal(!hasGuestAcceptedAgreement());
       return;
     }
+    setIsGuest(false);
     setLoading(true);
     try {
       const data = await getProfile();
@@ -63,7 +67,7 @@ export default function AgreementGuard({ children }: AgreementGuardProps) {
   }
 
   if (showModal) {
-    return <AgreementModal onAccepted={handleAccepted} />;
+    return <AgreementModal onAccepted={handleAccepted} isGuest={isGuest} />;
   }
 
   return <>{children}</>;

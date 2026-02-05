@@ -234,6 +234,8 @@ NEXT_PUBLIC_API_BASE_URL=https://api.ваш-домен.ru
 NEXT_PUBLIC_APP_URL=https://ваш-домен.ru
 # Опционально: юзернейм бота для кнопки «Log in with Telegram» в браузере (по умолчанию tibtoifabot)
 # NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=tibtoifabot
+# Для прокси «принять соглашение»: внутренний URL бэкенда (чтобы Next.js вызывал API без Nginx). Пример: API_INTERNAL_URL=http://127.0.0.1:3001
+# API_INTERNAL_URL=http://127.0.0.1:3001
 ```
 
 Либо те же переменные задайте в `.env.local` перед `npm run build`.

@@ -129,27 +129,37 @@ export async function acceptAgreement(): Promise<void> {
   if (typeof window !== 'undefined') {
     const { readTelegramUser } = await import('./telegramUser');
     const user = readTelegramUser();
-    const res = await fetch('/api/accept-agreement', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(user?.telegramId ? { 'x-telegram-id': user.telegramId } : {}),
-      },
-      body: '{}',
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      throw (data as ApiError) ?? { reasonCode: 'UNKNOWN', message: 'Не удалось сохранить' };
+    if (!user?.telegramId) {
+      throw { reasonCode: 'AUTH_REQUIRED', message: 'Сессия не найдена. Войдите снова.' };
+    }
+    const tryProxy = async (): Promise<void> => {
+      const res = await fetch('/api/accept-agreement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-telegram-id': user.telegramId },
+        body: '{}',
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw (data as ApiError) ?? { reasonCode: 'UNKNOWN', message: 'Не удалось сохранить. Попробуйте снова.' };
+      }
+    };
+    const tryDirect = async (): Promise<void> => {
+      const { response, data } = await apiFetch('/accept-agreement', { method: 'POST', json: {} });
+      if (!response.ok) throw (data as ApiError) ?? { reasonCode: 'UNKNOWN', message: 'Не удалось сохранить.' };
+    };
+    try {
+      await tryProxy();
+    } catch (proxyErr) {
+      try {
+        await tryDirect();
+      } catch {
+        throw proxyErr;
+      }
     }
     return;
   }
-  const { response, data } = await apiFetch('/accept-agreement', {
-    method: 'POST',
-    json: {},
-  });
-  if (!response.ok) {
-    throw data as ApiError;
-  }
+  const { response, data } = await apiFetch('/accept-agreement', { method: 'POST', json: {} });
+  if (!response.ok) throw data as ApiError;
 }
 
 export async function getAttemptHistory(): Promise<AttemptHistoryItem[]> {
