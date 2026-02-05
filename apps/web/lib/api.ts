@@ -129,13 +129,14 @@ export async function acceptAgreement(): Promise<void> {
   if (typeof window !== 'undefined') {
     const { readTelegramUser } = await import('./telegramUser');
     const user = readTelegramUser();
-    if (!user?.telegramId) {
+    const telegramId = user?.telegramId;
+    if (!telegramId) {
       throw { reasonCode: 'AUTH_REQUIRED', message: 'Сессия не найдена. Войдите снова.' };
     }
     const tryProxy = async (): Promise<void> => {
       const res = await fetch('/api/accept-agreement', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-telegram-id': user.telegramId },
+        headers: { 'Content-Type': 'application/json', 'x-telegram-id': telegramId },
         body: '{}',
       });
       const data = await res.json().catch(() => null);
