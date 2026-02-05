@@ -3,7 +3,7 @@
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import AnimatedPage from '../../../components/AnimatedPage';
 import BackButton from '../../../components/BackButton';
 import BottomNav from '../../../components/BottomNav';
@@ -45,6 +45,7 @@ function PayOneTimeClient() {
     mode: 'exam' | 'practice';
   } | null>(null);
   const [hasStoredInvoice, setHasStoredInvoice] = useState(false);
+  const [hasRedirected, setHasRedirected] = useState(false);
   // Используем относительные пути для статики - Next.js автоматически раздаст из public/
   // Для Telegram Mini App это работает корректно, так как статика раздается с того же домена
 
@@ -61,7 +62,7 @@ function PayOneTimeClient() {
   }, []);
 
   // Функция для проверки sessionStorage
-  const checkStoredInvoice = () => {
+  const checkStoredInvoice = useCallback((shouldAutoRedirect = false) => {
     if (!examId) {
       setHasStoredInvoice(false);
       return;
@@ -76,6 +77,19 @@ function PayOneTimeClient() {
       if (parsed.invoiceId && parsed.examId === examId) {
         console.log('[pay-one-time] Found stored invoice:', parsed.invoiceId);
         setHasStoredInvoice(true);
+        // Автоматически переходим на страницу ожидания при первой проверке
+        // (только если не было редиректа ранее и нет pendingInvoice)
+        if (shouldAutoRedirect && !hasRedirected && !pendingInvoice) {
+          console.log('[pay-one-time] Auto-redirecting to return page');
+          setHasRedirected(true);
+          router.replace(
+            `/cabinet/pay-one-time/return?invoiceId=${encodeURIComponent(
+              parsed.invoiceId
+            )}&examId=${encodeURIComponent(parsed.examId!)}&mode=${
+              parsed.mode === 'practice' ? 'practice' : 'exam'
+            }`
+          );
+        }
       } else {
         setHasStoredInvoice(false);
       }
@@ -83,20 +97,23 @@ function PayOneTimeClient() {
       console.error('[pay-one-time] Error checking stored invoice:', e);
       setHasStoredInvoice(false);
     }
-  };
+  }, [examId, hasRedirected, pendingInvoice, router]);
 
   // Проверяем наличие незавершённого инвойса в sessionStorage для отображения кнопки
   useEffect(() => {
-    checkStoredInvoice();
+    // При первой загрузке проверяем и делаем автоматический редирект если нужно
+    checkStoredInvoice(true);
 
     // Проверяем при возврате фокуса на окно (когда пользователь вернулся из приложения оплаты)
     const handleFocus = () => {
-      checkStoredInvoice();
+      // При возврате фокуса тоже делаем автоматический редирект
+      checkStoredInvoice(true);
     };
 
     // Проверяем периодически (каждые 2 секунды) для случаев, когда focus не срабатывает
+    // Но без автоматического редиректа - только для показа кнопки
     const intervalId = setInterval(() => {
-      checkStoredInvoice();
+      checkStoredInvoice(false);
     }, 2000);
 
     window.addEventListener('focus', handleFocus);
@@ -107,7 +124,7 @@ function PayOneTimeClient() {
       window.removeEventListener('pageshow', handleFocus);
       clearInterval(intervalId);
     };
-  }, [examId]);
+  }, [examId, checkStoredInvoice]);
 
   // Если есть «висящий» инвойс в sessionStorage, при открытии страницы проверяем его статус.
   // - paid    → сразу на страницу возврата / чека
@@ -140,33 +157,13 @@ function PayOneTimeClient() {
             return;
           }
           if (status.status === 'created') {
-            setPendingInvoice({
-              invoiceId: parsed.invoiceId!,
-              examId: parsed.examId!,
-              mode: parsed.mode === 'practice' ? 'practice' : 'exam',
-            });
-            setHasStoredInvoice(true);
-            // Начинаем опрос для Telegram WebView (когда пользователь вернулся после оплаты)
-            pollCount = 1;
-            while (!cancelled && pollCount < MAX_POLL_ATTEMPTS) {
-              await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
-              if (cancelled) return;
-              try {
-                const pollStatus = await getPaymentStatus(parsed.invoiceId!);
-                if (cancelled) return;
-                if (pollStatus.status === 'paid') {
-                  router.replace(
-                    `/cabinet/pay-one-time/return?invoiceId=${encodeURIComponent(
-                      parsed.invoiceId!
-                    )}&examId=${encodeURIComponent(parsed.examId!)}&mode=${parsed.mode === 'practice' ? 'practice' : 'exam'}`
-                  );
-                  return;
-                }
-              } catch {
-                // Игнорируем ошибки и продолжаем опрос
-              }
-              pollCount += 1;
-            }
+            // Автоматически переходим на страницу ожидания оплаты
+            console.log('[pay-one-time] Found pending invoice, redirecting to return page');
+            router.replace(
+              `/cabinet/pay-one-time/return?invoiceId=${encodeURIComponent(
+                parsed.invoiceId!
+              )}&examId=${encodeURIComponent(parsed.examId!)}&mode=${parsed.mode === 'practice' ? 'practice' : 'exam'}`
+            );
             return;
           }
           // Любой другой статус — считаем инвойс недействительным и очищаем.
