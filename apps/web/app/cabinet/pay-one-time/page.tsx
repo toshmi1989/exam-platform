@@ -12,7 +12,6 @@ import Card from '../../../components/Card';
 import PageHeader from '../../../components/PageHeader';
 import { readSettings, Language } from '../../../lib/uiSettings';
 import { getProfile, createPayment, getPaymentStatus } from '../../../lib/api';
-import { APP_BASE_URL } from '../../../lib/api/config';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,14 +42,8 @@ function PayOneTimeClient() {
     examId: string;
     mode: 'exam' | 'practice';
   } | null>(null);
-  const [assetBase, setAssetBase] = useState(() =>
-    (APP_BASE_URL || '').replace(/\/$/, '')
-  );
-
-  useEffect(() => {
-    if ((APP_BASE_URL || '').replace(/\/$/, '')) return;
-    setAssetBase(typeof window !== 'undefined' ? window.location.origin : '');
-  }, []);
+  // Используем относительные пути для статики - Next.js автоматически раздаст из public/
+  // Для Telegram Mini App это работает корректно, так как статика раздается с того же домена
 
   useEffect(() => {
     const update = () => setLanguage(readSettings().language);
@@ -267,16 +260,20 @@ function PayOneTimeClient() {
                 onClick={() => !paying && handlePay(method.id)}
               >
                 <div className="flex h-12 w-full items-center justify-center">
-                  {assetBase ? (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      src={`${assetBase}${PAYMENT_LOGOS}${method.logo}`}
-                      alt={method.label}
-                      className="h-10 w-auto object-contain"
-                    />
-                  ) : (
-                    <span className="h-10 text-slate-400" aria-hidden>{method.label}</span>
-                  )}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`${PAYMENT_LOGOS}${method.logo}`}
+                    alt={method.label}
+                    className="h-10 w-auto object-contain"
+                    onError={(e) => {
+                      // Если изображение не загрузилось, скрываем его и показываем текст
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const fallback = target.nextElementSibling as HTMLElement;
+                      if (fallback) fallback.style.display = 'block';
+                    }}
+                  />
+                  <span className="h-10 text-slate-400 hidden" aria-hidden>{method.label}</span>
                 </div>
                 <p className="text-sm font-medium text-slate-700">{method.label}</p>
               </Card>
