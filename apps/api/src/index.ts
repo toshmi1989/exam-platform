@@ -104,6 +104,7 @@ app.post('/accept-agreement', async (req, res, next) => {
   }
   try {
     const now = new Date();
+    // upsert: create user if missing (e.g. after widget login), avoid P2025
     await prisma.user.upsert({
       where: { telegramId },
       update: {
