@@ -32,8 +32,13 @@ export default function AgreementModal({ onAccepted }: AgreementModalProps) {
     try {
       await acceptAgreement();
       onAccepted();
-    } catch {
-      setError('Не удалось сохранить. Попробуйте снова.');
+    } catch (err: unknown) {
+      const apiErr = err as { reasonCode?: string; message?: string };
+      if (apiErr?.reasonCode === 'AUTH_REQUIRED') {
+        setError('Сессия истекла. Откройте приложение заново или войдите снова.');
+      } else {
+        setError(apiErr?.message ?? 'Не удалось сохранить. Попробуйте снова.');
+      }
     } finally {
       setLoading(false);
     }

@@ -114,7 +114,12 @@ app.post('/accept-agreement', async (req, res, next) => {
     });
     return res.status(200).json({ ok: true });
   } catch (e) {
-    next(e);
+    console.error('[accept-agreement]', e);
+    return res.status(500).json({
+      ok: false,
+      reasonCode: 'INTERNAL_ERROR',
+      message: 'Не удалось сохранить соглашение. Проверьте, что миграция БД применена (acceptedTerms, acceptedAt, agreementVersion).',
+    });
   }
 });
 

@@ -126,6 +126,23 @@ export async function getProfile(): Promise<UserProfile> {
 }
 
 export async function acceptAgreement(): Promise<void> {
+  if (typeof window !== 'undefined') {
+    const { readTelegramUser } = await import('./telegramUser');
+    const user = readTelegramUser();
+    const res = await fetch('/api/accept-agreement', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(user?.telegramId ? { 'x-telegram-id': user.telegramId } : {}),
+      },
+      body: '{}',
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw (data as ApiError) ?? { reasonCode: 'UNKNOWN', message: 'Не удалось сохранить' };
+    }
+    return;
+  }
   const { response, data } = await apiFetch('/accept-agreement', {
     method: 'POST',
     json: {},
