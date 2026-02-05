@@ -1,4 +1,4 @@
-import { API_BASE_URL } from '../../../../lib/api/config';
+import { API_BASE_URL } from '../../../lib/api/config';
 
 /** Проксирует POST на бэкенд, передаёт x-telegram-id (same-origin, без CORS). */
 export async function POST(request: Request) {
