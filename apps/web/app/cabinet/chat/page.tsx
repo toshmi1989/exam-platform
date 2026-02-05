@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import AnimatedPage from '../../../components/AnimatedPage';
 import BackButton from '../../../components/BackButton';
 import BottomNav from '../../../components/BottomNav';
@@ -30,6 +30,8 @@ export default function ChatPage() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const update = () => setLanguage(readSettings().language);
@@ -125,9 +127,25 @@ export default function ChatPage() {
       }
       setText('');
       setSelectedImage(null);
+      // Закрываем клавиатуру и возвращаем нав панель
+      if (inputRef.current) {
+        inputRef.current.blur();
+        setIsInputFocused(false);
+      }
     }
 
     setIsSending(false);
+  }
+
+  function handleAddPhoto() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      handleImageChange(file ?? null);
+    };
+    input.click();
   }
 
   return (
@@ -225,32 +243,37 @@ export default function ChatPage() {
               </div>
             ) : null}
 
-            <div className="flex flex-col gap-2">
+            {/* Поле ввода внизу карточки */}
+            <div className="mt-auto pt-2">
               <input
+                ref={inputRef}
+                type="text"
                 value={text}
                 onChange={(event) => setText(event.target.value)}
+                onFocus={() => setIsInputFocused(true)}
+                onBlur={() => setIsInputFocused(false)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && (text.trim() || selectedImage)) {
+                    e.preventDefault();
+                    void handleSend();
+                  }
+                }}
                 placeholder={copy.placeholder}
                 className="w-full min-w-0 rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#2AABEE]"
               />
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="cursor-pointer shrink-0 text-xs text-slate-500 underline">
-                  {copy.upload}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(event) => handleImageChange(event.target.files?.[0] ?? null)}
-                  />
-                </label>
-                <Button size="md" onClick={handleSend} disabled={isSending} className="shrink-0">
-                  {copy.send}
-                </Button>
-              </div>
             </div>
           </Card>
         </main>
       </AnimatedPage>
-      <BottomNav />
+      <BottomNav
+        chatMode={isInputFocused}
+        chatActions={{
+          onSend: handleSend,
+          onAddPhoto: handleAddPhoto,
+          canSend: Boolean(text.trim() || selectedImage) && !isSending,
+          hasImage: Boolean(selectedImage),
+        }}
+      />
     </>
   );
 }

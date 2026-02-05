@@ -12,6 +12,7 @@ import Card from '../../../components/Card';
 import PageHeader from '../../../components/PageHeader';
 import { readSettings, Language } from '../../../lib/uiSettings';
 import { getProfile, createPayment, getPaymentStatus, createAttempt, startAttempt } from '../../../lib/api';
+import { APP_BASE_URL } from '../../../lib/api/config';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,9 +38,12 @@ function PayOneTimeClient() {
   const [oneTimePrice, setOneTimePrice] = useState<number | null>(null);
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [assetBase, setAssetBase] = useState('');
+  const [assetBase, setAssetBase] = useState(() =>
+    (APP_BASE_URL || '').replace(/\/$/, '')
+  );
 
   useEffect(() => {
+    if ((APP_BASE_URL || '').replace(/\/$/, '')) return;
     setAssetBase(typeof window !== 'undefined' ? window.location.origin : '');
   }, []);
 

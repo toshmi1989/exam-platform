@@ -8,6 +8,7 @@ import Card from '../../../components/Card';
 import PageHeader from '../../../components/PageHeader';
 import { readSettings, Language } from '../../../lib/uiSettings';
 import { createPayment } from '../../../lib/api';
+import { APP_BASE_URL } from '../../../lib/api/config';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,9 +28,13 @@ export default function SubscribePage() {
   const [language, setLanguage] = useState<Language>(readSettings().language);
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [assetBase, setAssetBase] = useState('');
+  const [assetBase, setAssetBase] = useState(() =>
+    (APP_BASE_URL || '').replace(/\/$/, '')
+  );
 
   useEffect(() => {
+    const base = (APP_BASE_URL || '').replace(/\/$/, '');
+    if (base) return;
     setAssetBase(typeof window !== 'undefined' ? window.location.origin : '');
   }, []);
 

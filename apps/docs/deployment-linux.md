@@ -217,7 +217,7 @@ echo "apps/api/.env" >> .gitignore
 
 ### 6.2 Web (`apps/web/.env.production` или `.env.local`)
 
-Для сборки Next.js нужен публичный URL API:
+Для сборки Next.js нужны публичные URL:
 
 ```bash
 nano apps/web/.env.production
@@ -227,13 +227,17 @@ nano apps/web/.env.production
 
 ```env
 NEXT_PUBLIC_API_BASE_URL=https://api.ваш-домен.ru
+# URL фронта без слэша в конце — без него в Telegram Mini App не грузятся иконки оплаты
+NEXT_PUBLIC_APP_URL=https://ваш-домен.ru
 ```
 
-Либо тот же URL задайте в `.env.local` перед `npm run build`.
+Либо те же переменные задайте в `.env.local` перед `npm run build`.
 
 ---
 
 ## 7. База данных и миграции
+
+База данных (PostgreSQL) живёт **отдельно от кода**: она на сервере (или на отдельном хосте), к ней обращается приложение по строке `DATABASE_URL` из `.env`. **При пересборке проекта (git pull, npm run build, pm2 restart) база не пересоздаётся и не очищается** — меняется только код приложения. Данные удаляются только если вы явно выполните что-то вроде `prisma migrate reset` или удалите БД вручную.
 
 Один раз примените миграции Prisma:
 
@@ -245,6 +249,32 @@ cd ../..
 ```
 
 При необходимости создайте начальные данные (например, AccessSettings) через seed или вручную в БД.
+
+### 7.1 Перенос подписчиков из старого проекта (Telegram ID)
+
+Если у вас уже есть база подписчиков с Telegram ID (из другого бота/проекта), их можно перенести в этот проект.
+
+1. **Экспорт из старого проекта**  
+   Сохраните подписчиков в CSV с колонками: `telegram_id`, `first_name`, `username` (заголовок в первой строке). Пример:
+
+   ```csv
+   telegram_id,first_name,username
+   123456789,Иван,ivan_user
+   987654321,Мария,
+   ```
+
+2. **Импорт в этот проект**  
+   На сервере (или локально, с указанием `DATABASE_URL` на нужную БД):
+
+   ```bash
+   cd /opt/exam/exam-platform/apps/api
+   npm run import:subscribers -- /path/to/subscribers.csv
+   ```
+
+   Скрипт делает upsert по `telegram_id`: существующие пользователи обновляются (имя, username), новые — создаются. Подписки (UserSubscription) этим скриптом не создаются; при необходимости их можно выдать через админку или отдельный скрипт.
+
+   Если в CSV другой разделитель (например, точка с запятой), задайте переменную окружения:  
+   `CSV_DELIMITER=';' npm run import:subscribers -- /path/to/file.csv`
 
 ---
 
@@ -450,14 +480,16 @@ pm2 restart exam-web
 
 ### Обновление проекта после git pull
 
+**Важно:** после `git pull` обязательно пересобрать приложения и перезапустить PM2. Без пересборки сервер продолжит отдавать старый билд — изменений в коде видно не будет.
+
 ```bash
-cd /home/app/exam-platform
-git pull
+cd /opt/exam/exam-platform
+git pull origin main
 
 # API
 cd apps/api && npm ci && npm run build && cd ../..
 
-# Web
+# Web (именно build создаёт актуальный билд для next start)
 cd apps/web && npm ci && npm run build && cd ../..
 
 # Миграции (если появились новые)
