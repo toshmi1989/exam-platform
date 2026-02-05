@@ -14,25 +14,39 @@ import {
 import { randomUUID } from 'crypto';
 
 const router = Router();
-const ALLOWED_PS = ['click', 'payme', 'uzum', 'xazna', 'anorbank', 'alif', 'visa', 'mastercard'];
+
+/** Frontend (human) → Multicard internal payment system code. */
+const PS_MAP: Record<string, string> = {
+  payme: 'payme',
+  click: 'click',
+  uzum: 'uzum',
+  visa: 'card',
+  mastercard: 'card',
+  alif: 'alif',
+  anorbank: 'anorbank',
+  xazna: 'xazna',
+};
+
 const FRONTEND_URL = (process.env.FRONTEND_URL ?? process.env.CORS_ORIGIN ?? 'http://localhost:3000').replace(/\/$/, '');
 
 /**
  * POST /payments/create
  * Body: { kind: 'one-time' | 'subscription', examId?: string, paymentSystem: string }
+ * paymentSystem: frontend value (payme, click, visa, mastercard, etc.) — mapped to Multicard codes internally.
  * Returns: { checkout_url, invoiceId }
  */
 router.post('/create', async (req: Request, res: Response) => {
   const userId = (req as Request & { user?: { id: string } }).user?.id;
   const kind = req.body?.kind === 'subscription' ? 'subscription' : 'one-time';
   const examId = typeof req.body?.examId === 'string' ? req.body.examId.trim() : null;
-  const ps = typeof req.body?.paymentSystem === 'string' ? req.body.paymentSystem.trim().toLowerCase() : '';
+  const psRaw = typeof req.body?.paymentSystem === 'string' ? req.body.paymentSystem.trim().toLowerCase() : '';
+  const ps = psRaw && PS_MAP[psRaw] ? PS_MAP[psRaw] : '';
 
   if (!userId) {
     return res.status(401).json({ ok: false, reasonCode: 'AUTH_REQUIRED' });
   }
 
-  if (!ps || !ALLOWED_PS.includes(ps)) {
+  if (!ps) {
     return res.status(400).json({ ok: false, reasonCode: 'INVALID_PAYMENT_SYSTEM' });
   }
   if (kind === 'one-time' && !examId) {

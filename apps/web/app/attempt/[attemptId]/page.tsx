@@ -252,48 +252,51 @@ export default function AttemptPage() {
             <Timer label={copy.timer} remainingSeconds={remainingSeconds} />
           </div>
 
-          <div className="flex flex-wrap gap-2 pb-1">
-            {questions.map((question, index) => {
-              const answered = Boolean(answers[question.id]);
-              const active = index === currentIndex;
-              const isPractice = mode === 'practice';
-              const answeredCorrect =
-                isPractice &&
-                answered &&
-                question.correctOptionId &&
-                answers[question.id] === question.correctOptionId;
-              const answeredWrong =
-                isPractice &&
-                answered &&
-                question.correctOptionId &&
-                answers[question.id] !== question.correctOptionId;
-              return (
-                <button
-                  key={question.id}
-                  ref={(el) => {
-                    cardRefs.current[question.id] = el;
-                  }}
-                  type="button"
-                  onClick={() => {
-                    setWarning(null);
-                    setCurrentIndex(index);
-                  }}
-                  className={`min-w-[2.5rem] rounded-lg border px-3 py-2 text-xs font-semibold transition ${
-                    active
-                      ? 'border-slate-900 bg-slate-900 text-white'
-                      : answeredCorrect
-                        ? 'border-emerald-400 bg-emerald-100 text-emerald-800'
-                        : answeredWrong
-                          ? 'border-rose-400 bg-rose-100 text-rose-800'
-                          : answered
-                            ? 'border-blue-400 bg-blue-100 text-blue-800'
-                            : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                  }`}
-                >
-                  {index + 1}
-                </button>
-              );
-            })}
+          {/* На мобильном — одна строка с горизонтальным скроллом и центрированием активного вопроса; на md+ — сетка */}
+          <div className="-mx-4 overflow-x-auto overflow-y-hidden px-4 md:mx-0 md:overflow-visible md:px-0">
+            <div className="flex gap-2 pb-1 flex-nowrap md:flex-wrap">
+              {questions.map((question, index) => {
+                const answered = Boolean(answers[question.id]);
+                const active = index === currentIndex;
+                const isPractice = mode === 'practice';
+                const answeredCorrect =
+                  isPractice &&
+                  answered &&
+                  question.correctOptionId &&
+                  answers[question.id] === question.correctOptionId;
+                const answeredWrong =
+                  isPractice &&
+                  answered &&
+                  question.correctOptionId &&
+                  answers[question.id] !== question.correctOptionId;
+                return (
+                  <button
+                    key={question.id}
+                    ref={(el) => {
+                      cardRefs.current[question.id] = el;
+                    }}
+                    type="button"
+                    onClick={() => {
+                      setWarning(null);
+                      setCurrentIndex(index);
+                    }}
+                    className={`shrink-0 min-w-[2.5rem] rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                      active
+                        ? 'border-slate-900 bg-slate-900 text-white'
+                        : answeredCorrect
+                          ? 'border-emerald-400 bg-emerald-100 text-emerald-800'
+                          : answeredWrong
+                            ? 'border-rose-400 bg-rose-100 text-rose-800'
+                            : answered
+                              ? 'border-blue-400 bg-blue-100 text-blue-800'
+                              : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    {index + 1}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 

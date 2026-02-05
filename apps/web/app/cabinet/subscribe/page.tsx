@@ -11,21 +11,25 @@ import { createPayment } from '../../../lib/api';
 
 export const dynamic = 'force-dynamic';
 
+const PAYMENT_LOGOS = '/payments/';
 const paymentMethods = [
-  { id: 'anorbank', label: 'Anorbank', logo: '/payments/anorbank.svg' },
-  { id: 'click', label: 'Click', logo: '/payments/click.svg' },
-  { id: 'payme', label: 'Payme', logo: '/payments/payme.svg' },
-  { id: 'uzum', label: 'Uzum', logo: '/payments/uzum.svg' },
-  { id: 'xazna', label: 'Xazna', logo: '/payments/xazna.svg' },
-  { id: 'alif', label: 'Alif', logo: '/payments/alif.svg' },
-  { id: 'visa', label: 'Visa', logo: '/payments/visa.svg' },
-  { id: 'mastercard', label: 'Mastercard', logo: '/payments/mastercard.svg' },
+  { id: 'anorbank', label: 'Anorbank', logo: 'anorbank.svg' },
+  { id: 'click', label: 'Click', logo: 'click.svg' },
+  { id: 'payme', label: 'Payme', logo: 'payme.svg' },
+  { id: 'uzum', label: 'Uzum', logo: 'uzum.svg' },
+  { id: 'xazna', label: 'Xazna', logo: 'xazna.svg' },
+  { id: 'alif', label: 'Alif', logo: 'alif.svg' },
+  { id: 'visa', label: 'Visa', logo: 'visa.svg' },
+  { id: 'mastercard', label: 'Mastercard', logo: 'mastercard.svg' },
 ];
 
 export default function SubscribePage() {
   const [language, setLanguage] = useState<Language>(readSettings().language);
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [assetBase] = useState(() =>
+    typeof window !== 'undefined' ? window.location.origin : ''
+  );
 
   useEffect(() => {
     const update = () => setLanguage(readSettings().language);
@@ -87,7 +91,7 @@ export default function SubscribePage() {
                 <div className="flex h-12 w-full items-center justify-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={method.logo}
+                    src={assetBase ? `${assetBase}${PAYMENT_LOGOS}${method.logo}` : `${PAYMENT_LOGOS}${method.logo}`}
                     alt={method.label}
                     className="h-10 w-auto object-contain"
                   />

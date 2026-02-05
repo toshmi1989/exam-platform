@@ -12,28 +12,84 @@ import { getPaymentStatus, createAttempt, startAttempt } from '../../../../lib/a
 
 export const dynamic = 'force-dynamic';
 
-const POLL_INTERVAL_MS = 2000;
-const MAX_POLL_ATTEMPTS = 60; // ~2 min
+// Опрос статуса: при уходе со страницы (передумал оплатить) polling останавливается в cleanup — лишних запросов нет.
+// Один запрос = один лёгкий GET /payments/status/:id (findUnique), на стабильность не влияет.
+const POLL_INTERVAL_MS = 3000;  // 3 c — баланс между отзывчивостью и нагрузкой при отказе от оплаты
+const MAX_POLL_ATTEMPTS = 40;   // ~2 min
+const PAID_START_DELAY_MS = 800;   // дать колбэку время создать OneTimeAccess
+const CREATE_ATTEMPT_RETRIES = 5;  // повторы createAttempt при гонке с колбэком
+const CREATE_ATTEMPT_RETRY_DELAY_MS = 1000;
+
+const STORAGE_KEY = 'exam_one_time_return';
 
 function PayOneTimeReturnClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const invoiceId = searchParams.get('invoiceId') ?? '';
-  const examId = searchParams.get('examId') ?? '';
-  const mode = (searchParams.get('mode') === 'practice' ? 'practice' : 'exam') as 'exam' | 'practice';
+  const [invoiceId, setInvoiceId] = useState(() => searchParams.get('invoiceId') ?? '');
+  const [examId, setExamId] = useState(() => searchParams.get('examId') ?? '');
+  const [mode, setMode] = useState<'exam' | 'practice'>(() =>
+    (searchParams.get('mode') === 'practice' ? 'practice' : 'exam')
+  );
+  const [restored, setRestored] = useState(false);
 
   const [status, setStatus] = useState<'polling' | 'starting' | 'done' | 'error'>('polling');
   const [message, setMessage] = useState<string>('Ожидание подтверждения оплаты…');
   const pollCount = useRef(0);
 
+  // Восстановить invoiceId/examId/mode из sessionStorage, если в URL нет (редирект шлюза мог обрезать query)
   useEffect(() => {
+    if (restored) return;
+    const hasFromUrl = invoiceId && examId;
+    if (hasFromUrl) {
+      setRestored(true);
+      return;
+    }
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { invoiceId?: string; examId?: string; mode?: string };
+        if (parsed.invoiceId) setInvoiceId((prev) => prev || parsed.invoiceId || '');
+        if (parsed.examId) setExamId((prev) => prev || parsed.examId || '');
+        if (parsed.mode === 'practice' || parsed.mode === 'exam') setMode(parsed.mode);
+      }
+    } catch {
+      // ignore
+    }
+    setRestored(true);
+  }, [invoiceId, examId, restored]);
+
+  useEffect(() => {
+    if (!restored) return;
     if (!invoiceId || !examId) {
       setStatus('error');
-      setMessage('Не указан счёт или экзамен.');
+      setMessage('Не указан счёт или экзамен. Перейдите в «Мои экзамены» и попробуйте снова.');
       return;
     }
 
     let cancelled = false;
+
+    async function startTestAfterPaid(): Promise<boolean> {
+      await new Promise((r) => setTimeout(r, PAID_START_DELAY_MS));
+      for (let i = 0; i < CREATE_ATTEMPT_RETRIES && !cancelled; i++) {
+        try {
+          const attempt = await createAttempt(examId, mode);
+          await startAttempt(attempt.attemptId);
+          if (cancelled) return false;
+          try {
+            sessionStorage.removeItem(STORAGE_KEY);
+          } catch {
+            // ignore
+          }
+          router.replace(`/attempt/${attempt.attemptId}`);
+          return true;
+        } catch {
+          if (i < CREATE_ATTEMPT_RETRIES - 1) {
+            await new Promise((r) => setTimeout(r, CREATE_ATTEMPT_RETRY_DELAY_MS));
+          }
+        }
+      }
+      return false;
+    }
 
     async function poll() {
       while (!cancelled && pollCount.current < MAX_POLL_ATTEMPTS) {
@@ -43,11 +99,12 @@ function PayOneTimeReturnClient() {
           if (result.status === 'paid') {
             setStatus('starting');
             setMessage('Оплата получена. Запускаем тест…');
-            const attempt = await createAttempt(examId, mode);
-            await startAttempt(attempt.attemptId);
+            const started = await startTestAfterPaid();
             if (cancelled) return;
-            setStatus('done');
-            router.replace(`/attempt/${attempt.attemptId}`);
+            if (!started) {
+              setStatus('error');
+              setMessage('Не удалось запустить тест. Доступ уже оформлен — перейдите в «Мои экзамены» и начните тест.');
+            }
             return;
           }
         } catch {
@@ -66,7 +123,7 @@ function PayOneTimeReturnClient() {
     return () => {
       cancelled = true;
     };
-  }, [invoiceId, examId, mode, router]);
+  }, [restored, invoiceId, examId, mode, router]);
 
   return (
     <>
@@ -79,10 +136,10 @@ function PayOneTimeReturnClient() {
             )}
             {status === 'error' && (
               <>
-                <p className="text-center text-rose-600">{message}</p>
+                <p className="text-center text-slate-700">{message}</p>
                 <a
                   href="/cabinet/my-exams"
-                  className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-800"
+                  className="mt-2 inline-block rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-800"
                 >
                   К экзаменам
                 </a>
