@@ -60,8 +60,8 @@ function PayOneTimeClient() {
       .catch(() => setOneTimePrice(null));
   }, []);
 
-  // Проверяем наличие незавершённого инвойса в sessionStorage для отображения кнопки
-  useEffect(() => {
+  // Функция для проверки sessionStorage
+  const checkStoredInvoice = () => {
     if (!examId) {
       setHasStoredInvoice(false);
       return;
@@ -74,13 +74,39 @@ function PayOneTimeClient() {
       }
       const parsed = JSON.parse(raw) as { invoiceId?: string; examId?: string; mode?: string };
       if (parsed.invoiceId && parsed.examId === examId) {
+        console.log('[pay-one-time] Found stored invoice:', parsed.invoiceId);
         setHasStoredInvoice(true);
       } else {
         setHasStoredInvoice(false);
       }
-    } catch {
+    } catch (e) {
+      console.error('[pay-one-time] Error checking stored invoice:', e);
       setHasStoredInvoice(false);
     }
+  };
+
+  // Проверяем наличие незавершённого инвойса в sessionStorage для отображения кнопки
+  useEffect(() => {
+    checkStoredInvoice();
+
+    // Проверяем при возврате фокуса на окно (когда пользователь вернулся из приложения оплаты)
+    const handleFocus = () => {
+      checkStoredInvoice();
+    };
+
+    // Проверяем периодически (каждые 2 секунды) для случаев, когда focus не срабатывает
+    const intervalId = setInterval(() => {
+      checkStoredInvoice();
+    }, 2000);
+
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('pageshow', handleFocus); // Для случаев, когда страница восстанавливается из кэша
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('pageshow', handleFocus);
+      clearInterval(intervalId);
+    };
   }, [examId]);
 
   // Если есть «висящий» инвойс в sessionStorage, при открытии страницы проверяем его статус.
@@ -315,19 +341,26 @@ function PayOneTimeClient() {
                 ? `${oneTimePrice.toLocaleString('ru-UZ')} ${copy.sum}`
                 : '—'}
             </p>
-            {hasStoredInvoice && !pendingInvoice && (
+            {hasStoredInvoice && !pendingInvoice ? (
               <Button
                 className="mt-2 w-full"
                 onClick={() => {
+                  console.log('[pay-one-time] Check payment button clicked, hasStoredInvoice:', hasStoredInvoice);
                   try {
                     const raw = sessionStorage.getItem('exam_one_time_return');
-                    if (!raw) return;
+                    console.log('[pay-one-time] Raw sessionStorage:', raw);
+                    if (!raw) {
+                      console.log('[pay-one-time] No sessionStorage data');
+                      return;
+                    }
                     const parsed = JSON.parse(raw) as {
                       invoiceId?: string;
                       examId?: string;
                       mode?: string;
                     };
+                    console.log('[pay-one-time] Parsed data:', parsed, 'current examId:', examId);
                     if (parsed.invoiceId && parsed.examId === examId) {
+                      console.log('[pay-one-time] Redirecting to return page');
                       router.push(
                         `/cabinet/pay-one-time/return?invoiceId=${encodeURIComponent(
                           parsed.invoiceId
@@ -335,15 +368,17 @@ function PayOneTimeClient() {
                           parsed.mode === 'practice' ? 'practice' : 'exam'
                         }`
                       );
+                    } else {
+                      console.log('[pay-one-time] Invoice ID or examId mismatch');
                     }
-                  } catch {
-                    // ignore
+                  } catch (e) {
+                    console.error('[pay-one-time] Error in check payment:', e);
                   }
                 }}
               >
                 {copy.checkPayment}
               </Button>
-            )}
+            ) : null}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
