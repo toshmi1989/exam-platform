@@ -13,7 +13,9 @@ import paymentsRouter from './modules/payments/payments.routes';
 import { attachUserFromHeader } from './middlewares/attachUser.middleware';
 import {
   parseTelegramUser,
+  parseTelegramUserFromWidget,
   verifyTelegramInitData,
+  verifyTelegramWidgetAuth,
 } from './auth/telegram';
 import { prisma } from './db/prisma';
 import { isBlacklisted } from './modules/admin/admin.store';
@@ -178,6 +180,88 @@ app.post('/auth/telegram', (req, res) => {
     })
     .catch((err) => {
       console.error('[auth] user upsert failed', err);
+      return res.status(500).json({ ok: false });
+    });
+});
+
+app.post('/auth/telegram-widget', (req, res) => {
+  const payload = req.body as {
+    id?: number;
+    first_name?: string;
+    last_name?: string;
+    username?: string;
+    photo_url?: string;
+    auth_date?: number;
+    hash?: string;
+  };
+
+  if (
+    typeof payload?.id !== 'number' ||
+    typeof payload?.auth_date !== 'number' ||
+    typeof payload?.hash !== 'string'
+  ) {
+    return res.status(401).json({ ok: false });
+  }
+
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  if (!botToken) {
+    return res.status(500).json({ ok: false, error: 'Missing bot token' });
+  }
+
+  const widgetPayload = {
+    id: payload.id,
+    first_name: payload.first_name,
+    last_name: payload.last_name,
+    username: payload.username,
+    photo_url: payload.photo_url,
+    auth_date: payload.auth_date,
+    hash: payload.hash,
+  };
+
+  if (!verifyTelegramWidgetAuth(widgetPayload, botToken)) {
+    return res.status(401).json({ ok: false });
+  }
+
+  const user = parseTelegramUserFromWidget(widgetPayload);
+  if (isBlacklisted(user.telegramId)) {
+    return res.status(503).end();
+  }
+
+  const adminAllowlist = (process.env.ADMIN_TELEGRAM_IDS ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+  const userId = `tg-${user.telegramId}`;
+  const isAdmin = adminAllowlist.includes(user.telegramId);
+
+  prisma.user
+    .upsert({
+      where: { telegramId: user.telegramId },
+      update: {
+        firstName: user.firstName,
+        username: user.username,
+      },
+      create: {
+        id: userId,
+        telegramId: user.telegramId,
+        firstName: user.firstName,
+        username: user.username,
+        role: 'USER',
+      },
+    })
+    .then(() => {
+      return res.status(200).json({
+        ok: true,
+        isTelegramUser: true,
+        telegramId: user.telegramId,
+        firstName: user.firstName,
+        username: user.username,
+        role: isAdmin ? 'admin' : 'authorized',
+        isAdmin,
+      });
+    })
+    .catch((err) => {
+      console.error('[auth/telegram-widget] user upsert failed', err);
       return res.status(500).json({ ok: false });
     });
 });

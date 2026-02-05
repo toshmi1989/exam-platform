@@ -232,9 +232,13 @@ nano apps/web/.env.production
 NEXT_PUBLIC_API_BASE_URL=https://api.ваш-домен.ru
 # URL фронта без слэша в конце — без него в Telegram Mini App не грузятся иконки оплаты
 NEXT_PUBLIC_APP_URL=https://ваш-домен.ru
+# Опционально: юзернейм бота для кнопки «Log in with Telegram» в браузере (по умолчанию tibtoifabot)
+# NEXT_PUBLIC_TELEGRAM_BOT_USERNAME=tibtoifabot
 ```
 
 Либо те же переменные задайте в `.env.local` перед `npm run build`.
+
+**Telegram Web Login (вход в браузере):** чтобы на сайте работала кнопка «Log in with Telegram» для пользователей, открывающих сайт в обычном браузере (не в Mini App), нужно привязать домен к боту в [@BotFather](https://t.me/botfather): выполните команду `/setdomain` и укажите ваш домен (например `ваш-домен.ru`). Без этого виджет авторизации не будет работать на этом домене. Имя бота для виджета задаётся переменной `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME` (если не задана, используется `tibtoifabot`).
 
 ---
 

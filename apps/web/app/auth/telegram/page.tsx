@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import Script from 'next/script';
 import { useRouter } from 'next/navigation';
 import Button from '../../../components/Button';
 import Card from '../../../components/Card';
@@ -8,6 +9,9 @@ import PageHeader from '../../../components/PageHeader';
 import { getTelegramInitData, isTelegramWebApp } from '../../../lib/telegram';
 import { storeTelegramUser } from '../../../lib/telegramUser';
 import { readSettings, Language } from '../../../lib/uiSettings';
+
+const TELEGRAM_BOT_USERNAME =
+  process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? 'tibtoifabot';
 
 type AuthStatus = 'idle' | 'loading' | 'error';
 
@@ -20,6 +24,9 @@ export default function TelegramAuthPage() {
   );
 
   const isTelegram = useMemo(() => isTelegramWebApp(), []);
+  const routerRef = useRef(router);
+  routerRef.current = router;
+
   const copy = useMemo(() => {
     if (language === 'Английский') {
       return {
@@ -30,6 +37,7 @@ export default function TelegramAuthPage() {
         openInTelegram: 'Open in Telegram',
         retry: 'Retry',
         onlyTelegram: 'Please open this page inside Telegram to continue.',
+        browserLoginHint: 'Log in with Telegram in your browser, or open the app in Telegram.',
         errorDefault: 'We could not verify your Telegram session. Please try again.',
         errorInit: 'We could not read your Telegram session. Please reopen the app.',
         errorVerify: 'Telegram verification failed. Please try again.',
@@ -45,6 +53,7 @@ export default function TelegramAuthPage() {
         openInTelegram: 'Telegramda ochish',
         retry: 'Qayta urinish',
         onlyTelegram: 'Davom etish uchun ilovani Telegramda oching.',
+        browserLoginHint: 'Brauzerda Telegram orqali kiring yoki ilovani Telegramda oching.',
         errorDefault: 'Telegram sessiyasi tasdiqlanmadi. Qayta urinib ko‘ring.',
         errorInit: 'Telegram sessiyasi o‘qilmadi. Ilovani qayta oching.',
         errorVerify: 'Telegram tasdiqlash muvaffaqiyatsiz. Qayta urinib ko‘ring.',
@@ -59,12 +68,16 @@ export default function TelegramAuthPage() {
       openInTelegram: 'Открыть в Telegram',
       retry: 'Повторить',
       onlyTelegram: 'Откройте эту страницу в Telegram для продолжения.',
+      browserLoginHint: 'Войдите через Telegram в браузере или откройте приложение в Telegram.',
       errorDefault: 'Не удалось подтвердить Telegram-сессию. Попробуйте снова.',
       errorInit: 'Не удалось прочитать Telegram-сессию. Откройте приложение заново.',
       errorVerify: 'Проверка Telegram не удалась. Попробуйте снова.',
       errorNetwork: 'Проблема с сетью. Проверьте интернет и повторите.',
     };
   }, [language]);
+
+  const copyRef = useRef(copy);
+  copyRef.current = copy;
 
   useEffect(() => {
     setErrorMessage(copy.errorDefault);
@@ -86,6 +99,43 @@ export default function TelegramAuthPage() {
     window.addEventListener('ui-settings-changed', update);
     return () => window.removeEventListener('ui-settings-changed', update);
   }, []);
+
+  useEffect(() => {
+    if (isTelegram) return;
+
+    (window as unknown as { onTelegramAuth?: (user: Record<string, unknown>) => void }).onTelegramAuth =
+      async (user: Record<string, unknown>) => {
+        setAuthStatus('loading');
+        try {
+          const res = await fetch('/api/auth/telegram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ widget: user }),
+          });
+          const data = await res.json().catch(() => null);
+          if (!res.ok || !data?.ok) {
+            setErrorMessage(copyRef.current?.errorVerify ?? 'Verification failed.');
+            setAuthStatus('error');
+            return;
+          }
+          storeTelegramUser({
+            firstName: data?.firstName,
+            username: data?.username,
+            telegramId: data?.telegramId,
+            role: data?.role,
+            isAdmin: data?.isAdmin,
+          });
+          routerRef.current.replace('/cabinet');
+        } catch {
+          setErrorMessage(copyRef.current?.errorNetwork ?? 'Network error.');
+          setAuthStatus('error');
+        }
+      };
+
+    return () => {
+      (window as unknown as { onTelegramAuth?: (user: Record<string, unknown>) => void }).onTelegramAuth = undefined;
+    };
+  }, [isTelegram]);
 
   async function startTelegramAuth() {
     setAuthStatus('loading');
@@ -134,19 +184,15 @@ export default function TelegramAuthPage() {
     <main className="flex flex-col gap-6">
       <PageHeader title={copy.title} subtitle={copy.subtitle} />
 
-      <Card>
-        {isTelegram ? (
+      {isTelegram && (
+        <Card>
           <p className="text-sm text-slate-700">
             {authStatus === 'loading' && copy.connecting}
             {authStatus === 'error' && errorMessage}
             {authStatus === 'idle' && copy.preparing}
           </p>
-        ) : (
-          <p className="text-sm text-slate-700">
-            {copy.onlyTelegram}
-          </p>
-        )}
-      </Card>
+        </Card>
+      )}
 
       {isTelegram ? (
         authStatus === 'error' && (
@@ -155,14 +201,34 @@ export default function TelegramAuthPage() {
           </Button>
         )
       ) : (
-        <Button
-          size="lg"
-          onClick={() => {
-            window.location.href = 'https://t.me/tibtoifabot';
-          }}
-        >
-          {copy.openInTelegram}
-        </Button>
+        <>
+          <Card>
+            <p className="text-sm text-slate-700">{copy.browserLoginHint}</p>
+          </Card>
+          <div id="telegram-widget-container" className="flex justify-center">
+            <Script
+              src="https://telegram.org/js/telegram-widget.js?22"
+              data-telegram-login={TELEGRAM_BOT_USERNAME}
+              data-size="large"
+              data-onauth="onTelegramAuth"
+              strategy="lazyOnload"
+            />
+          </div>
+          {authStatus === 'loading' && (
+            <p className="text-sm text-slate-600">{copy.connecting}</p>
+          )}
+          {authStatus === 'error' && (
+            <p className="text-sm text-red-600">{errorMessage}</p>
+          )}
+          <Button
+            size="lg"
+            onClick={() => {
+              window.location.href = `https://t.me/${TELEGRAM_BOT_USERNAME}`;
+            }}
+          >
+            {copy.openInTelegram}
+          </Button>
+        </>
       )}
     </main>
   );
