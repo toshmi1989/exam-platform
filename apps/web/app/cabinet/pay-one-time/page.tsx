@@ -208,7 +208,6 @@ function PayOneTimeClient() {
               </p>
               <div className="mt-1 flex gap-2">
                 <Button
-                  size="sm"
                   className="flex-1"
                   onClick={() => {
                     router.push(
@@ -223,7 +222,6 @@ function PayOneTimeClient() {
                   Продолжить
                 </Button>
                 <Button
-                  size="sm"
                   variant="secondary"
                   className="flex-1"
                   onClick={() => {
