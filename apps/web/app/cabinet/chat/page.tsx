@@ -113,28 +113,31 @@ export default function ChatPage() {
   async function handleSend() {
     const trimmed = text.trim();
     if (!trimmed && !selectedImage) return;
+    if (isSending) return;
     setIsSending(true);
 
-    const { response, data } = await apiFetch('/chat/messages', {
-      method: 'POST',
-      json: { text: trimmed, imageData: selectedImage },
-    });
+    try {
+      const { response, data } = await apiFetch('/chat/messages', {
+        method: 'POST',
+        json: { text: trimmed, imageData: selectedImage },
+      });
 
-    if (response.ok) {
-      const payload = data as { message?: ChatMessage } | null;
-      if (payload?.message) {
-        setMessages((prev) => [...prev, payload.message as ChatMessage]);
+      if (response.ok) {
+        const payload = data as { message?: ChatMessage } | null;
+        if (payload?.message) {
+          setMessages((prev) => [...prev, payload.message as ChatMessage]);
+        }
+        setText('');
+        setSelectedImage(null);
+        // Закрываем клавиатуру и возвращаем нав панель
+        if (inputRef.current) {
+          inputRef.current.blur();
+          setIsInputFocused(false);
+        }
       }
-      setText('');
-      setSelectedImage(null);
-      // Закрываем клавиатуру и возвращаем нав панель
-      if (inputRef.current) {
-        inputRef.current.blur();
-        setIsInputFocused(false);
-      }
+    } finally {
+      setIsSending(false);
     }
-
-    setIsSending(false);
   }
 
   function handleAddPhoto() {
@@ -144,6 +147,22 @@ export default function ChatPage() {
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       handleImageChange(file ?? null);
+      // Возвращаем фокус на input после выбора файла
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          setIsInputFocused(true);
+        }
+      }, 100);
+    };
+    input.oncancel = () => {
+      // Если пользователь отменил выбор, возвращаем фокус
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          setIsInputFocused(true);
+        }
+      }, 100);
     };
     input.click();
   }
@@ -251,7 +270,14 @@ export default function ChatPage() {
                 value={text}
                 onChange={(event) => setText(event.target.value)}
                 onFocus={() => setIsInputFocused(true)}
-                onBlur={() => setIsInputFocused(false)}
+                onBlur={(e) => {
+                  // Не закрываем клавиатуру если клик был на нав панель
+                  const relatedTarget = e.relatedTarget as HTMLElement | null;
+                  if (relatedTarget?.closest('nav')) {
+                    return;
+                  }
+                  setIsInputFocused(false);
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey && (text.trim() || selectedImage)) {
                     e.preventDefault();

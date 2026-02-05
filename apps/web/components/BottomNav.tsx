@@ -6,39 +6,6 @@ import { usePathname } from 'next/navigation';
 import { readSettings, Language } from '../lib/uiSettings';
 import { readTelegramUser, TelegramUserSnapshot } from '../lib/telegramUser';
 
-// Определение высоты клавиатуры через визуальный viewport
-function useKeyboardHeight() {
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    // Используем visualViewport если доступен (современные браузеры)
-    if (window.visualViewport) {
-      const updateHeight = () => {
-        const viewport = window.visualViewport;
-        if (!viewport) return;
-        const windowHeight = window.innerHeight;
-        const viewportHeight = viewport.height;
-        const height = Math.max(0, windowHeight - viewportHeight);
-        setKeyboardHeight(height);
-      };
-
-      window.visualViewport.addEventListener('resize', updateHeight);
-      updateHeight();
-
-      return () => {
-        window.visualViewport?.removeEventListener('resize', updateHeight);
-      };
-    }
-
-    // Fallback: если visualViewport недоступен, используем фиксированную высоту при фокусе
-    // (это будет обрабатываться через chatMode prop)
-    return;
-  }, []);
-
-  return keyboardHeight;
-}
 
 const activeColor = '#2AABEE';
 
@@ -60,7 +27,6 @@ export default function BottomNav({ chatMode = false, chatActions }: BottomNavPr
   const [user, setUser] = useState<TelegramUserSnapshot | null>(
     readTelegramUser()
   );
-  const keyboardHeight = useKeyboardHeight();
   const normalizedPath = pathname.length > 1 ? pathname.replace(/\/$/, '') : pathname;
   const navItems = useMemo(() => {
     const isAdmin = Boolean(user?.isAdmin || user?.role === 'admin');
@@ -124,19 +90,18 @@ export default function BottomNav({ chatMode = false, chatActions }: BottomNavPr
     return { addPhoto: 'Добавить фото', send: 'Отправить' };
   }, [language]);
 
-  // При открытой клавиатуре поднимаем нав панель выше
-  // Если visualViewport доступен, используем реальную высоту клавиатуры
-  // Иначе используем фиксированное смещение (примерно 300px для типичной клавиатуры)
-  const bottomOffset = chatMode
-    ? keyboardHeight > 0
-      ? `${keyboardHeight + 12}px`
-      : '20rem' // Fallback: поднимаем примерно на высоту клавиатуры
-    : '0.75rem';
-
   return (
     <nav
-      className="fixed left-0 right-0 z-50 transition-all duration-300 ease-out"
-      style={{ bottom: bottomOffset }}
+      className={`fixed left-0 right-0 z-50 ${
+        chatMode ? 'bottom-0' : 'bottom-3'
+      } transition-all duration-300 ease-out`}
+      style={
+        chatMode
+          ? {
+              bottom: 'calc(env(keyboard-inset-height, 0px) + env(safe-area-inset-bottom, 0px) + 0.75rem)',
+            }
+          : undefined
+      }
     >
       <div className="mx-auto w-full max-w-3xl px-4">
         <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.25rem)] pt-2 shadow-[0_18px_35px_rgba(15,23,42,0.18)] ring-1 ring-[#2AABEE]/20 backdrop-blur-md">
@@ -144,14 +109,24 @@ export default function BottomNav({ chatMode = false, chatActions }: BottomNavPr
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={chatActions.onAddPhoto}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  chatActions.onAddPhoto();
+                }}
                 className="flex h-10 items-center justify-center rounded-xl text-[13px] font-medium text-slate-600 transition-all duration-150 hover:bg-slate-100 active:scale-[0.98]"
               >
                 {chatCopy.addPhoto}
               </button>
               <button
                 type="button"
-                onClick={chatActions.onSend}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (chatActions.canSend) {
+                    chatActions.onSend();
+                  }
+                }}
                 disabled={!chatActions.canSend}
                 className={`flex h-10 items-center justify-center rounded-xl text-[13px] font-medium transition-all duration-150 active:scale-[0.98] ${
                   chatActions.canSend
