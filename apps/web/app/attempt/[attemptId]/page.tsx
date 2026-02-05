@@ -213,13 +213,16 @@ export default function AttemptPage() {
   }
 
   async function handlePrimaryAction() {
-    const firstUnansweredIndex = questions.findIndex(
-      (question) => !answers[question.id]
-    );
-    if (firstUnansweredIndex !== -1) {
-      setWarning(copy.answerAll);
-      setCurrentIndex(firstUnansweredIndex);
-      return;
+    // В режиме «Сдать тест» нужно ответить на все вопросы; в режиме «Готовиться к тесту» можно завершить в любой момент
+    if (mode === 'exam') {
+      const firstUnansweredIndex = questions.findIndex(
+        (question) => !answers[question.id]
+      );
+      if (firstUnansweredIndex !== -1) {
+        setWarning(copy.answerAll);
+        setCurrentIndex(firstUnansweredIndex);
+        return;
+      }
     }
 
     try {
