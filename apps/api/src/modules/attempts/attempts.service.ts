@@ -38,6 +38,15 @@ import { gradeExam } from '../exams/grading.service';
 import { getQuestionsForExam } from '../exams/questions.service';
 import { buildResult } from '../exams/result.service';
 
+function shuffleArray<T>(arr: T[]): T[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 // =======================================================
 
 export type AttemptActionResult =
@@ -266,7 +275,7 @@ export async function getQuestionsForAttempt(
 
   if (!attempt.questionIds || attempt.questionIds.length === 0) {
     const allIds = exam.questions.map((q) => q.id);
-    const shuffled = [...allIds].sort(() => Math.random() - 0.5);
+    const shuffled = shuffleArray([...allIds]);
     const selected = shuffled.slice(0, Math.min(50, shuffled.length));
     attempt.questionIds = selected;
     await saveAttemptRecord(attempt);

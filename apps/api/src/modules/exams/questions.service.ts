@@ -1,6 +1,16 @@
 import { getExamById } from './exam.repository';
 import { QuestionDTO } from './question.dto';
 
+/** Перемешивает массив (Fisher–Yates), не меняя исходный. */
+function shuffle<T>(arr: T[]): T[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 export async function getQuestionsForExam(
   examId: string,
   options?: { questionIds?: string[]; includeCorrect?: boolean }
@@ -19,20 +29,21 @@ export async function getQuestionsForExam(
           .filter(Boolean)
       : exam.questions;
 
-  return orderedQuestions.map((q) => ({
-    id: q.id,
-    type: q.type,
-    text: q.text,
-    options:
-      q.type === 'test'
-        ? q.options.map((o) => ({
-            id: o.id,
-            text: o.text,
-          }))
-        : undefined,
-    correctOptionId:
+  return orderedQuestions.map((q) => {
+    const correctOptionId =
       includeCorrect && q.type === 'test'
         ? q.options.find((o) => o.isCorrect)?.id
-        : undefined,
-  }));
+        : undefined;
+    const optionsShuffled =
+      q.type === 'test'
+        ? shuffle(q.options).map((o) => ({ id: o.id, text: o.text }))
+        : undefined;
+    return {
+      id: q.id,
+      type: q.type,
+      text: q.text,
+      options: optionsShuffled,
+      correctOptionId,
+    };
+  });
 }
