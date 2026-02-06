@@ -27,6 +27,7 @@ export default function AttemptPage() {
   const [language, setLanguage] = useState<Language>(readSettings().language);
   const [warning, setWarning] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(60 * 60);
+  const [shakeKey, setShakeKey] = useState(0);
 
   function localizeReason(reasonCode?: string) {
     if (!reasonCode) return null;
@@ -196,12 +197,14 @@ export default function AttemptPage() {
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
     setWarning(null);
 
-    // Вибрация при неправильном ответе в режиме practice
+    // Вибрация и трясение интерфейса при неправильном ответе в режиме practice
     if (mode === 'practice' && isChoice && optionId) {
       const question = questions.find((q) => q.id === questionId);
       if (question?.correctOptionId && optionId !== question.correctOptionId) {
-        // Двойная легкая вибрация для неправильного ответа
-        triggerHapticFeedback('light');
+        // Двойная вибрация средней силы для неправильного ответа
+        triggerHapticFeedback('medium');
+        // Трясение интерфейса
+        setShakeKey((prev) => prev + 1);
       }
     }
 
@@ -332,12 +335,12 @@ export default function AttemptPage() {
         <AnimatePresence mode="wait">
           {currentQuestion ? (
             <motion.div
-              key={currentQuestion.id}
+              key={`${currentQuestion.id}-${shakeKey}`}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.25, ease: 'easeOut' }}
-              className="mt-6"
+              className={`mt-6 ${shakeKey > 0 ? 'shake' : ''}`}
             >
               <Card title={`${copy.questionLabel} ${currentIndex + 1}`}>
                 <p className="text-sm text-slate-700">

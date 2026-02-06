@@ -32,17 +32,17 @@ export function triggerHapticFeedback(style: 'light' | 'medium' | 'heavy' | 'rig
 
   // Используем Telegram WebApp HapticFeedback API если доступен
   if (tg?.WebApp?.HapticFeedback?.impactOccurred) {
-    // Двойная легкая вибрация с небольшой паузой
-    tg.WebApp.HapticFeedback.impactOccurred('light');
+    // Двойная вибрация средней силы с небольшой паузой
+    tg.WebApp.HapticFeedback.impactOccurred('medium');
     setTimeout(() => {
-      tg.WebApp?.HapticFeedback?.impactOccurred?.('light');
-    }, 80);
+      tg.WebApp?.HapticFeedback?.impactOccurred?.('medium');
+    }, 100);
     return;
   }
 
-  // Fallback на стандартный Vibration API - двойная легкая вибрация
+  // Fallback на стандартный Vibration API - двойная вибрация средней силы
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
-    // Паттерн: вибрация 50ms, пауза 80ms, вибрация 50ms
-    navigator.vibrate([50, 80, 50]);
+    // Паттерн: вибрация 80ms, пауза 100ms, вибрация 80ms
+    navigator.vibrate([80, 100, 80]);
   }
 }
