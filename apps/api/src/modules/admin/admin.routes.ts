@@ -29,6 +29,15 @@ import {
 const router = Router();
 
 router.use(express.json({ limit: '10mb' }));
+// #region agent log
+router.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err && typeof err === 'object' && 'type' in err && err.type === 'entity.too.large') {
+    fetch('http://127.0.0.1:7242/ingest/4fc32459-9fe7-40db-9541-c82348e3184a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'admin.routes.ts:32',message:'Body parser error: entity too large',data:{contentLength:req.headers['content-length'],limit:'10mb'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    return res.status(413).json({ ok: false, error: 'Request entity too large' });
+  }
+  next(err);
+});
+// #endregion
 router.use(requireAdmin);
 
 router.get('/stats', async (_req, res) => {
@@ -561,16 +570,31 @@ router.post('/settings/access', async (req, res) => {
 });
 
 router.post('/import/preview', async (req, res) => {
+  // #region agent log
+  const bodySizeMB = req.headers['content-length'] ? Number(req.headers['content-length']) / (1024 * 1024) : null;
+  const hasBody = !!req.body;
+  const fileBase64Length = typeof req.body?.fileBase64 === 'string' ? req.body.fileBase64.length : null;
+  fetch('http://127.0.0.1:7242/ingest/4fc32459-9fe7-40db-9541-c82348e3184a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'admin.routes.ts:563',message:'Preview handler entry',data:{bodySizeMB:bodySizeMB?.toFixed(2),hasBody,fileBase64Length,contentType:req.headers['content-type']},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
   req.setTimeout(120000); // 2 min for large Excel preview
   const profession = String(req.body?.profession ?? '').toUpperCase();
   const fileBase64 = String(req.body?.fileBase64 ?? '');
   if (!profession || !fileBase64) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/4fc32459-9fe7-40db-9541-c82348e3184a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'admin.routes.ts:568',message:'Preview validation failed',data:{profession,fileBase64Length:fileBase64.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     return res.status(400).json({ ok: false });
   }
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/4fc32459-9fe7-40db-9541-c82348e3184a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'admin.routes.ts:570',message:'Preview processing start',data:{profession,fileBase64Length:fileBase64.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
   const preview = await previewQuestionBank({
     profession: profession as 'DOCTOR' | 'NURSE',
     fileBase64,
   });
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/4fc32459-9fe7-40db-9541-c82348e3184a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'admin.routes.ts:574',message:'Preview processing done',data:{directionsCount:preview.directions.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
   res.json({ ok: true, preview });
 });
 
