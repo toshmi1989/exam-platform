@@ -28,11 +28,11 @@ import {
 
 const router = Router();
 
-router.use(express.json({ limit: '10mb' }));
+router.use(express.json({ limit: '25mb' })); // Excel import with base64 can be large
 // #region agent log
 router.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (err && typeof err === 'object' && 'type' in err && err.type === 'entity.too.large') {
-    fetch('http://127.0.0.1:7242/ingest/4fc32459-9fe7-40db-9541-c82348e3184a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'admin.routes.ts:32',message:'Body parser error: entity too large',data:{contentLength:req.headers['content-length'],limit:'10mb'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7242/ingest/4fc32459-9fe7-40db-9541-c82348e3184a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'admin.routes.ts:32',message:'Body parser error: entity too large',data:{contentLength:req.headers['content-length'],limit:'25mb'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
     return res.status(413).json({ ok: false, error: 'Request entity too large' });
   }
   next(err);
