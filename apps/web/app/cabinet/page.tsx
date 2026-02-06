@@ -169,52 +169,6 @@ function CabinetClient() {
         <main className="flex flex-col gap-6 pb-28 pt-[3.75rem]">
           <PageHeader title={copy.title} subtitle={copy.subtitle} />
 
-          <Card className="flex items-center gap-4">
-            <div className="h-14 w-14 overflow-hidden rounded-full bg-slate-100 text-slate-700">
-              {profile?.photoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={profile.photoUrl}
-                  alt="Telegram avatar"
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-lg font-semibold">
-                  {avatarInitial}
-                </div>
-              )}
-            </div>
-            <div className="flex-1 space-y-1">
-              <p className="text-base font-semibold text-slate-900">
-                {greetingName ? `Hello, ${greetingName}` : 'Hello'}
-              </p>
-              <p className="text-sm text-slate-600">
-                {currentQuoteText}
-              </p>
-            </div>
-          </Card>
-
-          <Card className="relative">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-base font-semibold text-slate-900">
-                {copy.chatTitle}
-              </h2>
-              {chatUnread > 0 ? (
-                <span className="badge-glow inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white">
-                  <span className="size-1.5 rounded-full bg-white" aria-hidden />
-                  {copy.newMessage}
-                  <span className="tabular-nums">({chatUnread > 99 ? '99+' : chatUnread})</span>
-                </span>
-              ) : null}
-            </div>
-            <p className="mt-2 text-sm text-slate-600">{copy.chatNote}</p>
-            <div className="mt-4">
-              <Button href="/cabinet/chat" size="lg" className="w-full">
-                {copy.chatCta}
-              </Button>
-            </div>
-          </Card>
-
           {isGuest ? (
             <Card title={copy.oneTimeCardTitle}>
               <p className="text-sm text-slate-600">{copy.oneTimeCardHint}</p>
@@ -271,6 +225,27 @@ function CabinetClient() {
               ) : null}
             </Card>
           )}
+
+          <Card className="relative">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-base font-semibold text-slate-900">
+                {copy.chatTitle}
+              </h2>
+              {chatUnread > 0 ? (
+                <span className="badge-glow inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white">
+                  <span className="size-1.5 rounded-full bg-white" aria-hidden />
+                  {copy.newMessage}
+                  <span className="tabular-nums">({chatUnread > 99 ? '99+' : chatUnread})</span>
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-2 text-sm text-slate-600">{copy.chatNote}</p>
+            <div className="mt-4">
+              <Button href="/cabinet/chat" size="lg" className="w-full">
+                {copy.chatCta}
+              </Button>
+            </div>
+          </Card>
         </main>
       </AnimatedPage>
       <BottomNav />

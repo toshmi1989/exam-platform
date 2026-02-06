@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AnimatedPage from '../../../components/AnimatedPage';
 import BackButton from '../../../components/BackButton';
@@ -224,6 +224,32 @@ function ExamSelectClient() {
 
   const canStart = profession && examType && examType !== 'oral' && mode && examLanguage && direction && !directionsLoading;
 
+  // Refs for scrolling
+  const examTypeRef = useRef<HTMLDivElement>(null);
+  const modeRef = useRef<HTMLDivElement>(null);
+  const languageRef = useRef<HTMLDivElement>(null);
+  const directionRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to center when step changes
+  useEffect(() => {
+    let ref: React.RefObject<HTMLDivElement> | null = null;
+    if (profession && !examType) {
+      ref = examTypeRef;
+    } else if (profession && examType === 'test' && !mode) {
+      ref = modeRef;
+    } else if (profession && examType === 'test' && mode && !examLanguage) {
+      ref = languageRef;
+    } else if (profession && examType === 'test' && mode && examLanguage && !direction) {
+      ref = directionRef;
+    }
+
+    if (ref?.current) {
+      setTimeout(() => {
+        ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+  }, [profession, examType, mode, examLanguage, direction]);
+
   return (
     <>
       <AnimatedPage>
@@ -267,7 +293,8 @@ function ExamSelectClient() {
 
             {/* Тип экзамена */}
             {profession && (
-              <Card title={copy.examTypeTitle}>
+              <div ref={examTypeRef}>
+                <Card title={copy.examTypeTitle}>
                 <div className="grid grid-cols-2 gap-3">
                   <Button
                     size="lg"
@@ -297,11 +324,13 @@ function ExamSelectClient() {
                   </Button>
                 </div>
               </Card>
+              </div>
             )}
 
             {/* Режим */}
             {profession && examType === 'test' && (
-              <Card title={copy.modeTitle}>
+              <div ref={modeRef}>
+                <Card title={copy.modeTitle}>
                 <div className="grid gap-3">
                   <Button
                     size="lg"
@@ -329,11 +358,13 @@ function ExamSelectClient() {
                   </Button>
                 </div>
               </Card>
+              </div>
             )}
 
             {/* Язык */}
             {profession && examType === 'test' && mode && (
-              <Card title={copy.languageTitle}>
+              <div ref={languageRef}>
+                <Card title={copy.languageTitle}>
                 <div className="grid grid-cols-2 gap-3">
                   <Button
                     size="lg"
@@ -359,11 +390,13 @@ function ExamSelectClient() {
                   </Button>
                 </div>
               </Card>
+              </div>
             )}
 
             {/* Направление */}
             {profession && examType === 'test' && mode && examLanguage && (
-              <Card title={copy.directionLabel}>
+              <div ref={directionRef}>
+                <Card title={copy.directionLabel}>
                 {directionsLoading ? (
                   <p className="text-sm text-slate-600">{copy.directionsLoading}</p>
                 ) : directionsError ? (
@@ -394,6 +427,7 @@ function ExamSelectClient() {
                   <p className="mt-2 text-xs text-slate-600">{copy.calmHint}</p>
                 )}
               </Card>
+              </div>
             )}
 
             {/* Устный экзамен заглушка */}
