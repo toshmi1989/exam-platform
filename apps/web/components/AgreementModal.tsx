@@ -6,8 +6,7 @@ import { USER_AGREEMENT_TEXT } from '../data/agreementText';
 import { acceptAgreement } from '../lib/api';
 import { setGuestAgreement } from '../lib/agreementStorage';
 
-const CHECKBOX_LABEL = 'Я принимаю условия пользовательского соглашения';
-const SUBMIT_LABEL = 'Продолжить';
+const SUBMIT_LABEL = 'Принять и продолжить';
 
 interface AgreementModalProps {
   onAccepted: () => void;
@@ -16,7 +15,6 @@ interface AgreementModalProps {
 }
 
 export default function AgreementModal({ onAccepted, isGuest = false }: AgreementModalProps) {
-  const [checked, setChecked] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,7 +27,7 @@ export default function AgreementModal({ onAccepted, isGuest = false }: Agreemen
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (!checked || loading) return;
+    if (loading) return;
     setLoading(true);
     setError(null);
     try {
@@ -52,7 +50,7 @@ export default function AgreementModal({ onAccepted, isGuest = false }: Agreemen
     } finally {
       setLoading(false);
     }
-  }, [checked, loading, onAccepted, isGuest]);
+  }, [loading, onAccepted, isGuest]);
 
   return (
     <div
@@ -73,16 +71,6 @@ export default function AgreementModal({ onAccepted, isGuest = false }: Agreemen
           {USER_AGREEMENT_TEXT}
         </div>
         <div className="mt-4 flex flex-shrink-0 flex-col gap-3">
-          <label className="flex cursor-pointer items-start gap-3">
-            <input
-              type="checkbox"
-              checked={checked}
-              onChange={(e) => setChecked(e.target.checked)}
-              className="mt-1 h-5 w-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-              aria-label={CHECKBOX_LABEL}
-            />
-            <span className="text-sm text-slate-700">{CHECKBOX_LABEL}</span>
-          </label>
           {error && (
             <p className="text-sm text-red-600" role="alert">
               {error}
@@ -91,7 +79,7 @@ export default function AgreementModal({ onAccepted, isGuest = false }: Agreemen
           <Button
             type="button"
             size="lg"
-            disabled={!checked || loading}
+            disabled={loading}
             onClick={handleSubmit}
           >
             {loading ? 'Сохранение…' : SUBMIT_LABEL}

@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation';
 function getNavIndex(pathname: string): number | null {
   if (pathname.startsWith('/cabinet/exams')) return 0;
   if (pathname.startsWith('/cabinet/my-exams')) return 0;
+  if (pathname.startsWith('/exam/select')) return 0;
   if (pathname === '/cabinet') return 1;
   if (pathname.startsWith('/cabinet/settings')) return 2;
   if (pathname.startsWith('/admin')) return 3;

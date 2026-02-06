@@ -222,7 +222,7 @@ function CabinetClient() {
                 <Button
                   size="lg"
                   className="w-full"
-                  onClick={() => router.push('/cabinet/my-exams?access=one-time')}
+                  onClick={() => router.push('/exam/select?access=one-time')}
                 >
                   {copy.oneTime}
                 </Button>
@@ -263,7 +263,7 @@ function CabinetClient() {
                     size="lg"
                     variant="secondary"
                     className="w-full"
-                    onClick={() => router.push('/cabinet/my-exams?access=one-time')}
+                    onClick={() => router.push('/exam/select?access=one-time')}
                   >
                     {copy.oneTime}
                   </Button>

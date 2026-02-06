@@ -19,7 +19,7 @@ export default function BottomNav() {
     const isAdmin = Boolean(user?.isAdmin || user?.role === 'admin');
     if (language === 'Английский') {
       const items = [
-        { href: '/cabinet/my-exams', label: 'Exams' },
+        { href: '/exam/select', label: 'Exams' },
         { href: '/cabinet', label: 'Home' },
         { href: '/cabinet/settings', label: 'Settings' },
       ];
@@ -27,14 +27,14 @@ export default function BottomNav() {
     }
     if (language === 'Узбекский') {
       const items = [
-        { href: '/cabinet/my-exams', label: 'Imtihon' },
+        { href: '/exam/select', label: 'Imtihon' },
         { href: '/cabinet', label: 'Asosiy' },
         { href: '/cabinet/settings', label: 'Sozlamalar' },
       ];
       return isAdmin ? [...items, { href: '/admin', label: 'Admin' }] : items;
     }
     const items = [
-      { href: '/cabinet/my-exams', label: 'Экзамен' },
+      { href: '/exam/select', label: 'Экзамен' },
       { href: '/cabinet', label: 'Главный' },
       { href: '/cabinet/settings', label: 'Настройки' },
     ];

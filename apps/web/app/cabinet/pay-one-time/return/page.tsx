@@ -262,7 +262,7 @@ function PayOneTimeReturnClient() {
     if (examId) {
       router.replace(`/cabinet/pay-one-time?examId=${encodeURIComponent(examId)}&mode=${mode}`);
     } else {
-      router.replace('/cabinet/my-exams');
+      router.replace('/exam/select');
     }
   }
 
@@ -323,7 +323,7 @@ function PayOneTimeReturnClient() {
                     {copy.choosePaymentAgain}
                   </button>
                   <a
-                    href="/cabinet/my-exams"
+                    href="/exam/select"
                     className="mt-1 block text-center text-sm text-slate-500 underline-offset-2 hover:underline"
                   >
                     {copy.goToMyExams}

@@ -351,7 +351,7 @@ export default function AttemptResultPage() {
               ) : null}
             </>
           ) : null}
-          <Button href="/cabinet/my-exams" size="lg" className="w-full">
+          <Button href="/exam/select" size="lg" className="w-full">
             {copy.tryAgain}
           </Button>
         </div>
@@ -359,7 +359,7 @@ export default function AttemptResultPage() {
 
       {showReviewUI ? (
         <div className="pt-4">
-          <Button href="/cabinet/my-exams" size="lg" className="w-full">
+          <Button href="/exam/select" size="lg" className="w-full">
             {copy.tryAgain}
           </Button>
         </div>

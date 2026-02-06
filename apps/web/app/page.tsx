@@ -150,7 +150,7 @@ export default function EntryPage() {
         role: 'authorized',
       });
     }
-    router.push('/cabinet/my-exams?access=one-time&guest=1');
+    router.push('/exam/select?access=one-time&guest=1');
   }
 
   return (

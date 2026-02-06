@@ -268,7 +268,7 @@ function PayOneTimeClient() {
             <PageHeader title={copy.title} subtitle={copy.subtitle} />
             <Card>
               <p className="text-sm text-slate-600">{copy.noExam}</p>
-              <Button href="/cabinet/my-exams" size="lg" className="mt-4 w-full">
+              <Button href="/exam/select" size="lg" className="mt-4 w-full">
                 {copy.back}
               </Button>
             </Card>
@@ -419,7 +419,7 @@ function PayOneTimeClient() {
             {copy.pay}
           </p>
 
-          <Button href="/cabinet/my-exams" size="lg" variant="secondary" className="w-full">
+          <Button href="/exam/select" size="lg" variant="secondary" className="w-full">
             {copy.back}
           </Button>
         </main>

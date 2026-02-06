@@ -1,19 +1,23 @@
 'use client';
 
-import { Suspense } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import AnimatedPage from '../../../components/AnimatedPage';
-import BackButton from '../../../components/BackButton';
-import BottomNav from '../../../components/BottomNav';
-import Button from '../../../components/Button';
-import Card from '../../../components/Card';
-import PageHeader from '../../../components/PageHeader';
-import { readSettings, Language } from '../../../lib/uiSettings';
-import { apiFetch } from '../../../lib/api/client';
-import { createAttempt, startAttempt, getProfile } from '../../../lib/api';
 
 export const dynamic = 'force-dynamic';
+
+// Redirect to new unified exam selection page
+export default function MyExamsFlowPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  useEffect(() => {
+    const access = searchParams.get('access');
+    const params = access === 'one-time' ? '?access=one-time' : '';
+    router.replace(`/exam/select${params}`);
+  }, [router, searchParams]);
+  
+  return null;
+}
 
 type ProfessionKey = 'doctors' | 'nurses';
 type ExamTypeKey = 'test' | 'oral';
