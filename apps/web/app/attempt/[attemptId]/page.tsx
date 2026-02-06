@@ -193,6 +193,11 @@ export default function AttemptPage() {
     }
   }, [currentIndex, questions]);
 
+  // Сбрасываем трясение при переходе на новый вопрос
+  useEffect(() => {
+    setShakingQuestionId(null);
+  }, [currentIndex]);
+
   function handleAnswerChange(questionId: string, value: string, isChoice?: boolean, optionId?: string) {
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
     setWarning(null);
