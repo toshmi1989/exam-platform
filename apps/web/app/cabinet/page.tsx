@@ -169,6 +169,31 @@ function CabinetClient() {
         <main className="flex flex-col gap-6 pb-28 pt-[3.75rem]">
           <PageHeader title={copy.title} subtitle={copy.subtitle} />
 
+          <Card className="flex items-center gap-4">
+            <div className="h-14 w-14 overflow-hidden rounded-full bg-slate-100 text-slate-700">
+              {profile?.photoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={profile.photoUrl}
+                  alt="Telegram avatar"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-lg font-semibold">
+                  {avatarInitial}
+                </div>
+              )}
+            </div>
+            <div className="flex-1 space-y-1">
+              <p className="text-base font-semibold text-slate-900">
+                {greetingName ? `Hello, ${greetingName}` : 'Hello'}
+              </p>
+              <p className="text-sm text-slate-600">
+                {currentQuoteText}
+              </p>
+            </div>
+          </Card>
+
           {isGuest ? (
             <Card title={copy.oneTimeCardTitle}>
               <p className="text-sm text-slate-600">{copy.oneTimeCardHint}</p>
