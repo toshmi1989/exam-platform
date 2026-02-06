@@ -20,7 +20,10 @@ export async function getEntitlementsForExam(
   const dailyCount = await prisma.examAttempt.count({
     where: {
       userId,
-      createdAt: {
+      // Free daily limit should be consumed on actual attempt start (launch),
+      // not merely on attempt record creation.
+      startedAt: {
+        not: null,
         gte: todayStart,
         lt: todayEnd,
       },

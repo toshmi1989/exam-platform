@@ -108,12 +108,7 @@ export default function AdminImportPage() {
     setErrorMessage(null);
     setStatusBar('preview');
     try {
-      // #region agent log
       const jsonPayload = { profession, fileBase64 };
-      const jsonStr = JSON.stringify(jsonPayload);
-      const jsonSizeMB = new Blob([jsonStr]).size / (1024 * 1024);
-      fetch('http://127.0.0.1:7242/ingest/4fc32459-9fe7-40db-9541-c82348e3184a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'import/page.tsx:111',message:'Preview request start',data:{fileBase64Length:fileBase64.length,jsonSizeMB:jsonSizeMB.toFixed(2),profession},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       const { response, data } = await apiFetch('/admin/import/preview', {
         method: 'POST',
         json: jsonPayload,
@@ -127,13 +122,7 @@ export default function AdminImportPage() {
         preview?: { directions?: { name: string; language: string; questionCount: number }[] };
       } | null;
       setPreview(payload?.preview?.directions ?? []);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/4fc32459-9fe7-40db-9541-c82348e3184a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'import/page.tsx:123',message:'Preview request success',data:{status:response.status,directionsCount:payload?.preview?.directions?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
     } catch (e) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/4fc32459-9fe7-40db-9541-c82348e3184a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'import/page.tsx:125',message:'Preview request error',data:{errorName:e instanceof Error ? e.name : 'unknown',errorMessage:e instanceof Error ? e.message : String(e)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       setErrorMessage(e instanceof Error ? e.message : 'Preview request failed.');
     } finally {
       setPreviewLoading(false);

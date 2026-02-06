@@ -325,14 +325,11 @@ app.use((_req, res) => {
 
 // Global error handler: unhandled rejections in async routes end up here
 app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
-  // #region agent log
   if (err && typeof err === 'object' && 'type' in err && err.type === 'entity.too.large') {
-    fetch('http://127.0.0.1:7242/ingest/4fc32459-9fe7-40db-9541-c82348e3184a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.ts:327',message:'Global body parser error: entity too large',data:{contentLength:req.headers['content-length'],path:req.path},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
     if (!res.headersSent) {
       return res.status(413).json({ ok: false, error: 'Request entity too large' });
     }
   }
-  // #endregion
   console.error('[API error]', err);
   if (res.headersSent) return;
   res.status(500).json({ ok: false, reasonCode: 'INTERNAL_ERROR' });
