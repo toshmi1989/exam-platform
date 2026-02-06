@@ -234,13 +234,13 @@ function ExamSelectClient() {
   useEffect(() => {
     let ref: React.RefObject<HTMLDivElement> | null = null;
     if (profession && !examType) {
-      ref = examTypeRef;
+      ref = examTypeRef as React.RefObject<HTMLDivElement>;
     } else if (profession && examType === 'test' && !mode) {
-      ref = modeRef;
+      ref = modeRef as React.RefObject<HTMLDivElement>;
     } else if (profession && examType === 'test' && mode && !examLanguage) {
-      ref = languageRef;
+      ref = languageRef as React.RefObject<HTMLDivElement>;
     } else if (profession && examType === 'test' && mode && examLanguage && !direction) {
-      ref = directionRef;
+      ref = directionRef as React.RefObject<HTMLDivElement>;
     }
 
     if (ref?.current) {
