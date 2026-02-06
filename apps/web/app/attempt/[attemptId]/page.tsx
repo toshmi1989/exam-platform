@@ -191,9 +191,20 @@ export default function AttemptPage() {
     }
   }, [currentIndex, questions]);
 
-  function handleAnswerChange(questionId: string, value: string, isChoice?: boolean) {
+  function handleAnswerChange(questionId: string, value: string, isChoice?: boolean, optionId?: string) {
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
     setWarning(null);
+
+    // Вибрация при неправильном ответе в режиме practice
+    if (mode === 'practice' && isChoice && optionId) {
+      const question = questions.find((q) => q.id === questionId);
+      if (question?.correctOptionId && optionId !== question.correctOptionId) {
+        // Вибрация: короткая пауза, затем две короткие вибрации
+        if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          navigator.vibrate([100, 50, 100]);
+        }
+      }
+    }
 
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
@@ -354,20 +365,9 @@ export default function AttemptPage() {
                         <button
                           key={option.id}
                           type="button"
-                          onClick={() => {
-                            handleAnswerChange(currentQuestion.id, option.id, true);
-                            // Вибрация при неправильном ответе в режиме practice
-                            if (
-                              mode === 'practice' &&
-                              currentQuestion.correctOptionId &&
-                              option.id !== currentQuestion.correctOptionId
-                            ) {
-                              // Вибрация: короткая пауза, затем две короткие вибрации
-                              if (navigator.vibrate) {
-                                navigator.vibrate([100, 50, 100]);
-                              }
-                            }
-                          }}
+                          onClick={() =>
+                            handleAnswerChange(currentQuestion.id, option.id, true, option.id)
+                          }
                           className={`rounded-xl border px-4 py-3 text-left text-sm transition ${
                             isCorrect
                               ? 'border-emerald-300 bg-emerald-50 text-emerald-800'

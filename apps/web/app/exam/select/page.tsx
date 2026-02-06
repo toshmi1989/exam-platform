@@ -4,7 +4,6 @@ import { Suspense } from 'react';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AnimatedPage from '../../../components/AnimatedPage';
-import BackButton from '../../../components/BackButton';
 import BottomNav from '../../../components/BottomNav';
 import Button from '../../../components/Button';
 import Card from '../../../components/Card';
@@ -254,7 +253,6 @@ function ExamSelectClient() {
     <>
       <AnimatedPage>
         <main className="flex min-h-[70vh] flex-col gap-6 pb-28 pt-[3.75rem]">
-          <BackButton placement="bottom" />
           <PageHeader title={copy.title} subtitle={copy.subtitle} />
 
           <div className="flex flex-col gap-4">
