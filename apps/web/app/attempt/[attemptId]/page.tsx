@@ -12,6 +12,7 @@ import { getQuestions, saveAnswer, submitAttempt } from '../../../lib/api';
 import type { ExamQuestion, ApiError } from '../../../lib/types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { readSettings, Language } from '../../../lib/uiSettings';
+import { triggerHapticFeedback } from '../../../lib/telegram';
 
 export default function AttemptPage() {
   const params = useParams<{ attemptId: string }>();
@@ -199,10 +200,8 @@ export default function AttemptPage() {
     if (mode === 'practice' && isChoice && optionId) {
       const question = questions.find((q) => q.id === questionId);
       if (question?.correctOptionId && optionId !== question.correctOptionId) {
-        // Вибрация: короткая пауза, затем две короткие вибрации
-        if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          navigator.vibrate([100, 50, 100]);
-        }
+        // Используем Telegram WebApp HapticFeedback или стандартный Vibration API
+        triggerHapticFeedback('rigid');
       }
     }
 

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import AnimatedPage from '../../../components/AnimatedPage';
-import BackButton from '../../../components/BackButton';
 import BottomNav from '../../../components/BottomNav';
 import Card from '../../../components/Card';
 import PageHeader from '../../../components/PageHeader';
@@ -88,8 +87,7 @@ export default function SettingsPage() {
     <>
       <AnimatedPage>
         <main className="flex flex-col gap-6 pb-28 pt-[3.75rem]">
-          <BackButton placement="bottom" />
-        <PageHeader title={copy.title} subtitle={copy.subtitle} />
+          <PageHeader title={copy.title} subtitle={copy.subtitle} />
 
         <Card title={copy.languageTitle}>
           <div className="flex flex-col gap-2">
