@@ -27,7 +27,7 @@ export default function AttemptPage() {
   const [language, setLanguage] = useState<Language>(readSettings().language);
   const [warning, setWarning] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(60 * 60);
-  const [shakeKey, setShakeKey] = useState(0);
+  const [shakingQuestionId, setShakingQuestionId] = useState<string | null>(null);
 
   function localizeReason(reasonCode?: string) {
     if (!reasonCode) return null;
@@ -203,8 +203,12 @@ export default function AttemptPage() {
       if (question?.correctOptionId && optionId !== question.correctOptionId) {
         // Двойная вибрация средней силы для неправильного ответа
         triggerHapticFeedback('medium');
-        // Трясение интерфейса
-        setShakeKey((prev) => prev + 1);
+        // Трясение интерфейса только для текущего вопроса
+        setShakingQuestionId(questionId);
+        // Сбрасываем трясение через 400ms (длительность анимации)
+        setTimeout(() => {
+          setShakingQuestionId(null);
+        }, 400);
       }
     }
 
@@ -335,12 +339,12 @@ export default function AttemptPage() {
         <AnimatePresence mode="wait">
           {currentQuestion ? (
             <motion.div
-              key={`${currentQuestion.id}-${shakeKey}`}
+              key={currentQuestion.id}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.25, ease: 'easeOut' }}
-              className={`mt-6 ${shakeKey > 0 ? 'shake' : ''}`}
+              className={`mt-6 ${shakingQuestionId === currentQuestion.id ? 'shake' : ''}`}
             >
               <Card title={`${copy.questionLabel} ${currentIndex + 1}`}>
                 <p className="text-sm text-slate-700">
