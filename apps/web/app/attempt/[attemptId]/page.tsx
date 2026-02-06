@@ -200,8 +200,8 @@ export default function AttemptPage() {
     if (mode === 'practice' && isChoice && optionId) {
       const question = questions.find((q) => q.id === questionId);
       if (question?.correctOptionId && optionId !== question.correctOptionId) {
-        // Используем Telegram WebApp HapticFeedback или стандартный Vibration API
-        triggerHapticFeedback('rigid');
+        // Двойная легкая вибрация для неправильного ответа
+        triggerHapticFeedback('light');
       }
     }
 
