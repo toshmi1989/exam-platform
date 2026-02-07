@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Use apps/web as root when repo has lockfiles at monorepo root (avoids wrong module resolution)
+  turbopack: { root: process.cwd() },
   async headers() {
     return [
       {

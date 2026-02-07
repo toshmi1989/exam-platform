@@ -1,22 +1,22 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import AnimatedPage from '../../../components/AnimatedPage';
-import BottomNav from '../../../components/BottomNav';
-import Card from '../../../components/Card';
-import PageHeader from '../../../components/PageHeader';
-import Button from '../../../components/Button';
+import AnimatedPage from '../../../../components/AnimatedPage';
+import BottomNav from '../../../../components/BottomNav';
+import Card from '../../../../components/Card';
+import PageHeader from '../../../../components/PageHeader';
+import Button from '../../../../components/Button';
 import AdminGuard from '../../components/AdminGuard';
 import AdminNav from '../../components/AdminNav';
-import { readSettings, Language } from '../../../lib/uiSettings';
+import { readSettings, Language } from '../../../../lib/uiSettings';
 import {
   getAdminOralStats,
   streamOralPrewarm,
   type AdminOralStats,
   type OralPrewarmProgress,
-} from '../../../lib/api';
-import { API_BASE_URL } from '../../../lib/api/config';
-import { readTelegramUser } from '../../../lib/telegramUser';
+} from '../../../../lib/api';
+import { API_BASE_URL } from '../../../../lib/api/config';
+import { readTelegramUser } from '../../../../lib/telegramUser';
 
 type ExamOption = { id: string; title: string };
 
