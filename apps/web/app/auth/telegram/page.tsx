@@ -125,8 +125,9 @@ export default function TelegramAuthPage() {
             role: data?.role,
             isAdmin: data?.isAdmin,
           });
-          // Full redirect: callback runs in widget context where router may not navigate
-          window.location.replace('/cabinet');
+          // Жёсткий переход: виджет может вызывать callback в контексте, где router не срабатывает
+          const base = typeof window !== 'undefined' ? window.location.origin : '';
+          window.location.href = base ? `${base}/cabinet` : '/cabinet';
         } catch {
           setErrorMessage(copyRef.current?.errorNetwork ?? 'Network error.');
           setAuthStatus('error');

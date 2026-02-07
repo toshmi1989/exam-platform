@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import Script from 'next/script';
 import { useRouter } from 'next/navigation';
 import AnimatedPage from '../components/AnimatedPage';
 import Button from '../components/Button';
@@ -9,6 +10,9 @@ import { getTelegramInitData, isTelegramWebApp } from '../lib/telegram';
 import { readTelegramUser, storeTelegramUser } from '../lib/telegramUser';
 import { readSettings, Language } from '../lib/uiSettings';
 
+const TELEGRAM_BOT_USERNAME =
+  process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? 'tibtoifabot';
+
 type AuthStatus = 'idle' | 'loading' | 'error' | 'blocked';
 
 export default function EntryPage() {
@@ -16,6 +20,7 @@ export default function EntryPage() {
   const [mounted, setMounted] = useState(false);
   const [authStatus, setAuthStatus] = useState<AuthStatus>('idle');
   const [language, setLanguage] = useState<Language>(readSettings().language);
+  const copyRef = useRef<Record<string, string>>({});
   const [errorMessage, setErrorMessage] = useState(
     'We could not verify your Telegram session. Please try again.'
   );
@@ -71,9 +76,48 @@ export default function EntryPage() {
     };
   }, [language]);
 
+  copyRef.current = copy;
+
   useEffect(() => {
     setErrorMessage(copy.errorDefault);
   }, [copy]);
+
+  useEffect(() => {
+    if (isTelegram) return;
+
+    (window as unknown as { onTelegramAuth?: (user: Record<string, unknown>) => void }).onTelegramAuth =
+      async (user: Record<string, unknown>) => {
+        setAuthStatus('loading');
+        try {
+          const res = await fetch('/api/auth/telegram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ widget: user }),
+          });
+          const data = await res.json().catch(() => null);
+          if (!res.ok || !data?.ok) {
+            setErrorMessage(copyRef.current?.errorVerify ?? 'Verification failed.');
+            setAuthStatus('error');
+            return;
+          }
+          storeTelegramUser({
+            firstName: data?.firstName,
+            username: data?.username,
+            telegramId: data?.telegramId,
+            role: data?.role,
+            isAdmin: data?.isAdmin,
+          });
+          window.location.href = '/cabinet';
+        } catch {
+          setErrorMessage(copyRef.current?.errorNetwork ?? 'Network error.');
+          setAuthStatus('error');
+        }
+      };
+
+    return () => {
+      (window as unknown as { onTelegramAuth?: (user: Record<string, unknown>) => void }).onTelegramAuth = undefined;
+    };
+  }, [isTelegram]);
 
   useEffect(() => {
     if (!isTelegram) return;
@@ -187,15 +231,26 @@ export default function EntryPage() {
           ) : (
             <>
               <div className="mt-6 flex flex-col gap-3">
-                <Button
-                  size="lg"
-                  className="w-full"
-                  onClick={() => {
-                    window.location.href = 'https://t.me/tibtoifabot';
-                  }}
-                >
-                  {copy.continueTelegram}
-                </Button>
+                <div id="telegram-login-widget" className="flex justify-center">
+                  <Script
+                    src="https://telegram.org/js/telegram-widget.js?22"
+                    data-telegram-login={TELEGRAM_BOT_USERNAME}
+                    data-size="large"
+                    data-onauth="onTelegramAuth"
+                    strategy="lazyOnload"
+                  />
+                </div>
+                {authStatus === 'loading' && (
+                  <p className="text-center text-sm text-slate-600">{copy.connecting}</p>
+                )}
+                {authStatus === 'error' && (
+                  <p className="text-center text-sm text-red-600">{errorMessage}</p>
+                )}
+                {authStatus === 'error' && (
+                  <Button size="lg" className="w-full" onClick={() => setAuthStatus('idle')}>
+                    {copy.retry}
+                  </Button>
+                )}
 
                 <Button
                   variant="secondary"
