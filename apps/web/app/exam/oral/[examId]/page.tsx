@@ -67,6 +67,7 @@ export default function OralExamPage() {
   const [answerCache, setAnswerCache] = useState<Record<string, string>>({});
   const [loadingAnswerId, setLoadingAnswerId] = useState<string | null>(null);
   const [answerError, setAnswerError] = useState<string | null>(null);
+  const [answerLimitReached, setAnswerLimitReached] = useState(false);
   const [iframeUrl, setIframeUrl] = useState<string | null>(null);
 
   const orderedQuestions = useMemo(() => {
@@ -111,6 +112,7 @@ export default function OralExamPage() {
     if (loadingAnswerId === questionId) return;
     setLoadingAnswerId(questionId);
     setAnswerError(null);
+    setAnswerLimitReached(false);
     if (answerCache[questionId] === undefined) {
       setAnswerCache((prev) => ({ ...prev, [questionId]: '' }));
     }
@@ -122,14 +124,19 @@ export default function OralExamPage() {
         },
         () => setLoadingAnswerId(null)
       );
-    } catch {
-      setAnswerError(
-        language === 'Узбекский'
-          ? "Javobni yuklab bo'lmadi."
-          : language === 'Английский'
-            ? 'Failed to load answer.'
-            : 'Не удалось загрузить ответ.'
-      );
+    } catch (err: unknown) {
+      const apiErr = err as { reasonCode?: string };
+      if (apiErr?.reasonCode === 'ACCESS_DENIED') {
+        setAnswerLimitReached(true);
+      } else {
+        setAnswerError(
+          language === 'Узбекский'
+            ? "Javobni yuklab bo'lmadi."
+            : language === 'Английский'
+              ? 'Failed to load answer.'
+              : 'Не удалось загрузить ответ.'
+        );
+      }
       setLoadingAnswerId(null);
     }
   }, [language]);
@@ -266,6 +273,15 @@ export default function OralExamPage() {
             )}
             {answerError && (
               <p className="mt-2 text-sm text-rose-600">{answerError}</p>
+            )}
+            {answerLimitReached && (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="font-semibold text-amber-800">{copy.dailyLimitTitle}</p>
+                <p className="mt-0.5 text-sm text-amber-800">{copy.dailyLimitHint}</p>
+                <Button href="/cabinet/subscribe" size="md" className="mt-3">
+                  {copy.buySubscriptionCta}
+                </Button>
+              </div>
             )}
             {(answerCache[current.id] !== undefined || loadingAnswerId === current.id) && (
               <div className="mt-4 overflow-hidden rounded-xl border-2 border-[#2AABEE]/20 bg-gradient-to-b from-slate-50 to-white shadow-sm">
