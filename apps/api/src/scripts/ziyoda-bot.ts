@@ -31,6 +31,8 @@ try {
 const TELEGRAM_BOT_TOKEN = (process.env.TELEGRAM_BOT_TOKEN ?? '').trim();
 const BOT_API_URL = (process.env.BOT_API_URL ?? process.env.API_PUBLIC_URL ?? 'http://127.0.0.1:3001').replace(/\/$/, '');
 const PLATFORM_URL = (process.env.FRONTEND_URL ?? process.env.PLATFORM_URL ?? '').replace(/\/$/, '');
+/** Ссылка запуска бота / теста (кнопка «Открыть MedTest»). */
+const BOT_START_URL = (process.env.TELEGRAM_BOT_START_URL ?? 'https://t.me/ziyomedbot/start').trim();
 
 if (!TELEGRAM_BOT_TOKEN) {
   console.error('[ziyoda-bot] TELEGRAM_BOT_TOKEN is required. Set it in apps/api/.env');
@@ -90,15 +92,15 @@ function getPlatformButtonLabel(lang: 'ru' | 'uz'): string {
   return lang === 'uz' ? 'ZiyoMed ni ochish' : 'Открыть ZiyoMed';
 }
 
-/** Инлайн-кнопки главного меню (Открыть MedTest, Как пользоваться, Мой профиль, Купить подписку). */
+/** Инлайн-кнопки главного меню (Открыть MedTest → бот start, Как пользоваться, Мой профиль, Купить подписку). */
 function getMainMenuKeyboard(lang: 'ru' | 'uz'): TelegramInlineKeyboard {
   const openLabel = lang === 'uz' ? '🚀 MedTest ni ochish' : '🚀 Открыть MedTest';
   const helpLabel = lang === 'uz' ? "📘 Qanday foydalanish" : '📘 Как пользоваться';
   const profileLabel = lang === 'uz' ? "👤 Mening profilim" : '👤 Мой профиль';
   const buyLabel = lang === 'uz' ? "Obuna sotib olish" : 'Купить подписку';
   const rows: TelegramInlineButton[][] = [];
+  rows.push([{ text: openLabel, url: BOT_START_URL }]);
   if (PLATFORM_URL) {
-    rows.push([{ text: openLabel, url: PLATFORM_URL }]);
     rows.push([{ text: buyLabel, url: `${PLATFORM_URL}/cabinet` }]);
   }
   rows.push([{ text: helpLabel, callback_data: 'help' }]);
@@ -299,9 +301,9 @@ async function run(): Promise<void> {
           } else if (isGreetingOrStart(text)) {
             answer = getWelcomeMessage(firstName ?? 'User', lang);
             replyMarkup = getMainMenuKeyboard(lang);
-          } else if (PLATFORM_URL && isStartTestIntent(text)) {
+          } else if (isStartTestIntent(text)) {
             answer = getStartTestMessage(lang);
-            replyMarkup = { inline_keyboard: [[{ text: getPlatformButtonLabel(lang), url: PLATFORM_URL }]] };
+            replyMarkup = { inline_keyboard: [[{ text: getPlatformButtonLabel(lang), url: BOT_START_URL }]] };
           } else {
             const ctx = conversationContext.get(telegramId);
             const result = await askZiyoda(

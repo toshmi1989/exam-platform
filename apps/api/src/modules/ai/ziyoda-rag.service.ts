@@ -139,7 +139,7 @@ export async function askZiyoda(
     }
 
     const maxChunks = getIntPrompt(prompts, 'max_chunks', DEFAULT_MAX_CHUNKS);
-    const minSimilarity = getFloatPrompt(prompts, 'min_similarity', 0.25);
+    const minSimilarity = getFloatPrompt(prompts, 'min_similarity', 0.2);
     const candidateCount = Math.min(entries.length, Math.max(maxChunks * 2, 20));
     const withScores = findTopKWithScores(
       queryEmbedding,

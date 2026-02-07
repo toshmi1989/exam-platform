@@ -6,6 +6,8 @@ import { checkBotAiLimit, recordBotAiRequest } from './bot-ai-limit.service';
 const router = Router();
 
 const PLATFORM_URL = (process.env.FRONTEND_URL ?? process.env.PLATFORM_URL ?? '').replace(/\/$/, '');
+/** Ссылка запуска бота / теста (кнопка «Открыть MedTest» и т.п.). */
+const BOT_START_URL = (process.env.TELEGRAM_BOT_START_URL ?? 'https://t.me/ziyomedbot/start').trim();
 
 const LIMIT_MESSAGE_RU =
   'Дневной лимит запросов к ИИ закончился. Чтобы пользоваться без ограничений функциями ИИ и платформы — оформите подписку. Вы также можете пользоваться навигацией ниже.';
@@ -18,8 +20,8 @@ function buildLimitInlineButtons(lang: 'ru' | 'uz'): { text: string; url?: strin
   const profileLabel = lang === 'uz' ? "👤 Mening profilim" : '👤 Мой профиль';
   const buyLabel = lang === 'uz' ? "Obuna sotib olish" : 'Купить подписку';
   const rows: { text: string; url?: string; callback_data?: string }[][] = [];
+  rows.push([{ text: openLabel, url: BOT_START_URL }]);
   if (PLATFORM_URL) {
-    rows.push([{ text: openLabel, url: PLATFORM_URL }]);
     rows.push([{ text: buyLabel, url: `${PLATFORM_URL}/cabinet` }]);
   }
   rows.push([{ text: helpLabel, callback_data: 'help' }]);
