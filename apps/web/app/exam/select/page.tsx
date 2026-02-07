@@ -130,11 +130,12 @@ function ExamSelectClient() {
         );
         setDirections([]);
       } else {
+        const testList = list as Array<{ id?: string; label?: string }>;
         setDirections(
-          list.map((entry: { id: string; label: string }) => ({
-            id: entry.id,
-            label: entry.label ?? entry.id,
-            examId: entry.id,
+          testList.map((entry) => ({
+            id: entry.id ?? '',
+            label: entry.label ?? entry.id ?? '',
+            examId: entry.id ?? '',
           }))
         );
         setOralDirections([]);
