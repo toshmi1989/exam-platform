@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import AnimatedPage from '../../../../components/AnimatedPage';
 import BottomNav from '../../../../components/BottomNav';
 import Card from '../../../../components/Card';
@@ -29,6 +29,7 @@ function formatDate(iso: string): string {
 
 function SubscribeReturnClient() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const invoiceId = searchParams.get('invoiceId') ?? '';
   const [language, setLanguage] = useState<Language>(() => readSettings().language);
 
@@ -67,6 +68,7 @@ function SubscribeReturnClient() {
         receipt: 'Payment receipt',
         toCabinet: 'To cabinet',
         timeout: 'Confirmation timed out. Check your subscription or try again.',
+        cancel: 'Cancel',
       };
     }
     if (language === 'Узбекский') {
@@ -83,6 +85,7 @@ function SubscribeReturnClient() {
         receipt: "To'lov kvitansiyasi",
         toCabinet: "Kabinetga",
         timeout: "Tasdiqlash muddati tugadi. Obunani tekshiring yoki qayta urinib ko'ring.",
+        cancel: 'Bekor qilish',
       };
     }
     return {
@@ -98,6 +101,7 @@ function SubscribeReturnClient() {
       receipt: 'Чек оплаты',
       toCabinet: 'В кабинет',
       timeout: 'Ожидание подтверждения истекло. Проверьте подписку или попробуйте снова.',
+      cancel: 'Отменить',
     };
   }, [language]);
 
@@ -148,6 +152,15 @@ function SubscribeReturnClient() {
     };
   }, [invoiceId]);
 
+  function handleCancelPayment() {
+    try {
+      sessionStorage.removeItem(SUBSCRIBE_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    router.replace('/cabinet');
+  }
+
   return (
     <>
       <AnimatedPage>
@@ -155,7 +168,16 @@ function SubscribeReturnClient() {
           <PageHeader title={copy.title} subtitle="" />
           <Card className="flex flex-col items-center gap-4 py-8">
             {status === 'polling' && (
-              <p className="text-center text-slate-600">{message}</p>
+              <>
+                <p className="text-center text-slate-600">{message}</p>
+                <button
+                  type="button"
+                  onClick={handleCancelPayment}
+                  className="mt-4 w-full max-w-xs rounded-xl border border-slate-300 bg-white px-5 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 active:scale-[0.98]"
+                >
+                  {copy.cancel}
+                </button>
+              </>
             )}
             {status === 'paid' && paidDetails && (
               <>

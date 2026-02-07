@@ -189,6 +189,15 @@ answerAll: 'Сначала ответьте на все вопросы.',
   const questionsScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     async function loadQuestions() {
       try {
         const data = await getQuestions(params.attemptId);
@@ -229,7 +238,7 @@ answerAll: 'Сначала ответьте на все вопросы.',
     setShakingQuestionId(null);
   }, [currentIndex]);
 
-  function handleAnswerChange(questionId: string, value: string, isChoice?: boolean, optionId?: string) {
+  async function handleAnswerChange(questionId: string, value: string, isChoice?: boolean, optionId?: string) {
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
     setWarning(null);
 
@@ -237,32 +246,43 @@ answerAll: 'Сначала ответьте на все вопросы.',
     if (mode === 'practice' && isChoice && optionId) {
       const question = questions.find((q) => q.id === questionId);
       if (question?.correctOptionId && optionId !== question.correctOptionId) {
-        // Двойная вибрация средней силы для неправильного ответа
         triggerHapticFeedback('medium');
-        // Трясение интерфейса только для текущего вопроса
         setShakingQuestionId(questionId);
-        // Сбрасываем трясение через 400ms (длительность анимации)
-        setTimeout(() => {
-          setShakingQuestionId(null);
-        }, 400);
+        setTimeout(() => setShakingQuestionId(null), 400);
       }
     }
 
+    // В режиме экзамена при выборе варианта сохраняем ответ сразу, затем переходим к следующему вопросу.
+    // Иначе при быстром клике по следующему вопросу таймер отменяется и предыдущий ответ не сохраняется.
+    if (mode === 'exam' && isChoice) {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+      try {
+        await saveAnswer(params.attemptId, questionId, value);
+      } catch (err) {
+        setError(err as ApiError);
+        return;
+      }
+      if (currentIndex < questions.length - 1) {
+        setCurrentIndex((prev) => prev + 1);
+      }
+      return;
+    }
+
+    // Режим практики или текстовый ответ — сохраняем с задержкой (дебаунс)
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
-
     saveTimeoutRef.current = setTimeout(async () => {
       try {
         await saveAnswer(params.attemptId, questionId, value);
       } catch (err) {
         setError(err as ApiError);
       }
+      saveTimeoutRef.current = null;
     }, 400);
-
-    if (mode === 'exam' && isChoice && currentIndex < questions.length - 1) {
-      setCurrentIndex((prev) => prev + 1);
-    }
   }
 
   async function handlePrimaryAction() {

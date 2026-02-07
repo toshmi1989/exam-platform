@@ -74,6 +74,7 @@ function PayOneTimeReturnClient() {
         retryCheck: 'Check again',
         choosePaymentAgain: 'Choose payment method again',
         goToMyExams: 'Go to "My exams"',
+        cancel: 'Cancel',
       };
     }
     if (language === 'Узбекский') {
@@ -96,6 +97,7 @@ function PayOneTimeReturnClient() {
         retryCheck: "Qayta tekshirish",
         choosePaymentAgain: "To'lov usulini qayta tanlang",
         goToMyExams: "«Mening imtihonlarim»ga o'tish",
+        cancel: 'Bekor qilish',
       };
     }
     return {
@@ -117,6 +119,7 @@ function PayOneTimeReturnClient() {
       retryCheck: 'Проверить ещё раз',
       choosePaymentAgain: 'Выбрать способ оплаты заново',
       goToMyExams: 'Перейти в «Мои экзамены»',
+      cancel: 'Отменить',
     };
   }, [language]);
 
@@ -266,6 +269,15 @@ function PayOneTimeReturnClient() {
     }
   }
 
+  function handleCancelPayment() {
+    try {
+      sessionStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    router.replace('/cabinet');
+  }
+
   return (
     <>
       <AnimatedPage>
@@ -273,7 +285,16 @@ function PayOneTimeReturnClient() {
           <PageHeader title={copy.title} subtitle="" />
           <Card className="flex flex-col items-center gap-4 py-8">
             {(status === 'polling' || status === 'starting') && (
-              <p className="text-center text-slate-600">{message}</p>
+              <>
+                <p className="text-center text-slate-600">{message}</p>
+                <button
+                  type="button"
+                  onClick={handleCancelPayment}
+                  className="mt-4 w-full max-w-xs rounded-xl border border-slate-300 bg-white px-5 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 active:scale-[0.98]"
+                >
+                  {copy.cancel}
+                </button>
+              </>
             )}
             {status === 'paid' && (
               <>
