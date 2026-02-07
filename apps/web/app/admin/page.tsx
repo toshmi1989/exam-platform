@@ -45,6 +45,8 @@ export default function AdminDashboardPage() {
         subs: 'Active subscriptions',
         attempts: 'Attempts today',
         conversion: 'Conversion',
+        subsToday: 'Subscriptions today',
+        subsThisMonth: 'Subscriptions this month',
         ziyodaPrewarm: 'Pre-generate Ziyoda',
       };
     }
@@ -56,6 +58,8 @@ export default function AdminDashboardPage() {
         subs: 'Faol obunalar',
         attempts: 'Bugungi urinishlar',
         conversion: 'Konversiya',
+        subsToday: "Bugun obuna bo'lganlar",
+        subsThisMonth: "Shu oyda obuna bo'lganlar",
         ziyodaPrewarm: "Ziyodani oldindan yaratish",
       };
     }
@@ -66,6 +70,8 @@ export default function AdminDashboardPage() {
       subs: 'Активные подписки',
       attempts: 'Попытки за день',
       conversion: 'Конверсия',
+      subsToday: 'Купили подписку сегодня',
+      subsThisMonth: 'Купили подписку за этот месяц',
       ziyodaPrewarm: 'Предварительно сгенерировать Зиёду',
     };
   }, [language]);
