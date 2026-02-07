@@ -46,6 +46,8 @@ function ExamSelectClient() {
   const [language, setLanguage] = useState<Language>(readSettings().language);
   const [startError, setStartError] = useState<string | null>(null);
   const [oneTimePrice, setOneTimePrice] = useState<number | null>(null);
+  const [subscriptionPrice, setSubscriptionPrice] = useState<number | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isStarting, setIsStarting] = useState(false);
 
   const professionLabels = useMemo(
@@ -61,8 +63,16 @@ function ExamSelectClient() {
 
   useEffect(() => {
     getProfile()
-      .then((p) => setOneTimePrice(p.oneTimePrice ?? null))
-      .catch(() => setOneTimePrice(null));
+      .then((p) => {
+        setOneTimePrice(p.oneTimePrice ?? null);
+        setSubscriptionPrice(p.subscriptionPrice ?? null);
+        setIsAuthenticated(true);
+      })
+      .catch(() => {
+        setOneTimePrice(null);
+        setSubscriptionPrice(null);
+        setIsAuthenticated(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -130,6 +140,9 @@ function ExamSelectClient() {
         accessDeniedTitle: 'Access denied',
         accessDeniedHint: 'To take this test you need a subscription or one-time access.',
         subscribeCta: 'Get subscription',
+        subscribeCtaFor: 'Get subscription for',
+        oneTimeCtaFor: 'One-time access for',
+        loginToPurchase: 'Log in to purchase access.',
         oneTimeTitle: 'One-time access',
         oneTimeHint: 'One-time access to this test costs',
         payCta: 'Pay and start test',
@@ -160,6 +173,9 @@ function ExamSelectClient() {
         accessDeniedTitle: 'Ruxsat yo‘q',
         accessDeniedHint: 'Bu testni topshirish uchun obuna yoki bir martalik kirish kerak.',
         subscribeCta: 'Obuna olish',
+        subscribeCtaFor: 'Obuna olish',
+        oneTimeCtaFor: 'Bir martalik kirish',
+        loginToPurchase: 'Kirish sotib olish uchun tizimga kiring.',
         oneTimeTitle: 'Bir martalik kirish',
         oneTimeHint: 'Bu test uchun bir martalik kirish narxi',
         payCta: 'To‘lash va testni boshlash',
@@ -189,6 +205,9 @@ function ExamSelectClient() {
       accessDeniedTitle: 'Доступ ограничен',
       accessDeniedHint: 'Чтобы пройти этот тест, нужна подписка или разовый доступ.',
       subscribeCta: 'Оформить подписку',
+      subscribeCtaFor: 'Оформить подписку за',
+      oneTimeCtaFor: 'Разовый доступ за',
+      loginToPurchase: 'Войдите в аккаунт, чтобы оформить подписку или оплатить доступ.',
       oneTimeTitle: 'Разовый доступ',
       oneTimeHint: 'Разовый доступ к этому тесту стоит',
       payCta: 'Оплатить и начать тест',
@@ -512,13 +531,33 @@ function ExamSelectClient() {
                     <p className="mt-0.5 text-sm text-amber-800">
                       {copy.accessDeniedHint}
                     </p>
-                    <Button
-                      href="/cabinet/subscribe"
-                      size="md"
-                      className="mt-3 w-full sm:w-auto"
-                    >
-                      {copy.subscribeCta}
-                    </Button>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {isAuthenticated && (
+                        <Button
+                          href="/cabinet/subscribe"
+                          size="md"
+                          className="w-full sm:w-auto"
+                        >
+                          {subscriptionPrice != null
+                            ? `${copy.subscribeCtaFor} ${subscriptionPrice.toLocaleString('ru-UZ')} сум`
+                            : copy.subscribeCta}
+                        </Button>
+                      )}
+                      <Button
+                        href={
+                          direction
+                            ? `/cabinet/pay-one-time?examId=${encodeURIComponent(direction.examId)}&mode=${mode ?? 'exam'}`
+                            : '/cabinet/pay-one-time'
+                        }
+                        size="md"
+                        variant={isAuthenticated ? 'secondary' : 'primary'}
+                        className="w-full sm:w-auto"
+                      >
+                        {oneTimePrice != null
+                          ? `${copy.oneTimeCtaFor} ${oneTimePrice.toLocaleString('ru-UZ')} сум`
+                          : copy.payCta}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )}
