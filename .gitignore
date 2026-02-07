@@ -16,7 +16,7 @@ apps/web/.next/
 # locks (если monorepo — лучше оставить один менеджер)
 package-lock.json
 apps/api/package-lock.json
-apps/web/package-lock.json
+# apps/web/package-lock.json — закоммичен для npm ci на сервере
 
 # cursor / ide
 .cursor/
