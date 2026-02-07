@@ -26,6 +26,7 @@ import {
   importQuestionBank,
 } from './import.service';
 import { prewarm, getAiStats } from '../ai/ai.service';
+import { sendBroadcastToUsers } from '../../services/broadcastSender.service';
 
 const router = Router();
 
@@ -541,10 +542,14 @@ router.post('/broadcasts', (req, res) => {
   const text = String(req.body?.text ?? '').trim();
   const segment = String(req.body?.segment ?? 'all');
   const imageData = typeof req.body?.imageData === 'string' ? req.body.imageData : undefined;
+  const channel = req.body?.channel === 'telegram' ? 'telegram' : req.body?.channel === 'platform' ? 'platform' : 'both';
   if (!title || !text) {
     return res.status(400).json({ ok: false });
   }
   const broadcast = addBroadcast({ title, text, segment, imageData });
+  if (channel === 'telegram' || channel === 'both') {
+    sendBroadcastToUsers({ title, text, segment, imageData });
+  }
   res.json({ ok: true, broadcast });
 });
 
@@ -585,6 +590,7 @@ router.post('/import/execute', async (req, res) => {
   req.setTimeout(300000); // 5 min for large Excel (many directions)
   const profession = String(req.body?.profession ?? '').toUpperCase();
   const fileBase64 = String(req.body?.fileBase64 ?? '');
+  const mode = req.body?.mode === 'add' ? 'add' : 'overwrite';
   if (!profession || !fileBase64) {
     return res.status(400).json({ ok: false });
   }
@@ -592,6 +598,7 @@ router.post('/import/execute', async (req, res) => {
     const result = await importQuestionBank({
       profession: profession as 'DOCTOR' | 'NURSE',
       fileBase64,
+      mode,
     });
     res.json({ ok: true, result });
   } catch (err) {

@@ -59,31 +59,39 @@ export async function previewQuestionBank(params: {
   };
 }
 
+export type ImportMode = 'overwrite' | 'add';
+
 export async function importQuestionBank(params: {
   profession: Profession;
   fileBase64: string;
+  mode?: ImportMode;
 }) {
   const buffer = decodeBase64(params.fileBase64);
   const workbook = XLSX.read(buffer, { type: 'buffer' });
   const sheetNames = workbook.SheetNames;
   const categoryName = resolveCategory(params.profession);
+  const mode = params.mode ?? 'overwrite';
 
   const category = await prisma.category.upsert({
     where: { name: categoryName },
     update: {},
     create: { name: categoryName },
   });
-  const deleteFilter =
-    sheetNames.length === 0
-      ? { categoryId: category.id, profession: params.profession }
-      : {
-          categoryId: category.id,
-          profession: params.profession,
-          title: { notIn: sheetNames },
-        };
-  await prisma.exam.deleteMany({ where: deleteFilter });
+
+  if (mode === 'overwrite') {
+    const deleteFilter =
+      sheetNames.length === 0
+        ? { categoryId: category.id, profession: params.profession }
+        : {
+            categoryId: category.id,
+            profession: params.profession,
+            title: { notIn: sheetNames },
+          };
+    await prisma.exam.deleteMany({ where: deleteFilter });
+  }
 
   let importedQuestions = 0;
+  let skippedExams = 0;
 
   for (let i = 0; i < sheetNames.length; i += 1) {
     const sheetName = sheetNames[i];
@@ -98,6 +106,16 @@ export async function importQuestionBank(params: {
 
     const cleanedRows = rows.filter((row) => normalizeText(row[0]));
     if (!cleanedRows.length) continue;
+
+    const existingExam = await prisma.exam.findUnique({
+      where: { title_categoryId: { title: sheetName, categoryId: category.id } },
+    });
+
+    if (mode === 'add' && existingExam) {
+      skippedExams += 1;
+      await yieldEventLoop();
+      continue;
+    }
 
     const exam = await prisma.exam.upsert({
       where: { title_categoryId: { title: sheetName, categoryId: category.id } },
@@ -117,7 +135,9 @@ export async function importQuestionBank(params: {
       },
     });
 
-    await prisma.question.deleteMany({ where: { examId: exam.id } });
+    if (mode === 'overwrite') {
+      await prisma.question.deleteMany({ where: { examId: exam.id } });
+    }
 
     const BATCH_SIZE = 150;
     for (let start = 0; start < cleanedRows.length; start += BATCH_SIZE) {
@@ -183,7 +203,9 @@ export async function importQuestionBank(params: {
 
   return {
     profession: params.profession,
+    mode,
     totalDirections: sheetNames.length,
     importedQuestions,
+    skippedExams: mode === 'add' ? skippedExams : undefined,
   };
 }

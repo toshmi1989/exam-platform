@@ -26,6 +26,7 @@ export default function AdminBroadcastsPage() {
   const [title, setTitle] = useState('');
   const [text, setText] = useState('');
   const [segment, setSegment] = useState('all');
+  const [channel, setChannel] = useState<'telegram' | 'platform' | 'both'>('both');
   const [imageData, setImageData] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [items, setItems] = useState<Broadcast[]>([]);
@@ -58,6 +59,10 @@ export default function AdminBroadcastsPage() {
         },
         upload: 'Add photo',
         imageTooLarge: 'Image is too large.',
+        channelLabel: 'Send to',
+        channelTelegram: 'Telegram only',
+        channelPlatform: 'Platform only (in-app)',
+        channelBoth: 'Both (Telegram + platform)',
       };
     }
     if (language === 'Узбекский') {
@@ -77,6 +82,10 @@ export default function AdminBroadcastsPage() {
         },
         upload: 'Rasm qo‘shish',
         imageTooLarge: 'Rasm juda katta.',
+        channelLabel: 'Qayerga',
+        channelTelegram: 'Faqat Telegram',
+        channelPlatform: 'Faqat platforma (ilova ichida)',
+        channelBoth: 'Ikkalasi (Telegram + platforma)',
       };
     }
     return {
@@ -95,6 +104,10 @@ export default function AdminBroadcastsPage() {
       },
       upload: 'Добавить фото',
       imageTooLarge: 'Изображение слишком большое.',
+      channelLabel: 'Куда отправить',
+      channelTelegram: 'Только в Telegram',
+      channelPlatform: 'Только в платформу (чат в приложении)',
+      channelBoth: 'В оба (Telegram + платформа)',
     };
   }, [language]);
 
@@ -109,7 +122,7 @@ export default function AdminBroadcastsPage() {
     if (!title.trim() || !text.trim()) return;
     const { response, data } = await apiFetch('/admin/broadcasts', {
       method: 'POST',
-      json: { title, text, segment, imageData },
+      json: { title, text, segment, channel, imageData },
     });
     if (response.ok) {
       const payload = data as { broadcast?: Broadcast } | null;
@@ -164,21 +177,47 @@ export default function AdminBroadcastsPage() {
                 rows={4}
                 className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#2AABEE]"
               />
-              <div className="flex flex-wrap gap-2">
-                {Object.entries(copy.segments).map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setSegment(key)}
-                    className={`rounded-xl border px-4 py-2 text-sm transition ${
-                      segment === key
-                        ? 'border-[#2AABEE] bg-[#2AABEE] text-white'
-                        : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
+              <div>
+                <p className="mb-2 text-sm font-medium text-slate-700">{copy.channelLabel}</p>
+                <div className="flex flex-wrap gap-2">
+                  {(['telegram', 'platform', 'both'] as const).map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setChannel(key)}
+                      className={`rounded-xl border px-4 py-2 text-sm transition ${
+                        channel === key
+                          ? 'border-[#2AABEE] bg-[#2AABEE] text-white'
+                          : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                      }`}
+                    >
+                      {key === 'telegram'
+                        ? copy.channelTelegram
+                        : key === 'platform'
+                          ? copy.channelPlatform
+                          : copy.channelBoth}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="mb-2 text-sm font-medium text-slate-700">{copy.segmentLabel}</p>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(copy.segments).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setSegment(key)}
+                      className={`rounded-xl border px-4 py-2 text-sm transition ${
+                        segment === key
+                          ? 'border-[#2AABEE] bg-[#2AABEE] text-white'
+                          : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
               {errorMessage ? (
                 <p className="text-xs text-rose-500">{errorMessage}</p>

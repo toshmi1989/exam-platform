@@ -52,7 +52,7 @@ export async function generateZiyodaExplanation(input: ZiyodaGeneratorInput): Pr
   const { userName, lang, question, options, correctAnswer } = input;
   const optionsText = options.map((o) => o.label).join('\n');
   const greeting = (userName ?? '').trim()
-    ? (lang === 'uz' ? `${input.userName}, keling bu savolni ko'rib chiqamiz.` : `${input.userName}, давайте разберём этот вопрос.`)
+    ? (lang === 'uz' ? `${userName}, keling bu savolni ko'rib chiqamiz.` : `${userName}, давайте разберём этот вопрос.`)
     : (lang === 'uz' ? 'Savol:' : 'Вопрос:');
   const userContent = `${greeting}\n\n${lang === 'uz' ? 'Savol' : 'Вопрос'}: ${question}\n\n${lang === 'uz' ? 'Variantlar' : 'Варианты ответов'}:\n${optionsText}\n\n${lang === 'uz' ? "To'g'ri javob" : 'Правильный ответ'}: ${correctAnswer}`;
 

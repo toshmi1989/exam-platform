@@ -183,6 +183,24 @@ export async function getChatUnread(): Promise<number> {
   return typeof payload?.unread === 'number' ? payload.unread : 0;
 }
 
+export interface BroadcastItem {
+  id: string;
+  title: string;
+  text: string;
+  segment: string;
+  createdAt: number;
+  imageData?: string;
+}
+
+export async function getBroadcasts(): Promise<BroadcastItem[]> {
+  const { response, data } = await apiFetch('/broadcasts');
+  if (!response.ok) {
+    return [];
+  }
+  const payload = data as { items?: BroadcastItem[] } | null;
+  return Array.isArray(payload?.items) ? payload.items : [];
+}
+
 export async function getAdminChatsUnreadCount(): Promise<number> {
   const { response, data } = await apiFetch('/admin/chats/unread-count');
   if (!response.ok) {
@@ -304,13 +322,11 @@ export async function getPaymentStatus(invoiceId: string): Promise<PaymentStatus
   };
 }
 
-export async function explainQuestion(
-  questionId: string,
-  lang: 'ru' | 'uz'
-): Promise<{ content: string }> {
+/** Язык ответа определяется по языку экзамена (теста) на бэкенде. */
+export async function explainQuestion(questionId: string): Promise<{ content: string }> {
   const { response, data } = await apiFetch('/ai/explain', {
     method: 'POST',
-    json: { questionId, lang },
+    json: { questionId },
   });
   if (!response.ok) {
     throw data as ApiError;

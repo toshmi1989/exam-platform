@@ -16,6 +16,7 @@ export default function AdminImportPage() {
   const [fileName, setFileName] = useState('');
   const [fileBase64, setFileBase64] = useState<string | null>(null);
   const [profession, setProfession] = useState<'DOCTOR' | 'NURSE' | ''>('');
+  const [importMode, setImportMode] = useState<'overwrite' | 'add'>('overwrite');
   const [preview, setPreview] = useState<
     { name: string; language: string; questionCount: number }[]
   >([]);
@@ -48,6 +49,11 @@ export default function AdminImportPage() {
         statusPreview: 'Checking file… (large files may take up to 2 min)',
         statusImport: 'Importing directions… Please wait.',
         statusDone: 'Import completed.',
+        importModeLabel: 'Import mode',
+        modeOverwrite: 'Overwrite',
+        modeAdd: 'Add',
+        modeOverwriteHint: 'Replace existing exams and questions (AI explanations will be lost).',
+        modeAddHint: 'Add only new directions; existing ones are left unchanged (AI explanations kept).',
       };
     }
     if (language === 'Узбекский') {
@@ -67,6 +73,11 @@ export default function AdminImportPage() {
         statusPreview: 'Fayl tekshirilmoqda… (katta fayllar 2 min gacha vaqt olishi mumkin)',
         statusImport: 'Yo‘nalishlar import qilinmoqda… Kuting.',
         statusDone: 'Import tugadi.',
+        importModeLabel: 'Import rejimi',
+        modeOverwrite: 'Ustiga yozish',
+        modeAdd: "Qo'shish",
+        modeOverwriteHint: 'Mavjud imtihonlar va savollar almashtiriladi (AI tushuntirishlar yo‘qoladi).',
+        modeAddHint: "Faqat yangi yo‘nalishlar qo‘shiladi; mavjudlar o‘zgartirilmaydi (AI tushuntirishlar saqlanadi).",
       };
     }
     return {
@@ -85,6 +96,11 @@ export default function AdminImportPage() {
       statusPreview: 'Проверка файла… (крупный файл — до 2 мин)',
       statusImport: 'Импорт направлений… Подождите.',
       statusDone: 'Импорт завершён.',
+      importModeLabel: 'Режим импорта',
+      modeOverwrite: 'Перезаписать',
+      modeAdd: 'Добавить',
+      modeOverwriteHint: 'Заменить существующие экзамены и вопросы (сгенерированные ответы Зиёды будут потеряны).',
+      modeAddHint: 'Добавить только новые направления; существующие не трогать (ответы Зиёды сохраняются).',
     };
   }, [language]);
 
@@ -138,7 +154,7 @@ export default function AdminImportPage() {
     try {
       const { response, data } = await apiFetch('/admin/import/execute', {
         method: 'POST',
-        json: { profession, fileBase64 },
+        json: { profession, fileBase64, mode: importMode },
         timeoutMs: 300_000,
       });
       if (!response.ok) {
@@ -183,6 +199,35 @@ export default function AdminImportPage() {
               {!profession ? (
                 <p className="text-xs text-slate-500">{copy.selectProfession}</p>
               ) : null}
+              <div>
+                <p className="mb-2 text-sm font-medium text-slate-700">{copy.importModeLabel}</p>
+                <div className="flex flex-col gap-2">
+                  <label className="flex cursor-pointer items-start gap-2">
+                    <input
+                      type="radio"
+                      name="importMode"
+                      checked={importMode === 'overwrite'}
+                      onChange={() => setImportMode('overwrite')}
+                      className="mt-1"
+                    />
+                    <span className="text-sm">
+                      <strong>{copy.modeOverwrite}</strong> — {copy.modeOverwriteHint}
+                    </span>
+                  </label>
+                  <label className="flex cursor-pointer items-start gap-2">
+                    <input
+                      type="radio"
+                      name="importMode"
+                      checked={importMode === 'add'}
+                      onChange={() => setImportMode('add')}
+                      className="mt-1"
+                    />
+                    <span className="text-sm">
+                      <strong>{copy.modeAdd}</strong> — {copy.modeAddHint}
+                    </span>
+                  </label>
+                </div>
+              </div>
               <input
                 type="file"
                 accept=".xlsx"

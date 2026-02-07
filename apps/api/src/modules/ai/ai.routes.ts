@@ -19,12 +19,20 @@ router.post('/explain', async (req: Request, res: Response): Promise<void> => {
   }
 
   const questionId = typeof req.body?.questionId === 'string' ? req.body.questionId.trim() : '';
-  const lang = req.body?.lang === 'uz' ? 'uz' : req.body?.lang === 'ru' ? 'ru' : '';
-
-  if (!questionId || !lang) {
-    res.status(400).json({ ok: false, reasonCode: 'INVALID_INPUT', message: 'Требуются questionId и lang (ru или uz).' });
+  if (!questionId) {
+    res.status(400).json({ ok: false, reasonCode: 'INVALID_INPUT', message: 'Требуется questionId.' });
     return;
   }
+
+  const questionWithExam = await prisma.question.findUnique({
+    where: { id: questionId },
+    select: { exam: { select: { language: true } } },
+  });
+  if (!questionWithExam) {
+    res.status(404).json({ ok: false, reasonCode: 'QUESTION_NOT_FOUND', message: 'Вопрос не найден.' });
+    return;
+  }
+  const lang = questionWithExam.exam.language === 'UZ' ? 'uz' : 'ru';
 
   let userName: string | undefined;
   if (telegramId) {

@@ -153,14 +153,12 @@ answerAll: 'Сначала ответьте на все вопросы.',
     };
   }, [language]);
 
-  const ziyodaLang = language === 'Узбекский' ? 'uz' : 'ru';
-
   async function handleZiyodaClick(questionId: string) {
     if (ziyodaCache[questionId] || ziyodaLoadingId) return;
     setZiyodaLoadingId(questionId);
     setZiyodaError(null);
     try {
-      const { content } = await explainQuestion(questionId, ziyodaLang);
+      const { content } = await explainQuestion(questionId);
       setZiyodaCache((prev) => ({ ...prev, [questionId]: content }));
     } catch {
       setZiyodaError(copy.ziyodaError);

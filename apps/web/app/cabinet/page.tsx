@@ -10,7 +10,7 @@ import PageHeader from '../../components/PageHeader';
 import { useRouter } from 'next/navigation';
 import { readTelegramUser, storeTelegramUser, TelegramUserSnapshot } from '../../lib/telegramUser';
 import { readSettings, Language } from '../../lib/uiSettings';
-import { getProfile, getChatUnread } from '../../lib/api';
+import { getProfile, getChatUnread, getBroadcasts, type BroadcastItem } from '../../lib/api';
 import { getQuoteByIndex, CABINET_QUOTES } from '../../data/cabinetQuotes';
 
 export const dynamic = 'force-dynamic';
@@ -22,6 +22,7 @@ function CabinetClient() {
   const [subscriptionActive, setSubscriptionActive] = useState(false);
   const [subscriptionEndsAt, setSubscriptionEndsAt] = useState<string | null>(null);
   const [chatUnread, setChatUnread] = useState(0);
+  const [broadcasts, setBroadcasts] = useState<BroadcastItem[]>([]);
   const [quoteIndex] = useState(() =>
     Math.floor(Math.random() * CABINET_QUOTES.length)
   );
@@ -87,6 +88,12 @@ function CabinetClient() {
     };
   }, []);
 
+  useEffect(() => {
+    getBroadcasts()
+      .then(setBroadcasts)
+      .catch(() => setBroadcasts([]));
+  }, []);
+
   const greetingName = useMemo(
     () => profile?.firstName ?? profile?.username ?? '',
     [profile?.firstName, profile?.username]
@@ -123,6 +130,8 @@ function CabinetClient() {
         activeSubscription: 'Active',
         oneTimeCardTitle: 'One-time test',
         oneTimeCardHint: 'Pay once and take one exam.',
+        broadcastsTitle: 'Announcements',
+        broadcastsEmpty: 'No announcements yet.',
       };
     }
     if (language === 'Узбекский') {
@@ -142,6 +151,8 @@ function CabinetClient() {
         activeSubscription: 'Faol',
         oneTimeCardTitle: 'Bir martalik test',
         oneTimeCardHint: 'Bir marta to‘lang va bitta imtihon topshiring.',
+        broadcastsTitle: 'E\'lonlar',
+        broadcastsEmpty: 'Hali e\'lonlar yo‘q.',
       };
     }
     return {
@@ -160,6 +171,8 @@ function CabinetClient() {
       activeSubscription: 'Активна',
       oneTimeCardTitle: 'Разовый тест',
       oneTimeCardHint: 'Оплатите один раз и сдайте один экзамен.',
+      broadcastsTitle: 'Объявления',
+      broadcastsEmpty: 'Пока нет объявлений.',
     };
   }, [language]);
 
@@ -250,6 +263,27 @@ function CabinetClient() {
               ) : null}
             </Card>
           )}
+
+          {broadcasts.length > 0 ? (
+            <Card title={copy.broadcastsTitle}>
+              <div className="flex flex-col gap-3">
+                {broadcasts.slice(0, 5).map((b) => (
+                  <div
+                    key={b.id}
+                    className="rounded-xl border border-slate-100 bg-slate-50/50 p-3"
+                  >
+                    <p className="text-sm font-semibold text-slate-900">{b.title}</p>
+                    <p className="mt-1 line-clamp-2 text-xs text-slate-600">
+                      {b.text}
+                    </p>
+                    <p className="mt-2 text-[10px] text-slate-400">
+                      {new Date(b.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          ) : null}
 
           <Card className="relative">
             <div className="flex items-center justify-between gap-2">

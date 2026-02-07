@@ -84,26 +84,30 @@ export interface PrewarmProgress {
 }
 
 /**
- * Pre-generate explanations for questions; use QuestionAIExplanation with hash. Skip when hash matches.
+ * Pre-generate explanations for questions in the language of each question's exam.
+ * One explanation per question (lang = exam language). Skip when hash matches.
  */
 export async function* prewarm(
   examId?: string,
-  lang?: AiLang
+  langFilter?: AiLang
 ): AsyncGenerator<PrewarmProgress, void, unknown> {
-  const where = examId ? { examId } : {};
+  const where: { examId?: string; exam?: { language: 'RU' | 'UZ' } } = examId ? { examId } : {};
+  if (langFilter) {
+    where.exam = { language: langFilter === 'uz' ? 'UZ' : 'RU' };
+  }
   const questions = await prisma.question.findMany({
     where,
-    include: { options: { orderBy: { order: 'asc' } } },
+    include: {
+      options: { orderBy: { order: 'asc' } },
+      exam: { select: { language: true } },
+    },
     orderBy: { order: 'asc' },
   });
 
-  const langs: AiLang[] = lang ? [lang] : ['ru', 'uz'];
-  const work: { question: (typeof questions)[0]; lang: AiLang }[] = [];
-  for (const q of questions) {
-    for (const l of langs) {
-      work.push({ question: q, lang: l });
-    }
-  }
+  const work: { question: (typeof questions)[0]; lang: AiLang }[] = questions.map((q) => ({
+    question: q,
+    lang: q.exam.language === 'UZ' ? 'uz' : 'ru',
+  }));
   const total = work.length;
 
   let processed = 0;
@@ -126,6 +130,7 @@ export async function* prewarm(
     } else {
       try {
         const content = await generateZiyodaExplanation({
+          userName: undefined,
           question: question.prompt,
           options: options.map((o) => ({ label: o.label })),
           correctAnswer,
@@ -173,7 +178,6 @@ export interface AiStats {
 export async function getAiStats(): Promise<AiStats> {
   const totalQuestions = await prisma.question.count();
   const withExplanation = await prisma.questionAIExplanation.count();
-  const targetSlots = totalQuestions * 2;
-  const missing = Math.max(0, targetSlots - withExplanation);
+  const missing = Math.max(0, totalQuestions - withExplanation);
   return { totalQuestions, withExplanation, missing };
 }

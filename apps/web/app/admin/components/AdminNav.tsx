@@ -94,11 +94,13 @@ export default function AdminNav() {
             {item.label}
             {showBadge ? (
               <span
-                className={`absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full px-1 text-[10px] font-bold ${
+                className={`absolute -right-0.5 -top-0.5 flex h-2.5 min-w-[1rem] items-center justify-center rounded-full px-0.5 text-[9px] font-bold ${
                   isActive
                     ? 'bg-white text-rose-500'
                     : 'bg-rose-500 text-white'
                 }`}
+                title={chatsUnread > 0 ? `Непрочитанных: ${chatsUnread}` : undefined}
+                aria-label={chatsUnread > 0 ? `Непрочитанных сообщений: ${chatsUnread}` : undefined}
               >
                 {chatsUnread > 99 ? '99+' : chatsUnread}
               </span>
