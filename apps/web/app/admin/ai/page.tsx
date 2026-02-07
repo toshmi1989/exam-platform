@@ -671,7 +671,7 @@ function AdminAIPageContent() {
                           <Button
                             type="button"
                             variant="secondary"
-                            size="sm"
+                            size="md"
                             disabled={entryDeletingId === entry.id}
                             onClick={async () => {
                               if (entryDeletingId) return;
