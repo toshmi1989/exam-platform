@@ -246,7 +246,7 @@ export default function OralExamPage() {
         >
           <div className="flex h-[80vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl">
             <div className="flex justify-end border-b border-slate-200 p-2">
-              <Button type="button" variant="secondary" size="sm" onClick={() => setIframeUrl(null)}>
+              <Button type="button" variant="secondary" size="md" onClick={() => setIframeUrl(null)}>
                 {copy.close}
               </Button>
             </div>
