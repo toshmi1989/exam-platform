@@ -9,6 +9,8 @@ import { getEmbedding } from './embedding';
 
 const MIN_CHUNK = 400;
 const MAX_CHUNK = 600;
+/** Максимум символов в одном чанке для эмбеддинга (лимит контекста модели ~8k токенов, ~2k символов с запасом) */
+const MAX_CHUNK_FOR_EMBED = 2000;
 
 function decodeBase64(fileBase64: string): Buffer {
   const base64 = fileBase64.includes(',')
@@ -42,7 +44,18 @@ function chunkText(text: string): string[] {
       chunks.push(normalized.slice(i, i + MAX_CHUNK));
     }
   }
-  return chunks.filter((c) => c.length >= 1);
+  // Разбить любой чанк длиннее MAX_CHUNK_FOR_EMBED (лимит контекста API)
+  const result: string[] = [];
+  for (const c of chunks) {
+    if (c.length <= MAX_CHUNK_FOR_EMBED) {
+      result.push(c);
+    } else {
+      for (let i = 0; i < c.length; i += MAX_CHUNK_FOR_EMBED) {
+        result.push(c.slice(i, i + MAX_CHUNK_FOR_EMBED));
+      }
+    }
+  }
+  return result.filter((c) => c.length >= 1);
 }
 
 export async function extractText(buffer: Buffer, filename: string): Promise<string> {
