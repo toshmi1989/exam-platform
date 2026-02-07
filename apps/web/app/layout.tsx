@@ -23,6 +23,11 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen">
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `window.__telegramAuthQueue=window.__telegramAuthQueue||[];window.onTelegramAuth=function(u){if(window.__telegramAuthQueue)window.__telegramAuthQueue.push(u);};`,
+          }}
+        />
         <Script
           src="https://telegram.org/js/telegram-web-app.js"
           strategy="beforeInteractive"

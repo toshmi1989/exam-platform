@@ -13,6 +13,8 @@ const FALLBACK_UZ =
   "Afsuski, ZiyoMed rasmiy materiallarida bu ko'rsatilmagan.";
 const UNAVAILABLE_RU = 'Зиёда временно недоступна. Попробуйте позже.';
 const UNAVAILABLE_UZ = "Ziyoda vaqtincha mavjud emas. Keyinroq urunib ko'ring.";
+const EMPTY_KB_RU = 'База знаний ZiyoMed пока пуста. Обратитесь к администратору для загрузки материалов.';
+const EMPTY_KB_UZ = "ZiyoMed bilim bazasi hali bo'sh. Materiallarni yuklash uchun administratorga murojaat qiling.";
 
 /** Макс. символов контекста диалога на сообщение (экономия токенов) */
 const MAX_CONTEXT_MSG_LEN = 280;
@@ -101,6 +103,11 @@ export async function askZiyoda(
       select: { id: true, content: true, embedding: true },
     });
 
+    if (entries.length === 0) {
+      console.warn('[ziyoda-rag] База знаний пуста (KnowledgeBaseEntry = 0). Загрузите материалы в админке → AI → Зиёда AI.');
+      return lang === 'uz' ? EMPTY_KB_UZ : EMPTY_KB_RU;
+    }
+
     const top = findTopK(
       queryEmbedding,
       entries.map((e) => ({
@@ -111,6 +118,10 @@ export async function askZiyoda(
       MAX_CHUNKS
     );
     const contextChunks = top.map((e) => e.content);
+
+    if (contextChunks.length === 0) {
+      console.warn('[ziyoda-rag] Нет подходящих чанков (возможно, эмбеддинги другой размерности или модель изменилась). Запрос:', trimmed.slice(0, 80));
+    }
 
     const previousExchange = hasContext && user.previousUserMessage && user.previousBotMessage
       ? {
@@ -132,7 +143,8 @@ export async function askZiyoda(
     return answer;
   } catch (err) {
     const isLangUz = lang === 'uz';
-    if (err instanceof Error && (err.message.includes('OPENAI') || err.message.includes('API'))) {
+    console.error('[ziyoda-rag] Ошибка:', err);
+    if (err instanceof Error && (err.message.includes('OPENAI') || err.message.includes('API') || err.message.includes('не настроен'))) {
       return isLangUz ? UNAVAILABLE_UZ : UNAVAILABLE_RU;
     }
     return isLangUz ? FALLBACK_UZ : FALLBACK_RU;

@@ -103,44 +103,60 @@ export default function TelegramAuthPage() {
   useEffect(() => {
     if (isTelegram) return;
 
-    (window as unknown as { onTelegramAuth?: (user: Record<string, unknown>) => void }).onTelegramAuth =
-      async (user: Record<string, unknown>) => {
-        setAuthStatus('loading');
-        try {
-          const res = await fetch('/api/auth/telegram', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ widget: user }),
-          });
-          const data = await res.json().catch(() => null);
-          if (!res.ok || !data?.ok) {
-            setErrorMessage(copyRef.current?.errorVerify ?? 'Verification failed.');
-            setAuthStatus('error');
-            return;
-          }
-          storeTelegramUser({
-            firstName: data?.firstName,
-            username: data?.username,
-            telegramId: data?.telegramId,
-            role: data?.role,
-            isAdmin: data?.isAdmin,
-          });
-          const target = '/cabinet';
-          const url = (typeof window !== 'undefined' && window.location.origin) ? `${window.location.origin}${target}` : target;
-          if (typeof window !== 'undefined' && window.opener) {
-            window.opener.location.href = url;
-            window.close();
-          } else {
-            window.location.href = url;
-          }
-        } catch {
-          setErrorMessage(copyRef.current?.errorNetwork ?? 'Network error.');
+    const doRedirect = (url: string) => {
+      if (typeof window === 'undefined') return;
+      if (window.opener) {
+        window.opener.location.href = url;
+        window.close();
+      } else if (window.outerWidth < 600 || window.outerHeight < 500) {
+        const w = window.open(url, '_blank');
+        if (w) window.close();
+        else window.location.href = url;
+      } else {
+        window.location.href = url;
+      }
+    };
+
+    const handleWidgetAuth = async (user: Record<string, unknown>) => {
+      setAuthStatus('loading');
+      try {
+        const res = await fetch('/api/auth/telegram', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ widget: user }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.ok) {
+          setErrorMessage(copyRef.current?.errorVerify ?? 'Verification failed.');
           setAuthStatus('error');
+          return;
         }
-      };
+        storeTelegramUser({
+          firstName: data?.firstName,
+          username: data?.username,
+          telegramId: data?.telegramId,
+          role: data?.role,
+          isAdmin: data?.isAdmin,
+        });
+        const target = '/cabinet';
+        const url = (typeof window !== 'undefined' && window.location.origin) ? `${window.location.origin}${target}` : target;
+        doRedirect(url);
+      } catch {
+        setErrorMessage(copyRef.current?.errorNetwork ?? 'Network error.');
+        setAuthStatus('error');
+      }
+    };
+
+    const win = window as unknown as { onTelegramAuth?: (u: Record<string, unknown>) => void; __telegramAuthQueue?: Record<string, unknown>[] };
+    const queue = win.__telegramAuthQueue;
+    if (queue?.length) {
+      win.__telegramAuthQueue = [];
+      queue.forEach((u) => void handleWidgetAuth(u));
+    }
+    win.onTelegramAuth = handleWidgetAuth;
 
     return () => {
-      (window as unknown as { onTelegramAuth?: (user: Record<string, unknown>) => void }).onTelegramAuth = undefined;
+      win.onTelegramAuth = undefined;
     };
   }, [isTelegram]);
 
