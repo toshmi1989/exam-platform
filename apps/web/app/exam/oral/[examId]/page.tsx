@@ -218,12 +218,16 @@ export default function OralExamPage() {
                         {children}
                       </SafeLink>
                     ),
-                    img: ({ src, alt }) => (
-                      <a href={src} target="_blank" rel="noopener noreferrer" className="block">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={src} alt={alt ?? ''} className="max-h-64 rounded-lg object-contain" />
-                      </a>
-                    ),
+                    img: ({ src, alt }) => {
+                      const srcStr = typeof src === 'string' ? src : undefined;
+                      if (!srcStr) return null;
+                      return (
+                        <a href={srcStr} target="_blank" rel="noopener noreferrer" className="block">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={srcStr} alt={alt ?? ''} className="max-h-64 rounded-lg object-contain" />
+                        </a>
+                      );
+                    },
                   }}
                 >
                   {answerCache[current.id]}
