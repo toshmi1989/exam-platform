@@ -1,4 +1,6 @@
 import { Router, Request, Response } from 'express';
+import { prisma } from '../../db/prisma';
+import { consumeOralQuestionSlot } from '../entitlements/entitlements.service';
 import { getOrCreateOralAnswer, getOrCreateOralAnswerStream, type GetOrCreateError } from './ai.service';
 
 const router = Router();
@@ -12,6 +14,21 @@ router.post('/answer', async (req: Request, res: Response): Promise<void> => {
   const questionId = typeof req.body?.questionId === 'string' ? req.body.questionId.trim() : '';
   if (!questionId) {
     res.status(400).json({ ok: false, reasonCode: 'INVALID_INPUT', message: 'Требуется questionId.' });
+    return;
+  }
+
+  const question = await prisma.question.findUnique({
+    where: { id: questionId },
+    select: { examId: true, type: true },
+  });
+  if (!question || question.type !== 'ORAL') {
+    res.status(404).json({ ok: false, reasonCode: 'QUESTION_NOT_FOUND', message: 'Вопрос не найден.' });
+    return;
+  }
+
+  const { allowed } = await consumeOralQuestionSlot(req.user.id, question.examId, questionId);
+  if (!allowed) {
+    res.status(403).json({ ok: false, reasonCode: 'ACCESS_DENIED', message: 'Дневной лимит просмотра ответов исчерпан.' });
     return;
   }
 
@@ -37,6 +54,21 @@ router.post('/answer/stream', async (req: Request, res: Response): Promise<void>
   const questionId = typeof req.body?.questionId === 'string' ? req.body.questionId.trim() : '';
   if (!questionId) {
     res.status(400).json({ ok: false, reasonCode: 'INVALID_INPUT', message: 'Требуется questionId.' });
+    return;
+  }
+
+  const question = await prisma.question.findUnique({
+    where: { id: questionId },
+    select: { examId: true, type: true },
+  });
+  if (!question || question.type !== 'ORAL') {
+    res.status(404).json({ ok: false, reasonCode: 'QUESTION_NOT_FOUND', message: 'Вопрос не найден.' });
+    return;
+  }
+
+  const { allowed } = await consumeOralQuestionSlot(req.user.id, question.examId, questionId);
+  if (!allowed) {
+    res.status(403).json({ ok: false, reasonCode: 'ACCESS_DENIED', message: 'Дневной лимит просмотра ответов исчерпан.' });
     return;
   }
 

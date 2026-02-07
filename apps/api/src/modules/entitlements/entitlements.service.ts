@@ -62,19 +62,18 @@ export async function getEntitlementsForExam(
     settings.freeDailyLimit > 0 &&
     dailyCount < settings.freeDailyLimit;
 
-  // Устный режим: подписчики без лимита; без подписки — по freeOralDailyLimit (открытий в день).
+  // Устный режим: подписчики без лимита; без подписки — freeOralDailyLimit = число разных вопросов, ответы на которые просмотрены сегодня.
   let oralDailyLimitAvailable = false;
   if (examType === 'ORAL') {
     if (subscriptionActive) {
       oralDailyLimitAvailable = true;
     } else if (settings.allowFreeAttempts && settings.freeOralDailyLimit > 0) {
-      const oralOpensToday = await prisma.oralAccessLog.count({
-        where: {
-          userId,
-          createdAt: { gte: todayStart, lt: todayEnd },
-        },
+      const rows = await (prisma as unknown as { oralAccessLog: { findMany: (args: { where: { userId: string; createdAt: { gte: Date; lt: Date } }; select: { questionId: true } }) => Promise<{ questionId: string | null }[]> } }).oralAccessLog.findMany({
+        where: { userId, createdAt: { gte: todayStart, lt: todayEnd } },
+        select: { questionId: true },
       });
-      oralDailyLimitAvailable = oralOpensToday < settings.freeOralDailyLimit;
+      const distinctQuestions = new Set(rows.map((r) => r.questionId).filter(Boolean)).size;
+      oralDailyLimitAvailable = distinctQuestions < settings.freeOralDailyLimit;
     }
   }
 
@@ -84,5 +83,61 @@ export async function getEntitlementsForExam(
     dailyLimitAvailable,
     oralDailyLimitAvailable,
   };
+}
+
+/** Границы «сегодня» для подсчёта устных ответов (локальное время сервера). */
+function getTodayBounds(): { gte: Date; lt: Date } {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(todayStart);
+  todayEnd.setDate(todayEnd.getDate() + 1);
+  return { gte: todayStart, lt: todayEnd };
+}
+
+/**
+ * Списывает один «вопрос» устного лимита при просмотре ответа (по разным questionId).
+ * Подписчики не ограничены. Повторный просмотр того же вопроса в тот же день не списывается.
+ */
+export async function consumeOralQuestionSlot(
+  userId: string,
+  examId: string,
+  questionId: string
+): Promise<{ allowed: boolean }> {
+  const entitlements = await getEntitlementsForExam(userId, examId, 'ORAL');
+  if (entitlements.subscriptionActive) {
+    return { allowed: true };
+  }
+  const settings = await getAccessSettings();
+  if (!settings.allowFreeAttempts || settings.freeOralDailyLimit <= 0) {
+    return { allowed: false };
+  }
+  const { gte, lt } = getTodayBounds();
+  const oralLog = prisma as unknown as {
+    oralAccessLog: {
+      findMany: (args: { where: { userId: string; createdAt: { gte: Date; lt: Date } }; select: { questionId: true } }) => Promise<{ questionId: string | null }[]>;
+      create: (args: { data: { userId: string; questionId: string } }) => Promise<unknown>;
+      count: (args: { where: { userId: string; questionId: string; createdAt: { gte: Date; lt: Date } } }) => Promise<number>;
+    };
+  };
+  const consumed = await prisma.$transaction(async (tx) => {
+    const txOral = (tx as unknown as typeof oralLog).oralAccessLog;
+    const rows = await txOral.findMany({
+      where: { userId, createdAt: { gte, lt } },
+      select: { questionId: true },
+    });
+    const distinctCount = new Set(rows.map((r) => r.questionId).filter(Boolean)).size;
+    const alreadyViewed = rows.some((r) => r.questionId === questionId);
+    if (alreadyViewed) {
+      return true;
+    }
+    if (distinctCount >= settings.freeOralDailyLimit) {
+      return false;
+    }
+    await txOral.create({
+      data: { userId, questionId },
+    });
+    return true;
+  });
+  return { allowed: consumed };
 }
   

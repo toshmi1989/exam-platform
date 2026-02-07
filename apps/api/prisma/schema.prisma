@@ -211,11 +211,13 @@ model AccessSettings {
 }
 
 model OralAccessLog {
-  id        String   @id @default(cuid())
-  userId    String
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  userId     String
+  questionId String?  // один слот = один просмотренный ответ на вопрос в день (по разным questionId)
+  createdAt  DateTime @default(now())
 
   @@index([userId, createdAt])
+  @@index([userId, questionId, createdAt])
 }
 
 model PaymentInvoice {
