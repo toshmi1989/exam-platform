@@ -24,6 +24,8 @@ import {
 import {
   previewQuestionBank,
   importQuestionBank,
+  previewOralQuestionBank,
+  importOralQuestionBank,
 } from './import.service';
 import { prewarm, getAiStats, getOralStats, prewarmOral } from '../ai/ai.service';
 import { sendBroadcastToUsers } from '../../services/broadcastSender.service';
@@ -599,6 +601,50 @@ router.post('/import/execute', async (req, res) => {
       profession: profession as 'DOCTOR' | 'NURSE',
       fileBase64,
       mode,
+    });
+    res.json({ ok: true, result });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ ok: false, error: errMsg });
+  }
+});
+
+router.post('/import/preview-oral', async (req, res) => {
+  req.setTimeout(120000);
+  const profession = String(req.body?.profession ?? '').toUpperCase();
+  const fileBase64 = String(req.body?.fileBase64 ?? '');
+  if (!profession || !fileBase64) {
+    return res.status(400).json({ ok: false });
+  }
+  if (profession !== 'DOCTOR' && profession !== 'NURSE') {
+    return res.status(400).json({ ok: false });
+  }
+  try {
+    const preview = await previewOralQuestionBank({
+      profession: profession as 'DOCTOR' | 'NURSE',
+      fileBase64,
+    });
+    res.json({ ok: true, preview });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ ok: false, error: errMsg });
+  }
+});
+
+router.post('/import/execute-oral', async (req, res) => {
+  req.setTimeout(300000);
+  const profession = String(req.body?.profession ?? '').toUpperCase();
+  const fileBase64 = String(req.body?.fileBase64 ?? '');
+  if (!profession || !fileBase64) {
+    return res.status(400).json({ ok: false });
+  }
+  if (profession !== 'DOCTOR' && profession !== 'NURSE') {
+    return res.status(400).json({ ok: false });
+  }
+  try {
+    const result = await importOralQuestionBank({
+      profession: profession as 'DOCTOR' | 'NURSE',
+      fileBase64,
     });
     res.json({ ok: true, result });
   } catch (err) {

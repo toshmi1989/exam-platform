@@ -209,3 +209,156 @@ export async function importQuestionBank(params: {
     skippedExams: mode === 'add' ? skippedExams : undefined,
   };
 }
+
+// ——— Oral import ———
+// Excel: each sheet = direction name. First sheet = UZ, second = RU, third = UZ, fourth = RU, ... (as in test import).
+// Columns = categories (doctors: 4 cols = 3, 2, 1, высшая; nurses: 3 cols = 2, 1, высшая). Each row = one question per column (cell = question text).
+
+const ORAL_CATEGORY_NAMES_DOCTOR = ['3', '2', '1', 'Высшая'] as const;
+const ORAL_CATEGORY_NAMES_NURSE = ['2', '1', 'Высшая'] as const;
+
+function getOralCategoryNames(profession: Profession): readonly string[] {
+  return profession === 'DOCTOR' ? ORAL_CATEGORY_NAMES_DOCTOR : ORAL_CATEGORY_NAMES_NURSE;
+}
+
+export async function previewOralQuestionBank(params: {
+  profession: Profession;
+  fileBase64: string;
+}) {
+  const buffer = decodeBase64(params.fileBase64);
+  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  const sheetNames = workbook.SheetNames;
+  const categoryNames = getOralCategoryNames(params.profession);
+
+  const directions: {
+    name: string;
+    language: Language;
+    categories: { categoryLabel: string; questionCount: number }[];
+  }[] = [];
+
+  for (let index = 0; index < sheetNames.length; index += 1) {
+    const sheetName = sheetNames[index];
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) continue;
+
+    const lang = resolveLanguage(index);
+
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+      header: 1,
+      defval: '',
+    });
+
+    const categories: { categoryLabel: string; questionCount: number }[] = [];
+    for (let colIndex = 0; colIndex < categoryNames.length; colIndex += 1) {
+      let count = 0;
+      for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+        const row = rows[rowIndex] as unknown[] | undefined;
+        const cell = row?.[colIndex];
+        if (normalizeText(cell)) count += 1;
+      }
+      categories.push({
+        categoryLabel: categoryNames[colIndex],
+        questionCount: count,
+      });
+    }
+
+    directions.push({ name: sheetName, language: lang, categories });
+  }
+
+  return {
+    profession: params.profession,
+    directions,
+    totalDirections: directions.length,
+  };
+}
+
+export async function importOralQuestionBank(params: {
+  profession: Profession;
+  fileBase64: string;
+}) {
+  const buffer = decodeBase64(params.fileBase64);
+  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  const sheetNames = workbook.SheetNames;
+  const categoryNames = getOralCategoryNames(params.profession);
+
+  // Ensure categories exist
+  for (const name of categoryNames) {
+    await prisma.category.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    });
+  }
+
+  let totalQuestions = 0;
+
+  for (let sheetIndex = 0; sheetIndex < sheetNames.length; sheetIndex += 1) {
+    const sheetName = sheetNames[sheetIndex];
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) continue;
+
+    const language = resolveLanguage(sheetIndex);
+
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+      header: 1,
+      defval: '',
+    });
+
+    for (let colIndex = 0; colIndex < categoryNames.length; colIndex += 1) {
+      const categoryName = categoryNames[colIndex];
+      const category = await prisma.category.findUnique({
+        where: { name: categoryName },
+      });
+      if (!category) continue;
+
+      const exam = await prisma.exam.upsert({
+        where: {
+          title_categoryId: { title: sheetName, categoryId: category.id },
+        },
+        update: {
+          type: 'ORAL',
+          profession: params.profession,
+          language,
+          direction: sheetName,
+        },
+        create: {
+          title: sheetName,
+          type: 'ORAL',
+          profession: params.profession,
+          language,
+          direction: sheetName,
+          categoryId: category.id,
+        },
+      });
+
+      await prisma.question.deleteMany({ where: { examId: exam.id, type: 'ORAL' } });
+
+      const questionsData: { examId: string; type: 'ORAL'; prompt: string; order: number }[] = [];
+      for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+        const row = rows[rowIndex] as unknown[] | undefined;
+        const cell = row?.[colIndex];
+        const text = normalizeText(cell);
+        if (!text) continue;
+        questionsData.push({
+          examId: exam.id,
+          type: 'ORAL',
+          prompt: text,
+          order: rowIndex + 1,
+        });
+      }
+
+      if (questionsData.length > 0) {
+        await prisma.question.createMany({ data: questionsData });
+        totalQuestions += questionsData.length;
+      }
+
+      await yieldEventLoop();
+    }
+  }
+
+  return {
+    profession: params.profession,
+    totalDirections: sheetNames.length,
+    importedQuestions: totalQuestions,
+  };
+}
