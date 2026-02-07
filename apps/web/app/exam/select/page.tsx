@@ -330,7 +330,7 @@ function ExamSelectClient() {
 
   // Scroll to center when step changes
   useEffect(() => {
-    let ref: React.RefObject<HTMLDivElement> | null = null;
+    let ref: React.RefObject<HTMLDivElement | null> | null = null;
     if (profession && !examType) {
       ref = examTypeRef as React.RefObject<HTMLDivElement>;
     } else if (profession && examType === 'test' && !mode) {
