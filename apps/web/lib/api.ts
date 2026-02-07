@@ -377,6 +377,67 @@ export async function getOralAnswer(questionId: string): Promise<{ content: stri
   return { content: payload.content };
 }
 
+/**
+ * Stream oral answer (SSE). Calls onChunk for each piece of content, onDone when finished.
+ * Use for lower perceived latency while AI generates.
+ */
+export async function streamOralAnswer(
+  questionId: string,
+  onChunk: (content: string) => void,
+  onDone: () => void
+): Promise<void> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (typeof window !== 'undefined') {
+    const user = readTelegramUser();
+    if (user?.telegramId) headers['x-telegram-id'] = user.telegramId;
+  }
+  const res = await fetch(`${API_BASE_URL}/oral/answer/stream`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ questionId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw (err as ApiError) || new Error('Failed to load answer');
+  }
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error('No response body');
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6)) as { content?: string; done?: boolean; error?: boolean };
+            if (data.error) throw new Error('Generation failed');
+            if (data.content) onChunk(data.content);
+            if (data.done) onDone();
+          } catch (e) {
+            if (e instanceof SyntaxError) continue;
+            throw e;
+          }
+        }
+      }
+    }
+    if (buffer.startsWith('data: ')) {
+      try {
+        const data = JSON.parse(buffer.slice(6)) as { content?: string; done?: boolean; error?: boolean };
+        if (data.content) onChunk(data.content);
+      } catch {
+        // ignore
+      }
+    }
+  } finally {
+    onDone();
+  }
+}
+
 /** Язык ответа определяется по языку экзамена (теста) на бэкенде. */
 export async function explainQuestion(questionId: string): Promise<{ content: string }> {
   const { response, data } = await apiFetch('/ai/explain', {
@@ -391,6 +452,67 @@ export async function explainQuestion(questionId: string): Promise<{ content: st
     throw new Error('Invalid explain response');
   }
   return { content: payload.content };
+}
+
+/**
+ * Stream Ziyoda explanation (SSE). Calls onChunk for each piece, onDone when finished.
+ * Use for lower perceived latency while AI generates.
+ */
+export async function streamExplainQuestion(
+  questionId: string,
+  onChunk: (content: string) => void,
+  onDone: () => void
+): Promise<void> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (typeof window !== 'undefined') {
+    const user = readTelegramUser();
+    if (user?.telegramId) headers['x-telegram-id'] = user.telegramId;
+  }
+  const res = await fetch(`${API_BASE_URL}/ai/explain/stream`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ questionId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw (err as ApiError) || new Error('Failed to load explanation');
+  }
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error('No response body');
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6)) as { content?: string; done?: boolean; error?: boolean };
+            if (data.error) throw new Error('Generation failed');
+            if (data.content) onChunk(data.content);
+            if (data.done) onDone();
+          } catch (e) {
+            if (e instanceof SyntaxError) continue;
+            throw e;
+          }
+        }
+      }
+    }
+    if (buffer.startsWith('data: ')) {
+      try {
+        const data = JSON.parse(buffer.slice(6)) as { content?: string; done?: boolean };
+        if (data.content) onChunk(data.content);
+      } catch {
+        // ignore
+      }
+    }
+  } finally {
+    onDone();
+  }
 }
 
 export interface AdminAiStatsByExam {

@@ -8,8 +8,9 @@ import Button from '../../../../components/Button';
 import Card from '../../../../components/Card';
 import PageHeader from '../../../../components/PageHeader';
 import { readSettings, Language } from '../../../../lib/uiSettings';
-import { getOralQuestions, getOralAnswer } from '../../../../lib/api';
+import { getOralQuestions, streamOralAnswer } from '../../../../lib/api';
 import ReactMarkdown from 'react-markdown';
+import AiLoadingDots from '../../../../components/AiLoadingDots';
 import remarkGfm from 'remark-gfm';
 
 interface QuestionItem {
@@ -61,6 +62,7 @@ export default function OralExamPage() {
   const [questions, setQuestions] = useState<QuestionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [index, setIndex] = useState(0);
   const [answerCache, setAnswerCache] = useState<Record<string, string>>({});
   const [loadingAnswerId, setLoadingAnswerId] = useState<string | null>(null);
@@ -91,19 +93,35 @@ export default function OralExamPage() {
     }
     setLoading(true);
     setError(null);
+    setAccessDenied(false);
     getOralQuestions(examId)
       .then(setQuestions)
-      .catch(() => setError('Failed to load questions'))
+      .catch((err: { reasonCode?: string }) => {
+        if (err?.reasonCode === 'ACCESS_DENIED') {
+          setAccessDenied(true);
+        } else {
+          setError('Failed to load questions');
+        }
+      })
       .finally(() => setLoading(false));
   }, [examId]);
 
   const showAnswer = useCallback(async (questionId: string) => {
-    if (answerCache[questionId]) return;
+    if (answerCache[questionId]?.length) return;
+    if (loadingAnswerId === questionId) return;
     setLoadingAnswerId(questionId);
     setAnswerError(null);
+    if (answerCache[questionId] === undefined) {
+      setAnswerCache((prev) => ({ ...prev, [questionId]: '' }));
+    }
     try {
-      const { content } = await getOralAnswer(questionId);
-      setAnswerCache((prev) => ({ ...prev, [questionId]: content }));
+      await streamOralAnswer(
+        questionId,
+        (content) => {
+          setAnswerCache((prev) => ({ ...prev, [questionId]: (prev[questionId] ?? '') + content }));
+        },
+        () => setLoadingAnswerId(null)
+      );
     } catch {
       setAnswerError(
         language === 'Узбекский'
@@ -112,10 +130,9 @@ export default function OralExamPage() {
             ? 'Failed to load answer.'
             : 'Не удалось загрузить ответ.'
       );
-    } finally {
       setLoadingAnswerId(null);
     }
-  }, [answerCache, language]);
+  }, [language]);
 
   const copy = useMemo(() => {
     if (language === 'Английский') {
@@ -124,6 +141,7 @@ export default function OralExamPage() {
         subtitle: 'Study questions and reveal answers.',
         showAnswer: 'Show answer',
         loading: 'Loading...',
+        loadingSearch: 'Ziyoda is searching for the answer…',
         prev: 'Previous',
         next: 'Next',
         questionNum: (n: number, t: number) => `Question ${n} of ${t}`,
@@ -131,6 +149,9 @@ export default function OralExamPage() {
         finish: 'Finish',
         openInRussian: 'Open in Russian',
         answerHeader: 'Ziyoda answers',
+        dailyLimitTitle: 'Daily limit used',
+        dailyLimitHint: 'Your free attempts for today are used. Get a subscription to continue.',
+        buySubscriptionCta: 'Get subscription',
       };
     }
     if (language === 'Узбекский') {
@@ -139,6 +160,7 @@ export default function OralExamPage() {
         subtitle: "Savollarni o'rganing va javoblarni ko'ring.",
         showAnswer: "Javobni ko'rsatish",
         loading: 'Yuklanmoqda...',
+        loadingSearch: "Ziyoda javob qidirmoqda…",
         prev: 'Oldingi',
         next: 'Keyingi',
         questionNum: (n: number, t: number) => `${n} / ${t} savol`,
@@ -146,6 +168,9 @@ export default function OralExamPage() {
         finish: 'Tugatish',
         openInRussian: "Ruscha ochish",
         answerHeader: 'Ziyoda javob beradi',
+        dailyLimitTitle: 'Kunlik limit tugadi',
+        dailyLimitHint: 'Bepul urinishlar bugun tugadi. Davom etish uchun obuna oling.',
+        buySubscriptionCta: 'Obuna olish',
       };
     }
     return {
@@ -153,6 +178,7 @@ export default function OralExamPage() {
       subtitle: 'Изучайте вопросы и открывайте ответы.',
       showAnswer: 'Показать ответ',
       loading: 'Загрузка...',
+      loadingSearch: 'Зиёда ищет ответ…',
       prev: 'Назад',
       next: 'Далее',
       questionNum: (n: number, t: number) => `Вопрос ${n} из ${t}`,
@@ -160,6 +186,9 @@ export default function OralExamPage() {
       finish: 'Завершить',
       openInRussian: 'Открыть на русском',
       answerHeader: 'Зиёда отвечает',
+      dailyLimitTitle: 'Дневной лимит исчерпан',
+      dailyLimitHint: 'Бесплатные попытки на сегодня израсходованы. Для продолжения нужна подписка.',
+      buySubscriptionCta: 'Купить подписку',
     };
   }, [language]);
 
@@ -168,6 +197,28 @@ export default function OralExamPage() {
       <AnimatedPage>
         <main className="flex min-h-[50vh] items-center justify-center pb-28 pt-[3.75rem]">
           <p className="text-slate-600">{copy.loading}</p>
+        </main>
+        <BottomNav />
+      </AnimatedPage>
+    );
+  }
+
+  if (accessDenied) {
+    return (
+      <AnimatedPage>
+        <main className="flex min-h-[50vh] flex-col gap-4 pb-28 pt-[3.75rem]">
+          <PageHeader title={copy.title} subtitle={copy.subtitle} />
+          <Card>
+            <div className="flex flex-col gap-3">
+              <p className="font-semibold text-amber-800">{copy.dailyLimitTitle}</p>
+              <p className="text-sm text-slate-600">{copy.dailyLimitHint}</p>
+              <div className="mt-2">
+                <Button href="/cabinet/subscribe" size="lg">
+                  {copy.buySubscriptionCta}
+                </Button>
+              </div>
+            </div>
+          </Card>
         </main>
         <BottomNav />
       </AnimatedPage>
@@ -205,21 +256,27 @@ export default function OralExamPage() {
                 onClick={() => showAnswer(current.id)}
                 disabled={loadingAnswerId === current.id}
               >
-                {loadingAnswerId === current.id ? copy.loading : copy.showAnswer}
+                {copy.showAnswer}
               </Button>
             </div>
+            {loadingAnswerId === current.id && (
+              <div className="mt-3">
+                <AiLoadingDots text={copy.loadingSearch} />
+              </div>
+            )}
             {answerError && (
               <p className="mt-2 text-sm text-rose-600">{answerError}</p>
             )}
-            {answerCache[current.id] && (
+            {(answerCache[current.id] !== undefined || loadingAnswerId === current.id) && (
               <div className="mt-4 overflow-hidden rounded-xl border-2 border-[#2AABEE]/20 bg-gradient-to-b from-slate-50 to-white shadow-sm">
                 <div className="border-b border-slate-200 bg-[#2AABEE]/10 px-4 py-2.5">
                   <p className="text-sm font-semibold text-slate-800">
                     🤖 {copy.answerHeader}
                   </p>
                 </div>
-                <div className="p-4 text-sm prose prose-slate max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-blockquote:border-[#2AABEE] prose-blockquote:bg-slate-50/80 prose-blockquote:py-1 prose-blockquote:rounded-r prose-img:rounded-lg prose-img:shadow-md">
+                <div className="p-4 text-sm prose prose-slate max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-blockquote:border-[#2AABEE] prose-blockquote:bg-slate-50/80 prose-blockquote:rounded-r prose-img:rounded-lg prose-img:shadow-md">
                   <div className="overflow-x-auto">
+                    {answerCache[current.id] ? (
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
@@ -284,6 +341,9 @@ export default function OralExamPage() {
                     >
                       {answerCache[current.id]}
                     </ReactMarkdown>
+                    ) : (
+                      <span className="text-slate-400">…</span>
+                    )}
                   </div>
                 </div>
               </div>

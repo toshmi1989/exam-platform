@@ -174,6 +174,9 @@ function ExamSelectClient() {
         accessDenied: 'Access denied. Please purchase access.',
         accessDeniedTitle: 'Access denied',
         accessDeniedHint: 'To take this test you need a subscription or one-time access.',
+        dailyLimitExhaustedTitle: 'Daily limit used',
+        dailyLimitExhaustedHint: 'Your free attempts for today are used. Get a subscription to continue.',
+        buySubscriptionCta: 'Get subscription',
         subscribeCta: 'Get subscription',
         subscribeCtaFor: 'Get subscription for',
         oneTimeCtaFor: 'One-time access for',
@@ -213,6 +216,9 @@ function ExamSelectClient() {
         accessDenied: 'Ruxsat yo‘q. Avval kirish sotib oling.',
         accessDeniedTitle: 'Ruxsat yo‘q',
         accessDeniedHint: 'Bu testni topshirish uchun obuna yoki bir martalik kirish kerak.',
+        dailyLimitExhaustedTitle: 'Kunlik limit tugadi',
+        dailyLimitExhaustedHint: 'Bepul urinishlar bugun tugadi. Davom etish uchun obuna oling.',
+        buySubscriptionCta: 'Obuna olish',
         subscribeCta: 'Obuna olish',
         subscribeCtaFor: 'Obuna olish',
         oneTimeCtaFor: 'Bir martalik kirish',
@@ -251,6 +257,9 @@ function ExamSelectClient() {
       accessDenied: 'Доступ запрещен. Сначала оплатите доступ.',
       accessDeniedTitle: 'Доступ ограничен',
       accessDeniedHint: 'Чтобы пройти этот тест, нужна подписка или разовый доступ.',
+      dailyLimitExhaustedTitle: 'Дневной лимит исчерпан',
+      dailyLimitExhaustedHint: 'Бесплатные попытки на сегодня израсходованы. Для продолжения нужна подписка.',
+      buySubscriptionCta: 'Купить подписку',
       subscribeCta: 'Оформить подписку',
       subscribeCtaFor: 'Оформить подписку за',
       oneTimeCtaFor: 'Разовый доступ за',
@@ -703,37 +712,44 @@ function ExamSelectClient() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-amber-800">
-                      {copy.accessDeniedTitle}
+                      {copy.dailyLimitExhaustedTitle}
                     </p>
                     <p className="mt-0.5 text-sm text-amber-800">
-                      {copy.accessDeniedHint}
+                      {copy.dailyLimitExhaustedHint}
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {isAuthenticated && (
-                        <Button
-                          href="/cabinet/subscribe"
-                          size="md"
-                          className="w-full sm:w-auto"
-                        >
-                          {subscriptionPrice != null
-                            ? `${copy.subscribeCtaFor} ${subscriptionPrice.toLocaleString('ru-UZ')} сум`
-                            : copy.subscribeCta}
+                        <>
+                          <Button
+                            href="/cabinet/subscribe"
+                            size="md"
+                            className="w-full sm:w-auto"
+                          >
+                            {subscriptionPrice != null
+                              ? `${copy.subscribeCtaFor} ${subscriptionPrice.toLocaleString('ru-UZ')} сум`
+                              : copy.buySubscriptionCta}
+                          </Button>
+                          <Button
+                            href={
+                              direction
+                                ? `/cabinet/pay-one-time?examId=${encodeURIComponent(direction.examId)}&mode=${mode ?? 'exam'}`
+                                : '/cabinet/pay-one-time'
+                            }
+                            size="md"
+                            variant="secondary"
+                            className="w-full sm:w-auto"
+                          >
+                            {oneTimePrice != null
+                              ? `${copy.oneTimeCtaFor} ${oneTimePrice.toLocaleString('ru-UZ')} сум`
+                              : copy.payCta}
+                          </Button>
+                        </>
+                      )}
+                      {!isAuthenticated && (
+                        <Button href="/cabinet" size="md" className="w-full sm:w-auto">
+                          {copy.loginToPurchase}
                         </Button>
                       )}
-                      <Button
-                        href={
-                          direction
-                            ? `/cabinet/pay-one-time?examId=${encodeURIComponent(direction.examId)}&mode=${mode ?? 'exam'}`
-                            : '/cabinet/pay-one-time'
-                        }
-                        size="md"
-                        variant={isAuthenticated ? 'secondary' : 'primary'}
-                        className="w-full sm:w-auto"
-                      >
-                        {oneTimePrice != null
-                          ? `${copy.oneTimeCtaFor} ${oneTimePrice.toLocaleString('ru-UZ')} сум`
-                          : copy.payCta}
-                      </Button>
                     </div>
                   </div>
                 </div>

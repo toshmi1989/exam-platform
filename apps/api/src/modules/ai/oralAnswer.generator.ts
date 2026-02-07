@@ -77,3 +77,33 @@ export async function generateOralAnswer(input: OralAnswerGeneratorInput): Promi
     throw new Error('Не удалось сгенерировать ответ. Попробуйте позже.');
   }
 }
+
+/** Stream oral answer chunk by chunk for lower perceived latency. */
+export async function* generateOralAnswerStream(
+  input: OralAnswerGeneratorInput
+): AsyncGenerator<string, void, unknown> {
+  if (!OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY не настроен. Генерация устных ответов недоступна.');
+  }
+
+  const { lang, question } = input;
+  const label = lang === 'uz' ? 'Savol' : 'Вопрос';
+
+  const stream = await openai.chat.completions.create({
+    model: 'gpt-4.1-mini',
+    messages: [
+      { role: 'system', content: getSystemPrompt(lang) },
+      { role: 'user', content: `${label}: ${question}` },
+    ],
+    temperature: 0.5,
+    max_tokens: 1200,
+    stream: true,
+  });
+
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta?.content;
+    if (typeof delta === 'string' && delta) {
+      yield delta;
+    }
+  }
+}

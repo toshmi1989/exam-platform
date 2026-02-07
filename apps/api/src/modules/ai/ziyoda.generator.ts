@@ -80,3 +80,37 @@ export async function generateZiyodaExplanation(input: ZiyodaGeneratorInput): Pr
     throw new Error('Не удалось сгенерировать объяснение. Попробуйте позже.');
   }
 }
+
+/** Stream explanation chunk by chunk for lower perceived latency. */
+export async function* generateZiyodaExplanationStream(
+  input: ZiyodaGeneratorInput
+): AsyncGenerator<string, void, unknown> {
+  if (!OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY не настроен. Объяснения Зиёды недоступны.');
+  }
+
+  const { lang, question, options, correctAnswer } = input;
+  const optionsText = options.map((o) => o.label).join('\n');
+  const userContent = `${lang === 'uz' ? 'Savol' : 'Вопрос'}: ${question}\n\n${lang === 'uz' ? 'Variantlar' : 'Варианты ответов'}:\n${optionsText}\n\n${lang === 'uz' ? "To'g'ri javob" : 'Правильный ответ'}: ${correctAnswer}`;
+  const header = getHeader(lang);
+
+  yield `${header}\n\n`;
+
+  const stream = await openai.chat.completions.create({
+    model: 'gpt-4.1-mini',
+    messages: [
+      { role: 'system', content: getSystemPrompt(lang) },
+      { role: 'user', content: userContent },
+    ],
+    temperature: 0.5,
+    max_tokens: 800,
+    stream: true,
+  });
+
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta?.content;
+    if (typeof delta === 'string' && delta) {
+      yield delta;
+    }
+  }
+}

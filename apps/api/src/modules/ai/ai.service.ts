@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import { prisma } from '../../db/prisma';
-import { generateZiyodaExplanation } from './ziyoda.generator';
-import { generateOralAnswer } from './oralAnswer.generator';
+import { generateZiyodaExplanation, generateZiyodaExplanationStream } from './ziyoda.generator';
+import { generateOralAnswer, generateOralAnswerStream } from './oralAnswer.generator';
 import type { ZiyodaLang } from './ziyoda.generator';
 
 export type AiLang = ZiyodaLang;
@@ -316,6 +316,97 @@ export async function getOrCreateOralAnswer(
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Не удалось сгенерировать ответ.';
     return { success: false, reasonCode: 'GENERATION_FAILED', message };
+  }
+}
+
+/** Stream oral answer: from cache (one chunk) or from AI (chunks then save). */
+export async function* getOrCreateOralAnswerStream(
+  questionId: string
+): AsyncGenerator<string, void, unknown> {
+  const question = await prisma.question.findUnique({
+    where: { id: questionId },
+    include: {
+      exam: { select: { language: true } },
+      oralAnswer: true,
+    },
+  });
+
+  if (!question || question.type !== 'ORAL') return;
+
+  const existing = question.oralAnswer?.answerHtml?.trim();
+  if (existing) {
+    yield existing;
+    return;
+  }
+
+  const lang: AiLang = question.exam.language === 'UZ' ? 'uz' : 'ru';
+  let content = '';
+  try {
+    for await (const chunk of generateOralAnswerStream({ lang, question: question.prompt })) {
+      content += chunk;
+      yield chunk;
+    }
+    if (content) {
+      await prisma.oralAnswer.upsert({
+        where: { questionId },
+        create: { questionId, answerHtml: content },
+        update: { answerHtml: content },
+      });
+    }
+  } catch {
+    // streaming already sent chunks; save is best-effort
+  }
+}
+
+/** Stream explanation: from cache (one chunk) or from AI (chunks then save). No per-user greeting when streaming. */
+export async function* getOrCreateExplanationStream(
+  questionId: string
+): AsyncGenerator<string, void, unknown> {
+  const question = await prisma.question.findUnique({
+    where: { id: questionId },
+    include: {
+      options: { orderBy: { order: 'asc' } },
+      exam: { select: { language: true } },
+    },
+  });
+
+  if (!question) return;
+
+  const lang: AiLang = question.exam.language === 'UZ' ? 'uz' : 'ru';
+  const options = question.options.map((o) => ({ id: o.id, label: o.label }));
+  const correctOption = question.options.find((o) => o.isCorrect);
+  const correctAnswer = correctOption?.label ?? '';
+  const hash = computeHash(question.prompt, options, correctAnswer);
+
+  const existing = await prisma.questionAIExplanation.findUnique({
+    where: { questionId },
+  });
+
+  if (existing?.hash === hash) {
+    yield existing.content;
+    return;
+  }
+
+  let content = '';
+  try {
+    for await (const chunk of generateZiyodaExplanationStream({
+      lang,
+      question: question.prompt,
+      options: options.map((o) => ({ label: o.label })),
+      correctAnswer,
+    })) {
+      content += chunk;
+      yield chunk;
+    }
+    if (content) {
+      await prisma.questionAIExplanation.upsert({
+        where: { questionId },
+        create: { questionId, lang, hash, content },
+        update: { hash, content, lang },
+      });
+    }
+  } catch {
+    // streaming already sent chunks; save is best-effort
   }
 }
 

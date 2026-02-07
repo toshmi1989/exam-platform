@@ -8,10 +8,11 @@ import ErrorState from '../../../components/ErrorState';
 import PageHeader from '../../../components/PageHeader';
 import Timer from '../../../components/Timer';
 import AnimatedPage from '../../../components/AnimatedPage';
-import { getQuestions, saveAnswer, submitAttempt, explainQuestion } from '../../../lib/api';
+import { getQuestions, saveAnswer, submitAttempt, streamExplainQuestion } from '../../../lib/api';
 import type { ExamQuestion, ApiError } from '../../../lib/types';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
+import AiLoadingDots from '../../../components/AiLoadingDots';
 import { readSettings, Language } from '../../../lib/uiSettings';
 import { triggerHapticFeedback } from '../../../lib/telegram';
 import { readTelegramUser } from '../../../lib/telegramUser';
@@ -167,15 +168,18 @@ export default function AttemptPage() {
   }, [language]);
 
   async function handleZiyodaClick(questionId: string) {
-    if (ziyodaCache[questionId] || ziyodaLoadingId) return;
+    if (ziyodaCache[questionId]?.length || ziyodaLoadingId) return;
     setZiyodaLoadingId(questionId);
     setZiyodaError(null);
+    setZiyodaCache((prev) => ({ ...prev, [questionId]: '' }));
     try {
-      const { content } = await explainQuestion(questionId);
-      setZiyodaCache((prev) => ({ ...prev, [questionId]: content }));
+      await streamExplainQuestion(
+        questionId,
+        (content) => setZiyodaCache((prev) => ({ ...prev, [questionId]: (prev[questionId] ?? '') + content })),
+        () => setZiyodaLoadingId(null)
+      );
     } catch {
       setZiyodaError(copy.ziyodaError);
-    } finally {
       setZiyodaLoadingId(null);
     }
   }
@@ -504,14 +508,20 @@ export default function AttemptPage() {
                     🧠 {copy.ziyodaAsk}
                   </Button>
                   {ziyodaLoadingId === currentQuestion.id && (
-                    <p className="mt-2 text-sm text-slate-500">{copy.ziyodaThinking}</p>
+                    <div className="mt-2">
+                      <AiLoadingDots text={copy.ziyodaThinking} />
+                    </div>
                   )}
                   {ziyodaError && ziyodaLoadingId !== currentQuestion.id && (
                     <p className="mt-2 text-sm text-rose-600">{ziyodaError}</p>
                   )}
-                  {ziyodaCache[currentQuestion.id] && (
+                  {(ziyodaCache[currentQuestion.id] !== undefined || ziyodaLoadingId === currentQuestion.id) && (
                     <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 prose prose-slate max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0">
-                      <ReactMarkdown>{ziyodaCache[currentQuestion.id]}</ReactMarkdown>
+                      {ziyodaCache[currentQuestion.id] ? (
+                        <ReactMarkdown>{ziyodaCache[currentQuestion.id]}</ReactMarkdown>
+                      ) : (
+                        <span className="text-slate-400">…</span>
+                      )}
                     </div>
                   )}
                 </div>
