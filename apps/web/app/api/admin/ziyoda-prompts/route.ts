@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     }
     try {
       const j = JSON.parse(text) as { error?: string };
-      return new Response(JSON.stringify({ ok: false, error: j?.error ?? text || 'Ошибка API' }), {
+      return new Response(JSON.stringify({ ok: false, error: (j?.error ?? text) || 'Ошибка API' }), {
         status: res.status,
         headers: { 'Content-Type': 'application/json' },
       });
