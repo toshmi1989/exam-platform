@@ -5,7 +5,7 @@ import OpenAI from 'openai';
 export type ZiyodaLang = 'ru' | 'uz';
 
 export interface ZiyodaGeneratorInput {
-  userName?: string;
+  /** Не передаём в генератор — текст в БД универсальный; обращение по имени добавляется при выдаче пользователю */
   lang: ZiyodaLang;
   question: string;
   options: { label: string }[];
@@ -49,12 +49,9 @@ export async function generateZiyodaExplanation(input: ZiyodaGeneratorInput): Pr
     );
   }
 
-  const { userName, lang, question, options, correctAnswer } = input;
+  const { lang, question, options, correctAnswer } = input;
   const optionsText = options.map((o) => o.label).join('\n');
-  const greeting = (userName ?? '').trim()
-    ? (lang === 'uz' ? `${userName}, keling bu savolni ko'rib chiqamiz.` : `${userName}, давайте разберём этот вопрос.`)
-    : (lang === 'uz' ? 'Savol:' : 'Вопрос:');
-  const userContent = `${greeting}\n\n${lang === 'uz' ? 'Savol' : 'Вопрос'}: ${question}\n\n${lang === 'uz' ? 'Variantlar' : 'Варианты ответов'}:\n${optionsText}\n\n${lang === 'uz' ? "To'g'ri javob" : 'Правильный ответ'}: ${correctAnswer}`;
+  const userContent = `${lang === 'uz' ? 'Savol' : 'Вопрос'}: ${question}\n\n${lang === 'uz' ? 'Variantlar' : 'Варианты ответов'}:\n${optionsText}\n\n${lang === 'uz' ? "To'g'ri javob" : 'Правильный ответ'}: ${correctAnswer}`;
 
   // gpt-4.1-mini, temperature 0.5, max_tokens 600–800 (streaming: false)
   try {

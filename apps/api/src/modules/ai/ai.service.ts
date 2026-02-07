@@ -21,6 +21,16 @@ function computeHash(questionText: string, options: { id: string; label: string 
   return createHash('sha256').update(payload, 'utf8').digest('hex');
 }
 
+/** При выдаче пользователю добавляем обращение по имени; в БД хранится универсальный текст */
+function addPersonalGreeting(content: string, lang: AiLang, userName?: string): string {
+  const name = (userName ?? '').trim();
+  if (!name) return content;
+  const greeting = lang === 'uz'
+    ? `${name}, mana tushuntirish:\n\n`
+    : `${name}, вот объяснение:\n\n`;
+  return greeting + content;
+}
+
 /**
  * Get explanation from QuestionAIExplanation (by questionId + lang, hash match) or generate via Ziyoda and upsert.
  */
@@ -47,13 +57,13 @@ export async function getOrCreateExplanation(
     where: { questionId_lang: { questionId, lang } },
   });
 
-  if (existing && existing.hash === hash) {
-    return { success: true, content: existing.content };
+  const cachedContent = existing?.hash === hash ? existing.content : null;
+  if (cachedContent) {
+    return { success: true, content: addPersonalGreeting(cachedContent, lang, userName) };
   }
 
   try {
     const content = await generateZiyodaExplanation({
-      userName,
       lang,
       question: question.prompt,
       options: options.map((o) => ({ label: o.label })),
@@ -66,7 +76,7 @@ export async function getOrCreateExplanation(
       update: { hash, content },
     });
 
-    return { success: true, content };
+    return { success: true, content: addPersonalGreeting(content, lang, userName) };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Не удалось сгенерировать объяснение.';
     return { success: false, reasonCode: 'GENERATION_FAILED', message };
@@ -130,7 +140,6 @@ export async function* prewarm(
     } else {
       try {
         const content = await generateZiyodaExplanation({
-          userName: undefined,
           question: question.prompt,
           options: options.map((o) => ({ label: o.label })),
           correctAnswer,
