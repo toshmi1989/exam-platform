@@ -139,18 +139,19 @@ export async function askZiyoda(
     }
 
     const maxChunks = getIntPrompt(prompts, 'max_chunks', DEFAULT_MAX_CHUNKS);
-    const minSimilarity = getFloatPrompt(prompts, 'min_similarity', 0.2);
-    const candidateCount = Math.min(entries.length, Math.max(maxChunks * 2, 20));
+    const minSimilarity = getFloatPrompt(prompts, 'min_similarity', 0.15);
+    const candidateCount = Math.min(entries.length, Math.max(maxChunks * 3, 30));
     const withScores = findTopKWithScores(
       queryEmbedding,
       entries.map((e) => ({ id: e.id, content: e.content, embedding: e.embedding })),
       candidateCount
     );
     const aboveThreshold = withScores.filter((x) => x.score >= minSimilarity).slice(0, maxChunks);
+    const fallbackChunkCount = Math.min(3, withScores.length);
     const contextChunks =
       aboveThreshold.length > 0
         ? aboveThreshold.map((x) => x.entry.content)
-        : withScores.slice(0, 1).map((x) => x.entry.content);
+        : withScores.slice(0, fallbackChunkCount).map((x) => x.entry.content);
 
     if (contextChunks.length === 0) {
       console.warn('[ziyoda-rag] Нет подходящих чанков (возможно, эмбеддинги другой размерности или модель изменилась). Запрос:', trimmed.slice(0, 80));

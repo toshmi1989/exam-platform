@@ -739,6 +739,14 @@ export async function getKnowledgeStats(): Promise<KnowledgeStats> {
   return payload ?? { totalEntries: 0, totalCacheEntries: 0 };
 }
 
+/** Очистить кэш ответов бота Зиёды (после смены промптов/базы — чтобы старые ответы не подставлялись). */
+export async function clearZiyodaBotCache(): Promise<{ cleared: number }> {
+  const { response, data } = await apiFetch('/admin/ai/clear-bot-cache', { method: 'POST' });
+  if (!response.ok) throw (data as ApiError) ?? { message: 'Failed to clear cache' };
+  const payload = data as { cleared?: number } | null;
+  return { cleared: payload?.cleared ?? 0 };
+}
+
 export async function getKnowledgeEntries(): Promise<KnowledgeEntryItem[]> {
   const { response, data } = await apiFetch('/admin/knowledge/entries');
   if (!response.ok) throw data as ApiError;

@@ -860,6 +860,16 @@ router.post('/knowledge/reindex/stream', async (_req, res) => {
   }
 });
 
+router.post('/ai/clear-bot-cache', async (_req, res) => {
+  try {
+    const result = await prisma.botAnswerCache.deleteMany({});
+    res.json({ ok: true, cleared: result.count });
+  } catch (err) {
+    console.error('[admin/ai/clear-bot-cache]', err);
+    res.status(500).json({ ok: false, error: 'Failed to clear cache' });
+  }
+});
+
 router.get('/knowledge/stats', async (_req, res) => {
   try {
     const stats = await getKnowledgeStats();

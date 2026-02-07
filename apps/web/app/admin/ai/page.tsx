@@ -21,6 +21,7 @@ import {
   addTextToKnowledge,
   uploadKnowledge,
   reindexKnowledgeStream,
+  clearZiyodaBotCache,
   type AdminAiStats,
   type AdminOralStats,
   type PrewarmProgress,
@@ -39,7 +40,7 @@ type ExamOption = { id: string; title: string; type?: string; category?: string 
 /** Промпты Зиёды по умолчанию (уже в полях, можно только править). */
 const DEFAULT_ZIYODA_PROMPTS: ZiyodaPrompts = {
   system_instruction:
-    'Ziyoda, ассистент ZiyoMed. Главное: понимай суть вопроса и отвечай на основе фрагментов в <chunks>. Ищи в контексте релевантную информацию по смыслу, обобщай своими словами. Если информации нет в контексте — ответь точно: {fallback}. Только если вопрос совсем неконкретный (например "расскажи про экзамен" без уточнения) — задай одно короткое уточнение, например: "Вы про устный экзамен или тестирование?" Язык ответа совпадает с языком вопроса. Начинай с обращения по имени (если передано): {name_greeting} Формат: короткий абзац, затем пункты при необходимости; при нескольких трактовках — варианты кратко. Без длинных текстов. Учитывай предыдущий обмен (медсёстры = hamshira, врачи = shifokor).',
+    'Ziyoda, ассистент ZiyoMed. Главное: понимай суть вопроса и отвечай на основе фрагментов в <chunks>. Ищи в контексте любую связанную по смыслу информацию (темы: категории, требования, стаж, экзамены и т.д.) и обобщай своими словами. Фразу {fallback} используй ТОЛЬКО когда в контексте действительно нет ничего по теме вопроса. Если есть хотя бы частично подходящая информация — дай ответ по смыслу. Только если вопрос совсем неконкретный («расскажи про экзамен» без уточнения) — задай одно короткое уточнение. Язык ответа совпадает с языком вопроса. Начинай с обращения по имени (если передано): {name_greeting} Формат: короткий абзац, затем пункты при необходимости. Без длинных текстов. Учитывай предыдущий обмен (медсёстры = hamshira, врачи = shifokor).',
   fallback_ru: 'К сожалению, в официальных материалах ZiyoMed это не указано.',
   fallback_uz: "Afsuski, ZiyoMed rasmiy materiallarida bu ko'rsatilmagan.",
   unavailable_ru: 'Зиёда временно недоступна. Попробуйте позже.',
@@ -49,7 +50,7 @@ const DEFAULT_ZIYODA_PROMPTS: ZiyodaPrompts = {
   max_chunks: '10',
   max_context_chars: '6000',
   max_context_msg_len: '500',
-  min_similarity: '0.2',
+  min_similarity: '0.15',
 };
 
 function streamPrewarmFetch(
@@ -190,6 +191,9 @@ function AdminAIPageContent() {
   const [reindexRunning, setReindexRunning] = useState(false);
   const [reindexProgress, setReindexProgress] = useState<ReindexProgress | null>(null);
   const [reindexError, setReindexError] = useState<string | null>(null);
+  const [clearCacheLoading, setClearCacheLoading] = useState(false);
+  const [clearCacheResult, setClearCacheResult] = useState<number | null>(null);
+  const [clearCacheError, setClearCacheError] = useState<string | null>(null);
   const [pasteText, setPasteText] = useState('');
   const [pasteTitle, setPasteTitle] = useState('');
   const [pasteLoading, setPasteLoading] = useState(false);
@@ -299,6 +303,8 @@ function AdminAIPageContent() {
         minSimilarityHint: 'Chunks below this relevance are skipped. Lower = more chunks, higher = stricter.',
         savePrompts: 'Save prompts',
         promptsNarrowHint: 'If the bot often says "not in materials": raise "Max chunks" and "Max context chars", lower "Min similarity" (e.g. 0.2), or run Reindex. Response style in system instruction.',
+        clearCacheLabel: 'Clear Ziyoda answer cache',
+        clearCacheDone: 'Cleared',
       };
     }
     if (language === 'Узбекский') {
@@ -352,6 +358,8 @@ function AdminAIPageContent() {
         minSimilarityHint: 'Shundan past bo\'lgan bloklar o\'tkazib yuboriladi.',
         savePrompts: "Promptlarni saqlash",
         promptsNarrowHint: "Bot tez-tez \"materialda yo\'q\" desa: Maks bloklar va kontekstni oshiring, Min o\'xshashlikni kamaytiring (0.2) yoki Qayta indekslashni ishlating.",
+        clearCacheLabel: "Ziyoda javob keshini tozalash",
+        clearCacheDone: "Tozalandi",
       };
     }
     return {
@@ -404,6 +412,8 @@ function AdminAIPageContent() {
       minSimilarityHint: 'Фрагменты с релевантностью ниже не передаются в модель. Ниже значение — больше чанков.',
       savePrompts: 'Сохранить промпты',
       promptsNarrowHint: 'Если бот часто пишет «в материалах не указано»: увеличьте «Макс. чанков» и «Макс. символов контекста», уменьшите «Мин. релевантность» (например 0,2) или запустите «Переиндексация».',
+      clearCacheLabel: 'Очистить кэш ответов Зиёды',
+      clearCacheDone: 'Очищено',
     };
   }, [language]);
 
@@ -877,6 +887,36 @@ function AdminAIPageContent() {
                     </div>
                   )}
                   {reindexError && <p className="mt-2 text-sm text-rose-600">{reindexError}</p>}
+                </Card>
+                <Card>
+                  <p className="text-sm font-medium text-slate-700">{copy.clearCacheLabel}</p>
+                  <p className="mt-1 text-xs text-slate-500">После смены промптов или базы — чтобы бот не подставлял старые ответы</p>
+                  <div className="mt-3">
+                    <Button
+                      type="button"
+                      disabled={clearCacheLoading}
+                      onClick={async () => {
+                        setClearCacheLoading(true);
+                        setClearCacheError(null);
+                        setClearCacheResult(null);
+                        try {
+                          const { cleared } = await clearZiyodaBotCache();
+                          setClearCacheResult(cleared);
+                          getKnowledgeStats().then(setKnowledgeStats).catch(() => {});
+                        } catch (err) {
+                          setClearCacheError(err instanceof Error ? err.message : copy.error);
+                        } finally {
+                          setClearCacheLoading(false);
+                        }
+                      }}
+                    >
+                      {clearCacheLoading ? '…' : copy.clearCacheLabel}
+                    </Button>
+                  </div>
+                  {clearCacheResult !== null && (
+                    <p className="mt-2 text-sm text-emerald-600">{copy.clearCacheDone}: {clearCacheResult}</p>
+                  )}
+                  {clearCacheError && <p className="mt-2 text-sm text-rose-600">{clearCacheError}</p>}
                 </Card>
                 <Card>
                   <p className="text-sm font-medium text-slate-700">{copy.promptsTitle}</p>
