@@ -167,6 +167,11 @@ function AdminAIPageContent() {
   const [reindexRunning, setReindexRunning] = useState(false);
   const [reindexProgress, setReindexProgress] = useState<ReindexProgress | null>(null);
   const [reindexError, setReindexError] = useState<string | null>(null);
+  const [pasteText, setPasteText] = useState('');
+  const [pasteTitle, setPasteTitle] = useState('');
+  const [pasteLoading, setPasteLoading] = useState(false);
+  const [pasteSuccess, setPasteSuccess] = useState<string | null>(null);
+  const [pasteError, setPasteError] = useState<string | null>(null);
 
   useEffect(() => {
     const update = () => setLanguage(readSettings().language);
@@ -204,7 +209,7 @@ function AdminAIPageContent() {
     if (tab === 'ziyoda') {
       getKnowledgeStats().then(setKnowledgeStats).catch(() => setKnowledgeStats(null));
     }
-  }, [tab, uploadSuccess, reindexProgress?.done]);
+  }, [tab, uploadSuccess, pasteSuccess, reindexProgress?.done]);
 
   const copy = useMemo(() => {
     if (language === 'Английский') {
@@ -236,6 +241,10 @@ function AdminAIPageContent() {
         uploadHint: 'PDF, DOCX, TXT',
         statsEntries: 'Chunks',
         statsCache: 'Cached answers',
+        pasteLabel: 'Paste text',
+        pastePlaceholder: 'Paste rules, FAQs, or any text here…',
+        pasteTitleLabel: 'Title (optional)',
+        addToBase: 'Add to knowledge base',
       };
     }
     if (language === 'Узбекский') {
@@ -267,6 +276,10 @@ function AdminAIPageContent() {
         uploadHint: 'PDF, DOCX, TXT',
         statsEntries: 'Bloklar',
         statsCache: 'Kesh javoblar',
+        pasteLabel: "Matn qo'shish",
+        pastePlaceholder: "Qoidalar, savol-javoblar yoki istalgan matnni shu yerga joylashtiring…",
+        pasteTitleLabel: 'Sarlavha (ixtiyoriy)',
+        addToBase: "Bilimlar bazasiga qo'shish",
       };
     }
     return {
@@ -297,6 +310,10 @@ function AdminAIPageContent() {
       uploadHint: 'PDF, DOCX, TXT',
       statsEntries: 'Фрагментов',
       statsCache: 'Кэш ответов',
+      pasteLabel: 'Вставить текст',
+      pastePlaceholder: 'Вставьте сюда правила, ответы на вопросы или любой текст…',
+      pasteTitleLabel: 'Название (необязательно)',
+      addToBase: 'Добавить в базу знаний',
     };
   }, [language]);
 
@@ -576,6 +593,66 @@ function AdminAIPageContent() {
                   </Card>
                 )}
                 <Card>
+                  <p className="text-sm font-medium text-slate-700">{copy.pasteLabel}</p>
+                  <p className="mt-1 text-xs text-slate-500">{copy.pastePlaceholder}</p>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <textarea
+                      value={pasteText}
+                      onChange={(e) => {
+                        setPasteText(e.target.value);
+                        setPasteError(null);
+                        setPasteSuccess(null);
+                      }}
+                      placeholder={copy.pastePlaceholder}
+                      rows={8}
+                      disabled={pasteLoading}
+                      className="w-full resize-y rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-[#2AABEE] focus:outline-none disabled:opacity-60"
+                    />
+                    <div>
+                      <label className="block text-xs text-slate-500">{copy.pasteTitleLabel}</label>
+                      <input
+                        type="text"
+                        value={pasteTitle}
+                        onChange={(e) => setPasteTitle(e.target.value)}
+                        placeholder="Напр. Правила ZiyoMed"
+                        disabled={pasteLoading}
+                        className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-[#2AABEE] focus:outline-none disabled:opacity-60"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={async () => {
+                        if (pasteLoading || !pasteText.trim()) return;
+                        setPasteLoading(true);
+                        setPasteError(null);
+                        setPasteSuccess(null);
+                        try {
+                          const { chunksCreated } = await addTextToKnowledge(pasteText.trim(), pasteTitle.trim() || undefined);
+                          setPasteSuccess(`${chunksCreated} ${copy.statsEntries.toLowerCase()}`);
+                          setPasteText('');
+                          setPasteTitle('');
+                          getKnowledgeStats().then(setKnowledgeStats).catch(() => {});
+                        } catch (err) {
+                          const msg =
+                            err && typeof err === 'object' && 'error' in err && typeof (err as { error: string }).error === 'string'
+                              ? (err as { error: string }).error
+                              : err instanceof Error
+                                ? err.message
+                                : copy.error;
+                          setPasteError(msg);
+                        } finally {
+                          setPasteLoading(false);
+                        }
+                      }}
+                      disabled={pasteLoading || !pasteText.trim()}
+                    >
+                      {pasteLoading ? '...' : copy.addToBase}
+                    </Button>
+                  </div>
+                  {pasteSuccess && <p className="mt-2 text-sm text-emerald-600">{pasteSuccess}</p>}
+                  {pasteError && <p className="mt-2 text-sm text-rose-600">{pasteError}</p>}
+                </Card>
+                <Card>
                   <p className="text-sm font-medium text-slate-700">{copy.knowledgeBase}</p>
                   <p className="mt-1 text-xs text-slate-500">{copy.uploadHint}</p>
                   <div className="mt-3 flex flex-col gap-2">
@@ -605,7 +682,13 @@ function AdminAIPageContent() {
                           setUploadFile(null);
                           getKnowledgeStats().then(setKnowledgeStats).catch(() => {});
                         } catch (err) {
-                          setUploadError(err instanceof Error ? err.message : copy.error);
+                          const msg =
+                            err && typeof err === 'object' && 'error' in err && typeof (err as { error: string }).error === 'string'
+                              ? (err as { error: string }).error
+                              : err instanceof Error
+                                ? err.message
+                                : copy.error;
+                          setUploadError(msg);
                         } finally {
                           setUploadLoading(false);
                         }

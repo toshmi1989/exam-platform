@@ -806,11 +806,26 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+export async function addTextToKnowledge(
+  text: string,
+  title?: string
+): Promise<{ chunksCreated: number }> {
+  const { response, data } = await apiFetch('/admin/knowledge/add-text', {
+    method: 'POST',
+    json: { text, title: title || undefined },
+    timeoutMs: 120000,
+  });
+  if (!response.ok) throw (data as ApiError) ?? new Error('Add text failed');
+  const payload = data as { chunksCreated?: number };
+  return { chunksCreated: payload?.chunksCreated ?? 0 };
+}
+
 export async function uploadKnowledge(file: File): Promise<{ chunksCreated: number }> {
   const fileBase64 = await fileToBase64(file);
   const { response, data } = await apiFetch('/admin/knowledge/upload', {
     method: 'POST',
     json: { file: fileBase64, filename: file.name },
+    timeoutMs: 120000,
   });
   if (!response.ok) throw (data as ApiError) ?? new Error('Upload failed');
   const payload = data as { chunksCreated?: number };

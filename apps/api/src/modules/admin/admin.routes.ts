@@ -30,6 +30,7 @@ import {
 import { prewarm, getAiStats, getOralStats, prewarmOral } from '../ai/ai.service';
 import {
   uploadKnowledge,
+  addTextToKnowledge,
   reindexKnowledge,
   getKnowledgeStats,
 } from '../ai/knowledge.service';
@@ -810,6 +811,19 @@ router.post('/knowledge/upload', async (req, res) => {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[admin/knowledge/upload]', err);
+    res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+router.post('/knowledge/add-text', async (req, res) => {
+  try {
+    const text = typeof req.body?.text === 'string' ? req.body.text : '';
+    const title = typeof req.body?.title === 'string' ? req.body.title.trim() : undefined;
+    const result = await addTextToKnowledge({ text, title });
+    res.json({ ok: true, chunksCreated: result.chunksCreated });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[admin/knowledge/add-text]', err);
     res.status(500).json({ ok: false, error: msg });
   }
 });

@@ -59,10 +59,27 @@ export async function extractText(buffer: Buffer, filename: string): Promise<str
     }
   }
   if (ext === 'docx' || ext === 'doc') {
-    const result = await mammoth.extractRawText({ buffer });
-    return (result.value ?? '').trim();
+    try {
+      const result = await mammoth.extractRawText({ buffer });
+      const text = (result.value ?? '').trim();
+      if (!text && ext === 'doc') {
+        throw new Error('Формат .doc не поддерживается. Сохраните файл в Word как .docx');
+      }
+      return text;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (ext === 'doc' || msg.includes('docx') || msg.includes('invalid')) {
+        throw new Error('Не удалось извлечь текст. Поддерживается только .docx (не старый .doc). Сохраните файл как .docx в Word.');
+      }
+      throw e;
+    }
   }
-  return buffer.toString('utf-8').trim();
+  // .txt или без расширения — как текст в UTF-8 (убираем BOM, если есть)
+  let text = buffer.toString('utf-8').trim();
+  if (text.charCodeAt(0) === 0xfeff) {
+    text = text.slice(1).trim();
+  }
+  return text;
 }
 
 export interface UploadKnowledgeParams {
@@ -74,8 +91,17 @@ export async function uploadKnowledge(
   params: UploadKnowledgeParams
 ): Promise<{ chunksCreated: number }> {
   const buffer = decodeBase64(params.fileBase64);
+  if (buffer.length === 0) {
+    throw new Error('Файл пуст или неверные данные.');
+  }
   const text = await extractText(buffer, params.filename);
+  if (!text) {
+    throw new Error('Не удалось извлечь текст из файла. Проверьте формат (поддерживаются PDF, .docx, .txt).');
+  }
   const chunks = chunkText(text);
+  if (chunks.length === 0) {
+    throw new Error('После обработки не получилось выделить фрагменты текста.');
+  }
   const title = params.filename;
   const source = params.filename;
   let created = 0;
@@ -85,6 +111,39 @@ export async function uploadKnowledge(
       data: {
         title,
         source,
+        content,
+        embedding: embedding as unknown as object,
+      },
+    });
+    created++;
+  }
+  return { chunksCreated: created };
+}
+
+export interface AddTextKnowledgeParams {
+  text: string;
+  title?: string;
+}
+
+export async function addTextToKnowledge(
+  params: AddTextKnowledgeParams
+): Promise<{ chunksCreated: number }> {
+  const text = (params.text ?? '').trim();
+  if (!text) {
+    throw new Error('Введите или вставьте текст.');
+  }
+  const title = (params.title ?? 'Вставленный текст').trim() || 'Вставленный текст';
+  const chunks = chunkText(text);
+  if (chunks.length === 0) {
+    throw new Error('Не удалось разбить текст на фрагменты. Добавьте больше текста.');
+  }
+  let created = 0;
+  for (const content of chunks) {
+    const embedding = await getEmbedding(content);
+    await prisma.knowledgeBaseEntry.create({
+      data: {
+        title,
+        source: title,
         content,
         embedding: embedding as unknown as object,
       },
