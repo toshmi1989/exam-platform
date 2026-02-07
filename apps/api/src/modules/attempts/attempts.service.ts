@@ -290,7 +290,13 @@ export async function getQuestionsForAttempt(
     return { success: false, reasonCode: 'EXAM_NOT_FOUND' };
   }
 
-  return { success: true, questions, mode: attempt.mode };
+  return {
+    success: true,
+    questions,
+    mode: attempt.mode,
+    examTitle: exam.title,
+    examDirection: exam.direction,
+  };
 }
 
 

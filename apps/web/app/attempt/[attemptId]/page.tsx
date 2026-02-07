@@ -14,6 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import { readSettings, Language } from '../../../lib/uiSettings';
 import { triggerHapticFeedback } from '../../../lib/telegram';
+import { readTelegramUser } from '../../../lib/telegramUser';
 
 export default function AttemptPage() {
   const params = useParams<{ attemptId: string }>();
@@ -33,6 +34,8 @@ export default function AttemptPage() {
   const [ziyodaLoadingId, setZiyodaLoadingId] = useState<string | null>(null);
   const [ziyodaError, setZiyodaError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [examDirection, setExamDirection] = useState<string>('');
+  const [userName, setUserName] = useState<string>('');
 
   function localizeReason(reasonCode?: string) {
     if (!reasonCode) return null;
@@ -105,6 +108,8 @@ export default function AttemptPage() {
         finishTest: 'Finish test',
         timer: 'Time',
         answerAll: 'Please answer all questions first.',
+        answerAllExtended: 'To see your result and correct answers you need to answer all questions. If you want to leave and reset this attempt, use the button below.',
+        resetAttempt: 'Leave test',
         prev: 'Previous',
         next: 'Next',
         ziyodaAsk: 'Ask Ziyoda',
@@ -127,6 +132,8 @@ export default function AttemptPage() {
         finishTest: 'Imtihonni yakunlash',
         timer: 'Vaqt',
         answerAll: 'Avval barcha savollarga javob bering.',
+        answerAllExtended: "Natija va to'g'ri javoblarni ko'rish uchun barcha savollarga javob bering. Agar imtihondan chiqmoqchi bo'lsangiz, quyidagi tugmani bosing.",
+        resetAttempt: "Imtihondan chiqish",
         prev: 'Oldingi',
         next: 'Keyingi',
         ziyodaAsk: "Ziyodadan so'rang",
@@ -147,8 +154,10 @@ export default function AttemptPage() {
       submit: 'Завершить тест',
       finishTest: 'Завершить тест',
       timer: 'Время',
-answerAll: 'Сначала ответьте на все вопросы.',
-        prev: 'Предыдущий',
+      answerAll: 'Сначала ответьте на все вопросы.',
+      answerAllExtended: 'Для просмотра результата и правильных ответов нужно ответить на все вопросы. Или если хотите сбросить сессию — выйдите из режима теста (кнопка ниже).',
+      resetAttempt: 'Сбросить',
+      prev: 'Предыдущий',
         next: 'Следующий',
         ziyodaAsk: 'Спросить Зиёду',
         ziyodaThinking: 'Зиёда думает…',
@@ -202,9 +211,9 @@ answerAll: 'Сначала ответьте на все вопросы.',
       try {
         const data = await getQuestions(params.attemptId);
         setQuestions(data.questions);
-        if (data.mode) {
-          setMode(data.mode);
-        }
+        if (data.mode) setMode(data.mode);
+        if (data.examDirection != null) setExamDirection(data.examDirection);
+        else if (data.examTitle != null) setExamDirection(data.examTitle);
       } catch (err) {
         setError(err as ApiError);
       } finally {
@@ -216,7 +225,21 @@ answerAll: 'Сначала ответьте на все вопросы.',
   }, [params.attemptId]);
 
   useEffect(() => {
-    const current = questions[currentIndex];
+    const user = readTelegramUser();
+    setUserName((user?.firstName || user?.username || '').trim());
+  }, []);
+
+  const attemptSubtitle = useMemo(() => {
+    const dir = (examDirection || '').trim();
+    if (userName && dir) return `${userName} · ${dir}`;
+    if (dir) return dir;
+    if (userName) return userName;
+    return copy.subtitle;
+  }, [userName, examDirection, copy.subtitle]);
+
+  useEffect(() => {
+    const idx = questions.length > 0 ? Math.min(Math.max(0, currentIndex), questions.length - 1) : 0;
+    const current = questions[idx];
     const button = current ? cardRefs.current[current.id] : null;
     const container = questionsScrollRef.current;
     if (!button || !container) return;
@@ -237,6 +260,15 @@ answerAll: 'Сначала ответьте на все вопросы.',
   useEffect(() => {
     setShakingQuestionId(null);
   }, [currentIndex]);
+
+  // При выходе currentIndex за границы (например после быстрых кликов) возвращаем в допустимый диапазон
+  useEffect(() => {
+    if (questions.length === 0) return;
+    const maxIndex = questions.length - 1;
+    if (currentIndex > maxIndex || currentIndex < 0) {
+      setCurrentIndex(Math.min(Math.max(0, currentIndex), maxIndex));
+    }
+  }, [currentIndex, questions.length]);
 
   async function handleAnswerChange(questionId: string, value: string, isChoice?: boolean, optionId?: string) {
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
@@ -265,9 +297,8 @@ answerAll: 'Сначала ответьте на все вопросы.',
         setError(err as ApiError);
         return;
       }
-      if (currentIndex < questions.length - 1) {
-        setCurrentIndex((prev) => prev + 1);
-      }
+      // Переход только на следующий вопрос, не дальше последнего (защита от быстрых кликов)
+      setCurrentIndex((prev) => Math.min(prev + 1, questions.length - 1));
       return;
     }
 
@@ -291,7 +322,7 @@ answerAll: 'Сначала ответьте на все вопросы.',
         (question) => !answers[question.id]
       );
       if (firstUnansweredIndex !== -1) {
-        setWarning(copy.answerAll);
+        setWarning(copy.answerAllExtended);
         setCurrentIndex(firstUnansweredIndex);
         return;
       }
@@ -322,8 +353,10 @@ answerAll: 'Сначала ответьте на все вопросы.',
     );
   }
 
-  const currentQuestion = questions[currentIndex];
   const totalQuestions = questions.length;
+  // Индекс в границах списка: при быстрых кликах currentIndex мог выйти за пределы
+  const safeIndex = totalQuestions > 0 ? Math.min(Math.max(0, currentIndex), totalQuestions - 1) : 0;
+  const currentQuestion = questions[safeIndex];
 
   return (
     <AnimatedPage>
@@ -332,12 +365,12 @@ answerAll: 'Сначала ответьте на все вопросы.',
         <div className="flex flex-col gap-4">
           <PageHeader
             title={copy.title}
-            subtitle={copy.subtitle}
+            subtitle={attemptSubtitle}
           />
 
           <div className="flex items-center justify-between text-xs text-slate-500">
             <span>
-              {copy.questionLabel} {currentIndex + 1} / {totalQuestions}
+              {copy.questionLabel} {safeIndex + 1} / {totalQuestions}
             </span>
             <Timer label={copy.timer} remainingSeconds={remainingSeconds} />
           </div>
@@ -350,7 +383,7 @@ answerAll: 'Сначала ответьте на все вопросы.',
             <div className="flex min-w-max gap-2 pb-1 flex-nowrap md:min-w-0 md:flex-wrap">
               {questions.map((question, index) => {
                 const answered = Boolean(answers[question.id]);
-                const active = index === currentIndex;
+                const active = index === safeIndex;
                 const isPractice = mode === 'practice';
                 const answeredCorrect =
                   isPractice &&
@@ -405,7 +438,7 @@ answerAll: 'Сначала ответьте на все вопросы.',
               transition={{ duration: 0.25, ease: 'easeOut' }}
               className={`mt-6 ${shakingQuestionId === currentQuestion.id ? 'shake' : ''}`}
             >
-              <Card title={`${copy.questionLabel} ${currentIndex + 1}`}>
+              <Card title={`${copy.questionLabel} ${safeIndex + 1}`}>
                 <p className="text-sm text-slate-700">
                   {currentQuestion.text}
                 </p>
@@ -526,16 +559,29 @@ answerAll: 'Сначала ответьте на все вопросы.',
 
         {warning ? (
           <div
-            className="mt-4 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 shadow-sm"
+            className="mt-4 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 shadow-sm"
             role="alert"
           >
-            <span
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-200 text-amber-700"
-              aria-hidden
-            >
-              !
-            </span>
-            <p className="flex-1 font-medium">{warning}</p>
+            <div className="flex items-start gap-3">
+              <span
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-200 text-amber-700"
+                aria-hidden
+              >
+                !
+              </span>
+              <p className="flex-1 font-medium">{warning}</p>
+            </div>
+            {mode === 'exam' && warning ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                className="self-start"
+                onClick={() => router.replace('/cabinet')}
+              >
+                {copy.resetAttempt}
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </main>

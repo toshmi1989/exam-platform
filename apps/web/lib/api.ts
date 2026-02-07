@@ -85,13 +85,28 @@ export async function submitAttempt(
 
 export async function getQuestions(
   attemptId: string
-): Promise<{ questions: ExamQuestion[]; mode?: 'exam' | 'practice' }> {
+): Promise<{
+  questions: ExamQuestion[];
+  mode?: 'exam' | 'practice';
+  examTitle?: string;
+  examDirection?: string;
+}> {
   const { response, data } = await apiFetch(`/attempts/${attemptId}/questions`);
   if (!response.ok) {
     throw data as ApiError;
   }
-  const payload = data as { questions?: ExamQuestion[]; mode?: 'exam' | 'practice' } | null;
-  return { questions: payload?.questions ?? [], mode: payload?.mode };
+  const payload = data as {
+    questions?: ExamQuestion[];
+    mode?: 'exam' | 'practice';
+    examTitle?: string;
+    examDirection?: string;
+  } | null;
+  return {
+    questions: payload?.questions ?? [],
+    mode: payload?.mode,
+    examTitle: payload?.examTitle,
+    examDirection: payload?.examDirection,
+  };
 }
 
 export async function getResult(
