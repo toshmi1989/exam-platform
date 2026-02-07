@@ -31,5 +31,19 @@ module.exports = {
         PORT: 3000,
       },
     },
+    {
+      name: 'ziyoda-bot',
+      cwd: './apps/api',
+      script: 'dist/scripts/ziyoda-bot.js',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '200M',
+      env: {
+        NODE_ENV: 'production',
+        BOT_API_URL: 'http://127.0.0.1:3001',
+      },
+      env_file: './apps/api/.env',
+    },
   ],
 };

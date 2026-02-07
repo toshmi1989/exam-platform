@@ -44,6 +44,8 @@ cd /home/app/exam-platform && git pull && cd apps/api && npm ci && npm run build
 | Перезапуск API | `pm2 restart exam-api` |
 | Перезапуск Web | `pm2 restart exam-web` |
 | Перезапуск всех | `pm2 restart all` |
+| Перезапуск бота Зиёды | `pm2 restart ziyoda-bot` |
+| Логи бота Зиёды | `pm2 logs ziyoda-bot` |
 | Остановить все | `pm2 stop all` |
 | Удалить из PM2 | `pm2 delete all` |
 
@@ -102,7 +104,18 @@ sudo tail -f /var/log/nginx/error.log
 
 ## Ziyoda RAG (бот)
 
-- Эндпоинт бота: **POST** `https://ваш-домен/api/bot/ask` (прокси через Nginx на API, порт 3001).
+- **Запуск бота (процесс в Telegram):** бот — отдельный процесс, получает сообщения и дергает API. После деплоя запустите его через PM2:
+  ```bash
+  pm2 start ecosystem.config.cjs
+  ```
+  В `ecosystem.config.cjs` добавлено приложение `ziyoda-bot`. Оно использует те же `apps/api/.env`: `TELEGRAM_BOT_TOKEN`, `OPENAI_API_KEY`. По умолчанию дергает API по `http://127.0.0.1:3001` (переменная `BOT_API_URL` в ecosystem или в .env).
+- **Ручной запуск** (если не через PM2):
+  ```bash
+  cd /opt/exam/exam-platform/apps/api
+  node dist/scripts/ziyoda-bot.js
+  ```
+  Нужны в окружении: `TELEGRAM_BOT_TOKEN`, `BOT_API_URL` (или `API_PUBLIC_URL`, например `http://127.0.0.1:3001`).
+- Эндпоинт API для бота: **POST** `https://ваш-домен/api/bot/ask` (прокси через Nginx на API, порт 3001). Бот-процесс на том же сервере вызывает `http://127.0.0.1:3001/bot/ask`.
 - Тело запроса: `{ "telegramId": "...", "firstName": "Имя", "message": "текст вопроса" }`. Ответ: `{ "answer": "..." }`.
 - После деплоя миграция `add_ziyoda_rag_models` применится командой `npx prisma migrate deploy` (она уже в цепочке обновления выше).
 - База знаний: в админке → AI → вкладка «Зиёда AI» — загрузка PDF/DOCX/TXT, переиндексация, статистика.

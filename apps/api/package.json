@@ -13,7 +13,8 @@
     "import:questions": "ts-node-dev --transpile-only -r tsconfig-paths/register src/scripts/importQuestions.ts",
     "import:question-bank": "ts-node-dev --transpile-only -r tsconfig-paths/register src/scripts/importQuestionBank.ts",
     "seed:test-user": "node -r ts-node/register/transpile-only -r tsconfig-paths/register src/scripts/seedTestUser.ts",
-    "import:subscribers": "ts-node -r tsconfig-paths/register src/scripts/importSubscribers.ts"
+    "import:subscribers": "ts-node -r tsconfig-paths/register src/scripts/importSubscribers.ts",
+    "bot": "node dist/scripts/ziyoda-bot.js"
   },
   "keywords": [],
   "author": "",
