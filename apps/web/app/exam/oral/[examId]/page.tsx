@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import AnimatedPage from '../../../../components/AnimatedPage';
 import BottomNav from '../../../../components/BottomNav';
 import Button from '../../../../components/Button';
@@ -10,6 +10,7 @@ import PageHeader from '../../../../components/PageHeader';
 import { readSettings, Language } from '../../../../lib/uiSettings';
 import { getOralQuestions, getOralAnswer } from '../../../../lib/api';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface QuestionItem {
   id: string;
@@ -52,6 +53,7 @@ function SafeLink({ href, children, onLinkClick }: { href?: string; children: Re
 export default function OralExamPage() {
   const params = useParams();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const examId = typeof params?.examId === 'string' ? params.examId : '';
   const orderMode = searchParams.get('order') === 'random' ? 'random' : 'order';
 
@@ -126,6 +128,8 @@ export default function OralExamPage() {
         next: 'Next',
         questionNum: (n: number, t: number) => `Question ${n} of ${t}`,
         close: 'Close',
+        finish: 'Finish',
+        openInRussian: 'Open in Russian',
       };
     }
     if (language === 'Узбекский') {
@@ -138,6 +142,8 @@ export default function OralExamPage() {
         next: 'Keyingi',
         questionNum: (n: number, t: number) => `${n} / ${t} savol`,
         close: 'Yopish',
+        finish: 'Tugatish',
+        openInRussian: "Ruscha ochish",
       };
     }
     return {
@@ -149,6 +155,8 @@ export default function OralExamPage() {
       next: 'Далее',
       questionNum: (n: number, t: number) => `Вопрос ${n} из ${t}`,
       close: 'Закрыть',
+      finish: 'Завершить',
+      openInRussian: 'Открыть на русском',
     };
   }, [language]);
 
@@ -201,13 +209,20 @@ export default function OralExamPage() {
               <p className="mt-2 text-sm text-rose-600">{answerError}</p>
             )}
             {answerCache[current.id] && (
-              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-sm prose prose-slate max-w-none">
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-sm prose prose-slate max-w-none prose-img:rounded-lg prose-table:text-sm">
                 <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
                   components={{
                     a: ({ href, children }) => (
                       <SafeLink href={href} onLinkClick={(url) => setIframeUrl(url)}>
                         {children}
                       </SafeLink>
+                    ),
+                    img: ({ src, alt }) => (
+                      <a href={src} target="_blank" rel="noopener noreferrer" className="block">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={src} alt={alt ?? ''} className="max-h-64 rounded-lg object-contain" />
+                      </a>
                     ),
                   }}
                 >
@@ -217,22 +232,31 @@ export default function OralExamPage() {
             )}
           </Card>
 
-          <div className="flex gap-2">
+          <div className="flex flex-col items-center gap-4">
+            <div className="flex justify-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setIndex((i) => Math.max(0, i - 1))}
+                disabled={index === 0}
+              >
+                {copy.prev}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setIndex((i) => Math.min(total - 1, i + 1))}
+                disabled={index >= total - 1}
+              >
+                {copy.next}
+              </Button>
+            </div>
             <Button
               type="button"
               variant="secondary"
-              onClick={() => setIndex((i) => Math.max(0, i - 1))}
-              disabled={index === 0}
+              onClick={() => router.push('/exam/select')}
             >
-              {copy.prev}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setIndex((i) => Math.min(total - 1, i + 1))}
-              disabled={index >= total - 1}
-            >
-              {copy.next}
+              {copy.finish}
             </Button>
           </div>
         </main>
@@ -245,7 +269,19 @@ export default function OralExamPage() {
           aria-modal="true"
         >
           <div className="flex h-[80vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl">
-            <div className="flex justify-end border-b border-slate-200 p-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 p-2">
+              <div className="flex gap-2">
+                {iframeUrl.includes('uz.wikipedia.org') && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="md"
+                    onClick={() => setIframeUrl(iframeUrl.replace('uz.wikipedia.org', 'ru.wikipedia.org'))}
+                  >
+                    {copy.openInRussian}
+                  </Button>
+                )}
+              </div>
               <Button type="button" variant="secondary" size="md" onClick={() => setIframeUrl(null)}>
                 {copy.close}
               </Button>

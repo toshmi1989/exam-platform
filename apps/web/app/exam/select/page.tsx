@@ -186,6 +186,7 @@ function ExamSelectClient() {
         orderSequential: 'In order',
         categoryLabel: 'Category',
         startOral: 'Start oral',
+        selectPlaceholder: 'Select',
       };
     }
     if (language === 'Узбекский') {
@@ -224,6 +225,7 @@ function ExamSelectClient() {
         orderSequential: 'Ketma-ket',
         categoryLabel: 'Kategoriya',
         startOral: "Og'zaki boshlash",
+        selectPlaceholder: 'Tanlang',
       };
     }
     return {
@@ -261,6 +263,7 @@ function ExamSelectClient() {
       orderSequential: 'По очереди',
       categoryLabel: 'Категория',
       startOral: 'Начать устный',
+      selectPlaceholder: 'Выберите',
     };
   }, [language]);
 
@@ -312,6 +315,8 @@ function ExamSelectClient() {
   const modeRef = useRef<HTMLDivElement>(null);
   const languageRef = useRef<HTMLDivElement>(null);
   const directionRef = useRef<HTMLDivElement>(null);
+  const categoryRef = useRef<HTMLDivElement>(null);
+  const startSectionRef = useRef<HTMLDivElement>(null);
   const startErrorRef = useRef<HTMLDivElement>(null);
 
   // When access denied / payment required — scroll notification into view so it's visible
@@ -340,6 +345,10 @@ function ExamSelectClient() {
       ref = directionRef as React.RefObject<HTMLDivElement>;
     } else if (profession && examType === 'oral' && orderMode && examLanguage && !selectedDirection) {
       ref = directionRef as React.RefObject<HTMLDivElement>;
+    } else if (profession && examType === 'oral' && orderMode && examLanguage && selectedDirection && !selectedOralExam) {
+      ref = categoryRef;
+    } else if (canStart) {
+      ref = startSectionRef;
     }
 
     if (ref?.current) {
@@ -347,7 +356,7 @@ function ExamSelectClient() {
         ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 100);
     }
-  }, [profession, examType, mode, orderMode, examLanguage, direction, selectedDirection]);
+  }, [profession, examType, mode, orderMode, examLanguage, direction, selectedDirection, selectedOralExam, canStart]);
 
   return (
     <>
@@ -555,7 +564,7 @@ function ExamSelectClient() {
                     }}
                   >
                     <option value="" disabled>
-                      —
+                      {copy.selectPlaceholder}
                     </option>
                     {directions.map((option) => (
                       <option key={option.id} value={option.id}>
@@ -589,7 +598,7 @@ function ExamSelectClient() {
                         setStartError(null);
                       }}
                     >
-                      <option value="" disabled>—</option>
+                      <option value="" disabled>{copy.selectPlaceholder}</option>
                       {oralDirections.map((g) => (
                         <option key={g.direction} value={g.direction}>
                           {g.direction}
@@ -599,6 +608,7 @@ function ExamSelectClient() {
                   )}
                 </Card>
                 {selectedDirection && (
+                  <div ref={categoryRef}>
                   <Card title={copy.categoryLabel} className="mt-4">
                     {(() => {
                       const group = oralDirections.find((g) => g.direction === selectedDirection);
@@ -614,7 +624,7 @@ function ExamSelectClient() {
                             setStartError(null);
                           }}
                         >
-                          <option value="" disabled>—</option>
+                          <option value="" disabled>{copy.selectPlaceholder}</option>
                           {exams.map((ex) => (
                             <option key={ex.id} value={ex.id}>
                               {ex.categoryLabel}
@@ -624,12 +634,14 @@ function ExamSelectClient() {
                       );
                     })()}
                   </Card>
+                  </div>
                 )}
               </div>
             )}
 
             {/* Кнопка старта */}
             {canStart && (
+              <div ref={startSectionRef}>
               <Button
                 size="lg"
                 className="w-full"
@@ -638,6 +650,7 @@ function ExamSelectClient() {
               >
                 {isStarting ? 'Запуск...' : canStartOral ? copy.startOral : copy.start}
               </Button>
+              </div>
             )}
 
             {/* Ошибки и информация об оплате */}

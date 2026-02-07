@@ -1,7 +1,7 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import AnimatedPage from '../../../../components/AnimatedPage';
 import BottomNav from '../../../../components/BottomNav';
 import Card from '../../../../components/Card';
@@ -10,24 +10,19 @@ import Button from '../../../../components/Button';
 import AdminGuard from '../../components/AdminGuard';
 import AdminNav from '../../components/AdminNav';
 import { readSettings, Language } from '../../../../lib/uiSettings';
-import {
-  getAdminOralStats,
-  streamOralPrewarm,
-  type AdminOralStats,
-  type OralPrewarmProgress,
-} from '../../../../lib/api';
+import { streamPrewarm, getAdminAiStats, type PrewarmProgress, type AdminAiStats } from '../../../../lib/api';
 import { API_BASE_URL } from '../../../../lib/api/config';
 import { readTelegramUser } from '../../../../lib/telegramUser';
 
 type ExamOption = { id: string; title: string };
 
-export default function AdminAIOralPage() {
+export default function AdminAITestsPage() {
   const [language, setLanguage] = useState<Language>(readSettings().language);
   const [examId, setExamId] = useState<string>('');
   const [exams, setExams] = useState<ExamOption[]>([]);
   const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState<OralPrewarmProgress | null>(null);
-  const [stats, setStats] = useState<AdminOralStats | null>(null);
+  const [progress, setProgress] = useState<PrewarmProgress | null>(null);
+  const [stats, setStats] = useState<AdminAiStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -50,72 +45,69 @@ export default function AdminAIOralPage() {
   }, []);
 
   useEffect(() => {
-    getAdminOralStats().then(setStats).catch(() => setStats(null));
+    getAdminAiStats().then(setStats).catch(() => setStats(null));
   }, []);
 
   useEffect(() => {
     if (running || progress?.done) {
-      getAdminOralStats().then(setStats).catch(() => setStats(null));
+      getAdminAiStats().then(setStats).catch(() => setStats(null));
     }
   }, [running, progress?.done]);
 
   const copy = useMemo(() => {
     if (language === 'Английский') {
       return {
-        title: 'AI — Oral answers',
-        subtitle: 'Pre-generate Ziyoda answers for oral questions.',
+        title: 'AI — Tests',
+        subtitle: 'Pre-generate Зиёда explanations for test questions.',
         exam: 'Exam (optional)',
-        all: 'All oral questions',
-        generate: 'Generate answers',
+        all: 'All questions',
+        generate: 'Generate explanations',
         stop: 'Stop',
         progress: 'Generating',
         generated: 'Generated',
         skipped: 'Skipped',
-        errors: 'Errors',
         error: 'Error',
         statsTitle: 'Statistics',
-        statsTotal: 'Oral questions',
+        statsTotal: 'Total',
         statsMissing: 'Missing',
-        statsByDirection: 'By exam',
-      back: 'Back to AI',
+        statsByExam: 'By exam',
+        back: 'Back to AI',
       };
     }
     if (language === 'Узбекский') {
       return {
-        title: 'AI — Og\'zaki javoblar',
-        subtitle: "Og'zaki savollar uchun Ziyoda javoblarini yaratish.",
+        title: 'AI — Testlar',
+        subtitle: "Test savollari uchun Ziyoda tushuntirishlarini yaratish.",
         exam: 'Imtihon (ixtiyoriy)',
-        all: 'Barcha og\'zaki savollar',
-        generate: "Javoblarni yaratish",
+        all: 'Barcha savollar',
+        generate: "Tushuntirishlarni yaratish",
         stop: 'To‘xtatish',
         progress: 'Yaratilmoqda',
         generated: 'Yaratilgan',
         skipped: "O'tkazib yuborilgan",
-        errors: 'Xatolar',
         error: 'Xato',
         statsTitle: 'Statistika',
-        statsTotal: "Og'zaki savollar",
+        statsTotal: 'Jami',
         statsMissing: 'Yetishmayapti',
-        statsByDirection: 'Imtihon bo‘yicha',
-      back: "AI ga qaytish",
+        statsByExam: 'Imtihon bo‘yicha',
+        back: "AI ga qaytish",
       };
     }
     return {
-      title: 'AI — Устные ответы',
-      subtitle: 'Предгенерация ответов Зиёды для устных вопросов.',
+      title: 'AI — Тесты',
+      subtitle: 'Предгенерация объяснений Зиёды для тестовых вопросов.',
       exam: 'Экзамен (необязательно)',
-      all: 'Все устные вопросы',
-      generate: 'Сгенерировать ответы',
+      all: 'Все вопросы',
+      generate: 'Сгенерировать объяснения',
       stop: 'Остановить',
       progress: 'Генерация',
       generated: 'Создано',
       skipped: 'Пропущено',
-      errors: 'Ошибки',
       error: 'Ошибка',
       statsTitle: 'Статистика',
-      statsTotal: 'Устных вопросов',
-      statsMissing: 'Без ответа',
-      statsByDirection: 'По экзаменам',
+      statsTotal: 'Всего',
+      statsMissing: 'Отсутствует',
+      statsByExam: 'По экзаменам',
       back: 'Назад к AI',
     };
   }, [language]);
@@ -130,7 +122,7 @@ export default function AdminAIOralPage() {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     const user = readTelegramUser();
     if (user?.telegramId) headers['x-telegram-id'] = user.telegramId;
-    fetch(`${API_BASE_URL}/admin/ai/oral/prewarm/stream`, {
+    fetch(`${API_BASE_URL}/admin/ai/prewarm/stream`, {
       method: 'POST',
       headers,
       body: JSON.stringify(params),
@@ -152,7 +144,7 @@ export default function AdminAIOralPage() {
             const m = block.match(/^data:\s*(.+)$/m);
             if (m) {
               try {
-                const p = JSON.parse(m[1]) as OralPrewarmProgress;
+                const p = JSON.parse(m[1]) as PrewarmProgress;
                 setProgress(p);
               } catch {
                 // skip
@@ -164,7 +156,7 @@ export default function AdminAIOralPage() {
           const m = buffer.match(/^data:\s*(.+)$/m);
           if (m) {
             try {
-              const p = JSON.parse(m[1]) as OralPrewarmProgress;
+              const p = JSON.parse(m[1]) as PrewarmProgress;
               setProgress(p);
             } catch {
               // skip
@@ -177,18 +169,18 @@ export default function AdminAIOralPage() {
         abortRef.current = null;
       })
       .catch((err) => {
-        if (err?.name !== 'AbortError') {
+        if (err?.name === 'AbortError') {
+          setRunning(false);
+        } else {
           setError(err?.message ?? copy.error);
+          setRunning(false);
         }
-        setRunning(false);
         abortRef.current = null;
       });
   }, [running, examId, copy.error]);
 
   const handleStop = useCallback(() => {
-    if (abortRef.current) {
-      abortRef.current.abort();
-    }
+    if (abortRef.current) abortRef.current.abort();
   }, []);
 
   const p = progress;
@@ -214,19 +206,17 @@ export default function AdminAIOralPage() {
               <Card>
                 <p className="text-sm font-medium text-slate-700">{copy.statsTitle}</p>
                 <p className="mt-2 text-slate-600">
-                  {copy.statsTotal}: {stats.withAnswer} / {stats.totalOralQuestions}, {copy.statsMissing}: {stats.missing}
+                  {copy.statsTotal}: {stats.withExplanation} / {stats.totalQuestions}, {copy.statsMissing}: {stats.missing}
                 </p>
                 {stats.byExam && stats.byExam.length > 0 && (
                   <div className="mt-4">
-                    <p className="mb-2 text-xs font-medium text-slate-500">{copy.statsByDirection}</p>
+                    <p className="mb-2 text-xs font-medium text-slate-500">{copy.statsByExam}</p>
                     <ul className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/50 p-2 text-sm">
                       {stats.byExam.map((row) => (
                         <li key={row.examId} className="flex items-center justify-between gap-2 py-1">
-                          <span className="min-w-0 truncate text-slate-700" title={row.title}>
-                            {row.title}
-                          </span>
+                          <span className="min-w-0 truncate text-slate-700" title={row.title}>{row.title}</span>
                           <span className="shrink-0 tabular-nums text-slate-600">
-                            {row.withAnswer} / {row.total}
+                            {row.withExplanation} / {row.total}
                           </span>
                         </li>
                       ))}
@@ -273,23 +263,11 @@ export default function AdminAIOralPage() {
                   {copy.progress}: {p.processed} / {p.total} ({percent}%)
                 </p>
                 <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-slate-200">
-                  <div
-                    className="h-full bg-[#2AABEE] transition-all duration-300"
-                    style={{ width: `${percent}%` }}
-                  />
+                  <div className="h-full bg-[#2AABEE] transition-all duration-300" style={{ width: `${percent}%` }} />
                 </div>
                 <div className="mt-3 flex gap-4 text-sm">
-                  <span className="text-emerald-600">
-                    {copy.generated}: {p.generated}
-                  </span>
-                  <span className="text-slate-500">
-                    {copy.skipped}: {p.skipped}
-                  </span>
-                  {(p.errors ?? 0) > 0 && (
-                    <span className="text-rose-600">
-                      {copy.errors}: {p.errors}
-                    </span>
-                  )}
+                  <span className="text-emerald-600">{copy.generated}: {p.generated}</span>
+                  <span className="text-slate-500">{copy.skipped}: {p.skipped}</span>
                 </div>
               </Card>
             )}

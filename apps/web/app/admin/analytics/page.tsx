@@ -8,11 +8,12 @@ import PageHeader from '../../../components/PageHeader';
 import AdminGuard from '../components/AdminGuard';
 import AdminNav from '../components/AdminNav';
 import { readSettings, Language } from '../../../lib/uiSettings';
-import { getAdminAnalytics, type AdminAnalytics } from '../../../lib/api';
+import { getAdminAnalytics, getAdminOralStats, type AdminAnalytics, type AdminOralStats } from '../../../lib/api';
 
 export default function AdminAnalyticsPage() {
   const [language, setLanguage] = useState<Language>(readSettings().language);
   const [data, setData] = useState<AdminAnalytics | null>(null);
+  const [oralStats, setOralStats] = useState<AdminOralStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -23,9 +24,15 @@ export default function AdminAnalyticsPage() {
 
   useEffect(() => {
     setLoading(true);
-    getAdminAnalytics()
-      .then(setData)
-      .catch(() => setData(null))
+    Promise.all([getAdminAnalytics(), getAdminOralStats()])
+      .then(([analytics, oral]) => {
+        setData(analytics);
+        setOralStats(oral);
+      })
+      .catch(() => {
+        setData(null);
+        setOralStats(null);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -37,9 +44,11 @@ export default function AdminAnalyticsPage() {
         attempts: 'Attempts by day',
         conversion: 'Subscription conversion',
         conversionHint: 'Active subscriptions / total users.',
-        top: 'Top exams',
+        top: 'Top exams (tests)',
         loading: 'Loading...',
         noData: 'No data yet.',
+        oral: 'Oral',
+        oralHint: 'Questions with / without AI answer.',
       };
     }
     if (language === 'Узбекский') {
@@ -49,9 +58,11 @@ export default function AdminAnalyticsPage() {
         attempts: 'Kunlik urinishlar',
         conversion: 'Obunaga konversiya',
         conversionHint: 'Faol obunalar / jami foydalanuvchilar.',
-        top: 'Top imtihonlar',
+        top: 'Top imtihonlar (testlar)',
         loading: 'Yuklanmoqda...',
         noData: 'Hali ma’lumot yo‘q.',
+        oral: "Og'zaki",
+        oralHint: "AI javobi bor / yo'q savollar.",
       };
     }
     return {
@@ -60,9 +71,11 @@ export default function AdminAnalyticsPage() {
       attempts: 'Попытки по дням',
       conversion: 'Конверсия в подписку',
       conversionHint: 'Активные подписки / всего пользователей.',
-      top: 'Топ экзамены',
+      top: 'Топ экзамены (тесты)',
       loading: 'Загружаем...',
       noData: 'Пока нет данных.',
+      oral: 'Устные',
+      oralHint: 'Вопросы с ответом / без ответа.',
     };
   }, [language]);
 
@@ -149,6 +162,29 @@ export default function AdminAnalyticsPage() {
                       </li>
                     ))}
                   </ul>
+                ) : (
+                  <p className="text-sm text-slate-500">{copy.noData}</p>
+                )}
+              </Card>
+              <Card title={copy.oral}>
+                {loading ? (
+                  <p className="text-sm text-slate-500">{copy.loading}</p>
+                ) : oralStats ? (
+                  <div className="space-y-2 text-sm">
+                    <p className="text-slate-600">
+                      {oralStats.withAnswer} / {oralStats.totalOralQuestions} {copy.oralHint}
+                    </p>
+                    {oralStats.byExam && oralStats.byExam.length > 0 && (
+                      <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded border border-slate-100 bg-slate-50/50 p-2 text-xs">
+                        {oralStats.byExam.map((row) => (
+                          <li key={row.examId} className="flex justify-between gap-2">
+                            <span className="min-w-0 truncate">{row.title}</span>
+                            <span className="shrink-0 tabular-nums">{row.withAnswer} / {row.total}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 ) : (
                   <p className="text-sm text-slate-500">{copy.noData}</p>
                 )}
