@@ -613,7 +613,7 @@ router.get('/ai/stats', async (_req, res) => {
     res.json(stats);
   } catch (err) {
     console.error('[admin/ai/stats]', err);
-    res.status(500).json({ totalQuestions: 0, withExplanation: 0, missing: 0 });
+    res.status(500).json({ totalQuestions: 0, withExplanation: 0, missing: 0, byExam: [] });
   }
 });
 

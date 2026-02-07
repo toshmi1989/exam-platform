@@ -15,7 +15,6 @@ interface ZiyodaPrewarmModalProps {
 export default function ZiyodaPrewarmModal({ onClose }: ZiyodaPrewarmModalProps) {
   const [language, setLanguage] = useState<Language>(readSettings().language);
   const [examId, setExamId] = useState<string>('');
-  const [lang, setLang] = useState<'ru' | 'uz' | 'both'>('both');
   const [exams, setExams] = useState<ExamOption[]>([]);
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(false);
@@ -49,9 +48,7 @@ export default function ZiyodaPrewarmModal({ onClose }: ZiyodaPrewarmModalProps)
       return {
         title: 'Pre-generate Ziyoda',
         exam: 'Exam (optional)',
-        lang: 'Exam language filter',
         all: 'All questions',
-        both: 'All',
         start: 'Start',
         close: 'Close',
         generated: 'Generated',
@@ -66,9 +63,7 @@ export default function ZiyodaPrewarmModal({ onClose }: ZiyodaPrewarmModalProps)
       return {
         title: "Ziyodani oldindan yaratish",
         exam: 'Imtihon (ixtiyoriy)',
-        lang: 'Imtihon tili filtri',
         all: 'Barcha savollar',
-        both: 'Barchasi',
         start: 'Boshlash',
         close: 'Yopish',
         generated: 'Yaratilgan',
@@ -82,9 +77,7 @@ export default function ZiyodaPrewarmModal({ onClose }: ZiyodaPrewarmModalProps)
     return {
       title: 'Предварительно сгенерировать Зиёду',
       exam: 'Экзамен (необязательно)',
-      lang: 'Фильтр по языку экзамена',
       all: 'Все вопросы',
-      both: 'Все',
       start: 'Запустить',
       close: 'Закрыть',
       generated: 'Создано',
@@ -104,7 +97,6 @@ export default function ZiyodaPrewarmModal({ onClose }: ZiyodaPrewarmModalProps)
     setProgress(null);
     const params = {
       examId: examId.trim() || undefined,
-      lang: lang === 'both' ? undefined : (lang as 'ru' | 'uz'),
     };
     streamPrewarm(params, (p) => setProgress(p))
       .then(() => {
@@ -115,7 +107,7 @@ export default function ZiyodaPrewarmModal({ onClose }: ZiyodaPrewarmModalProps)
         setError(err?.message ?? copy.error);
         setRunning(false);
       });
-  }, [running, examId, lang, copy.error]);
+  }, [running, examId, copy.error]);
 
   const p = progress;
   const percent = p && p.total > 0 ? Math.round((p.processed / p.total) * 100) : 0;
@@ -147,18 +139,6 @@ export default function ZiyodaPrewarmModal({ onClose }: ZiyodaPrewarmModalProps)
                     {exam.title}
                   </option>
                 ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm text-slate-600">{copy.lang}</label>
-              <select
-                value={lang}
-                onChange={(e) => setLang(e.target.value as 'ru' | 'uz' | 'both')}
-                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-[#2AABEE]"
-              >
-                <option value="both">{copy.both}</option>
-                <option value="ru">RU</option>
-                <option value="uz">UZ</option>
               </select>
             </div>
           </div>

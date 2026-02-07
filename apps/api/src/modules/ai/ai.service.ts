@@ -231,15 +231,37 @@ export async function* prewarm(
   };
 }
 
+export interface AiStatsByExam {
+  examId: string;
+  title: string;
+  total: number;
+  withExplanation: number;
+}
+
 export interface AiStats {
   totalQuestions: number;
   withExplanation: number;
   missing: number;
+  byExam: AiStatsByExam[];
 }
 
 export async function getAiStats(): Promise<AiStats> {
-  const totalQuestions = await prisma.question.count();
-  const withExplanation = await prisma.questionAIExplanation.count();
+  const [questions, withExplList, exams] = await Promise.all([
+    prisma.question.findMany({ select: { id: true, examId: true } }),
+    prisma.questionAIExplanation.findMany({ select: { questionId: true } }),
+    prisma.exam.findMany({ select: { id: true, title: true }, orderBy: { title: 'asc' } }),
+  ]);
+  const withExplSet = new Set(withExplList.map((e) => e.questionId));
+  const totalQuestions = questions.length;
+  const withExplanation = withExplSet.size;
   const missing = Math.max(0, totalQuestions - withExplanation);
-  return { totalQuestions, withExplanation, missing };
+
+  const byExam: AiStatsByExam[] = exams.map((exam) => {
+    const examQuestions = questions.filter((q) => q.examId === exam.id);
+    const total = examQuestions.length;
+    const withExpl = examQuestions.filter((q) => withExplSet.has(q.id)).length;
+    return { examId: exam.id, title: exam.title, total, withExplanation: withExpl };
+  });
+
+  return { totalQuestions, withExplanation, missing, byExam };
 }

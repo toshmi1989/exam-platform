@@ -18,7 +18,6 @@ type ExamOption = { id: string; title: string };
 export default function AdminAIPage() {
   const [language, setLanguage] = useState<Language>(readSettings().language);
   const [examId, setExamId] = useState<string>('');
-  const [lang, setLang] = useState<'ru' | 'uz' | 'both'>('both');
   const [exams, setExams] = useState<ExamOption[]>([]);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<PrewarmProgress | null>(null);
@@ -46,6 +45,12 @@ export default function AdminAIPage() {
 
   useEffect(() => {
     getAdminAiStats().then(setStats).catch(() => setStats(null));
+  }, []);
+
+  useEffect(() => {
+    if (running || progress?.done) {
+      getAdminAiStats().then(setStats).catch(() => setStats(null));
+    }
   }, [running, progress?.done]);
 
   const copy = useMemo(() => {
@@ -54,15 +59,19 @@ export default function AdminAIPage() {
         title: 'AI — Generate explanations',
         subtitle: 'Pre-generate Зиёда explanations for exam questions.',
         exam: 'Exam (optional)',
-        lang: 'Exam language filter',
         all: 'All questions',
-        both: 'All',
         generate: 'Generate explanations',
         stop: 'Stop',
         progress: 'Generating',
         generated: 'Generated',
         skipped: 'Skipped',
         error: 'Error',
+        statsTitle: 'Statistics',
+        statsTotal: 'Total slots',
+        statsMissing: 'Missing',
+        statsByDirection: 'By direction',
+        statsDirection: 'Direction',
+        statsCount: 'Explanations',
       };
     }
     if (language === 'Узбекский') {
@@ -70,30 +79,38 @@ export default function AdminAIPage() {
         title: 'AI — Tushuntirishlar',
         subtitle: "Imtihon savollari uchun Ziyoda tushuntirishlarini yaratish.",
         exam: 'Imtihon (ixtiyoriy)',
-        lang: 'Imtihon tili filtri',
         all: 'Barcha savollar',
-        both: 'Barchasi',
         generate: "Tushuntirishlarni yaratish",
         stop: 'To‘xtatish',
         progress: 'Yaratilmoqda',
         generated: 'Yaratilgan',
         skipped: "O'tkazib yuborilgan",
         error: 'Xato',
+        statsTitle: 'Statistika',
+        statsTotal: 'Jami',
+        statsMissing: 'Yetishmayapti',
+        statsByDirection: 'Yo‘nalish bo‘yicha',
+        statsDirection: 'Yo‘nalish',
+        statsCount: 'Tushuntirishlar',
       };
     }
     return {
       title: 'AI — Генерация объяснений',
       subtitle: 'Предварительная генерация объяснений Зиёды для вопросов экзамена.',
       exam: 'Экзамен (необязательно)',
-      lang: 'Фильтр по языку экзамена',
       all: 'Все вопросы',
-      both: 'Все',
       generate: 'Сгенерировать объяснения',
       stop: 'Остановить',
       progress: 'Генерация',
       generated: 'Создано',
       skipped: 'Пропущено',
       error: 'Ошибка',
+      statsTitle: 'Статистика',
+      statsTotal: 'Всего слотов',
+      statsMissing: 'Отсутствует',
+      statsByDirection: 'По направлениям',
+      statsDirection: 'Направление',
+      statsCount: 'Объяснений',
     };
   }, [language]);
 
@@ -105,7 +122,6 @@ export default function AdminAIPage() {
     abortRef.current = new AbortController();
     const params = {
       examId: examId.trim() || undefined,
-      lang: lang === 'both' ? undefined : (lang as 'ru' | 'uz'),
     };
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     const user = readTelegramUser();
@@ -165,7 +181,7 @@ export default function AdminAIPage() {
         }
         abortRef.current = null;
       });
-  }, [running, examId, lang, copy.error]);
+  }, [running, examId, copy.error]);
 
   const handleStop = useCallback(() => {
     if (abortRef.current) {
@@ -186,10 +202,25 @@ export default function AdminAIPage() {
 
             {stats != null && (
               <Card>
-                <p className="text-sm text-slate-500">Статистика</p>
-                <p className="mt-2 text-slate-700">
-                  Всего слотов объяснений: {stats.withExplanation}, отсутствует: {stats.missing}
+                <p className="text-sm font-medium text-slate-700">{copy.statsTitle}</p>
+                <p className="mt-2 text-slate-600">
+                  {copy.statsTotal}: {stats.withExplanation} / {stats.totalQuestions}, {copy.statsMissing}: {stats.missing}
                 </p>
+                {stats.byExam && stats.byExam.length > 0 && (
+                  <div className="mt-4">
+                    <p className="mb-2 text-xs font-medium text-slate-500">{copy.statsByDirection}</p>
+                    <ul className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/50 p-2 text-sm">
+                      {stats.byExam.map((row) => (
+                        <li key={row.examId} className="flex items-center justify-between gap-2 py-1">
+                          <span className="min-w-0 truncate text-slate-700" title={row.title}>{row.title}</span>
+                          <span className="shrink-0 tabular-nums text-slate-600">
+                            {row.withExplanation} / {row.total}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </Card>
             )}
 
@@ -209,19 +240,6 @@ export default function AdminAIPage() {
                         {exam.title}
                       </option>
                     ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm text-slate-600">{copy.lang}</label>
-                  <select
-                    value={lang}
-                    onChange={(e) => setLang(e.target.value as 'ru' | 'uz' | 'both')}
-                    disabled={running}
-                    className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-[#2AABEE] disabled:opacity-60"
-                  >
-                    <option value="both">{copy.both}</option>
-                    <option value="ru">RU</option>
-                    <option value="uz">UZ</option>
                   </select>
                 </div>
                 <div className="flex gap-2">

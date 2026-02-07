@@ -348,10 +348,18 @@ export async function explainQuestion(questionId: string): Promise<{ content: st
   return { content: payload.content };
 }
 
+export interface AdminAiStatsByExam {
+  examId: string;
+  title: string;
+  total: number;
+  withExplanation: number;
+}
+
 export interface AdminAiStats {
   totalQuestions: number;
   withExplanation: number;
   missing: number;
+  byExam: AdminAiStatsByExam[];
 }
 
 export async function getAdminAiStats(): Promise<AdminAiStats> {
@@ -365,6 +373,7 @@ export async function getAdminAiStats(): Promise<AdminAiStats> {
       totalQuestions: 0,
       withExplanation: 0,
       missing: 0,
+      byExam: [],
     }
   );
 }
