@@ -25,7 +25,7 @@ import {
   previewQuestionBank,
   importQuestionBank,
 } from './import.service';
-import { prewarm, getAiStats } from '../ai/ai.service';
+import { prewarm, getAiStats, getOralStats, prewarmOral } from '../ai/ai.service';
 import { sendBroadcastToUsers } from '../../services/broadcastSender.service';
 
 const router = Router();
@@ -637,6 +637,40 @@ router.post('/ai/prewarm/stream', async (req, res) => {
   } catch (err) {
     console.error('[admin/ai/prewarm/stream]', err);
     res.write(`data: ${JSON.stringify({ error: 'Prewarm failed' })}\n\n`);
+  } finally {
+    res.end();
+  }
+});
+
+router.get('/ai/oral/stats', async (_req, res) => {
+  try {
+    const stats = await getOralStats();
+    res.json(stats);
+  } catch (err) {
+    console.error('[admin/ai/oral/stats]', err);
+    res.status(500).json({ totalOralQuestions: 0, withAnswer: 0, missing: 0, byExam: [] });
+  }
+});
+
+router.post('/ai/oral/prewarm/stream', async (req, res) => {
+  const examId = typeof req.body?.examId === 'string' ? req.body.examId.trim() : undefined;
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders?.();
+
+  try {
+    for await (const progress of prewarmOral(examId)) {
+      res.write(`data: ${JSON.stringify(progress)}\n\n`);
+      if (typeof (res as unknown as { flush?: () => void }).flush === 'function') {
+        (res as unknown as { flush: () => void }).flush();
+      }
+    }
+  } catch (err) {
+    console.error('[admin/ai/oral/prewarm/stream]', err);
+    res.write(`data: ${JSON.stringify({ error: 'Oral prewarm failed' })}\n\n`);
   } finally {
     res.end();
   }

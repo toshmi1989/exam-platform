@@ -11,6 +11,7 @@ import broadcastsRouter from './modules/broadcasts/broadcasts.routes';
 import examsRouter from './modules/exams/exams.routes';
 import paymentsRouter from './modules/payments/payments.routes';
 import aiRouter from './modules/ai/ai.routes';
+import oralRouter from './modules/ai/oral.routes';
 import { attachUserFromHeader } from './middlewares/attachUser.middleware';
 import { requireAcceptedTerms } from './middlewares/requireAcceptedTerms.middleware';
 import {
@@ -317,6 +318,7 @@ app.post('/auth/telegram-widget', (req, res) => {
 
 app.use('/attempts', attemptsRouter);
 app.use('/ai', aiRouter);
+app.use('/oral', oralRouter);
 app.use('/admin', adminRouter);
 app.use('/chat', chatRouter);
 app.use('/broadcasts', broadcastsRouter);

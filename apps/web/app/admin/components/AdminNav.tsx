@@ -55,7 +55,8 @@ export default function AdminNav() {
         { href: '/admin/exams', label: 'Exams' },
         { href: '/admin/access-settings', label: 'Access' },
         { href: '/admin/import', label: 'Import' },
-        { href: '/admin/ai', label: 'AI' },
+        { href: '/admin/ai', label: 'AI — Tests' },
+        { href: '/admin/ai/oral', label: 'AI — Oral' },
         { href: '/admin/analytics', label: 'Analytics' },
       ];
     }
@@ -69,7 +70,8 @@ export default function AdminNav() {
         { href: '/admin/exams', label: 'Imtihonlar' },
         { href: '/admin/access-settings', label: 'Kirish' },
         { href: '/admin/import', label: 'Import' },
-        { href: '/admin/ai', label: 'AI' },
+        { href: '/admin/ai', label: 'AI — Testlar' },
+        { href: '/admin/ai/oral', label: "AI — Og'zaki" },
         { href: '/admin/analytics', label: 'Analitika' },
       ];
     }
@@ -82,7 +84,8 @@ export default function AdminNav() {
       { href: '/admin/exams', label: 'Экзамены' },
       { href: '/admin/access-settings', label: 'Доступ' },
       { href: '/admin/import', label: 'Импорт' },
-      { href: '/admin/ai', label: 'AI' },
+      { href: '/admin/ai', label: 'AI — Тесты' },
+      { href: '/admin/ai/oral', label: 'AI — Устные' },
       { href: '/admin/analytics', label: 'Аналитика' },
     ];
   }, [language]);
@@ -91,7 +94,9 @@ export default function AdminNav() {
     <div className="grid grid-cols-3 gap-2 pb-2">
       {items.map((item) => {
         const isActive =
-          pathname === item.href || pathname.startsWith(`${item.href}/`);
+          item.href === '/admin/ai'
+            ? pathname === '/admin/ai'
+            : pathname === item.href || pathname.startsWith(`${item.href}/`);
         const isChats = item.href === '/admin/chats';
         const showBadge = isChats && chatsUnread > 0;
         return (

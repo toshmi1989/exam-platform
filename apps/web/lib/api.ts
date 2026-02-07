@@ -332,6 +332,30 @@ export async function getPaymentStatus(invoiceId: string): Promise<PaymentStatus
   };
 }
 
+export async function getOralQuestions(examId: string): Promise<{ id: string; prompt: string; order: number }[]> {
+  const { response, data } = await apiFetch(`/exams/${encodeURIComponent(examId)}/oral-questions`);
+  if (!response.ok) {
+    throw data as ApiError;
+  }
+  const payload = data as { questions?: { id: string; prompt: string; order: number }[] } | null;
+  return payload?.questions ?? [];
+}
+
+export async function getOralAnswer(questionId: string): Promise<{ content: string }> {
+  const { response, data } = await apiFetch('/oral/answer', {
+    method: 'POST',
+    json: { questionId },
+  });
+  if (!response.ok) {
+    throw data as ApiError;
+  }
+  const payload = data as { content?: string } | null;
+  if (typeof payload?.content !== 'string') {
+    throw new Error('Invalid oral answer response');
+  }
+  return { content: payload.content };
+}
+
 /** Язык ответа определяется по языку экзамена (теста) на бэкенде. */
 export async function explainQuestion(questionId: string): Promise<{ content: string }> {
   const { response, data } = await apiFetch('/ai/explain', {
@@ -444,6 +468,103 @@ export async function streamPrewarm(
       if (m) {
         try {
           const p = JSON.parse(m[1]) as PrewarmProgress;
+          onProgress(p);
+        } catch {
+          // skip
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+export interface AdminOralStatsByExam {
+  examId: string;
+  title: string;
+  total: number;
+  withAnswer: number;
+}
+
+export interface AdminOralStats {
+  totalOralQuestions: number;
+  withAnswer: number;
+  missing: number;
+  byExam: AdminOralStatsByExam[];
+}
+
+export async function getAdminOralStats(): Promise<AdminOralStats> {
+  const { response, data } = await apiFetch('/admin/ai/oral/stats');
+  if (!response.ok) {
+    throw data as ApiError;
+  }
+  const payload = data as AdminOralStats | null;
+  return (
+    payload ?? {
+      totalOralQuestions: 0,
+      withAnswer: 0,
+      missing: 0,
+      byExam: [],
+    }
+  );
+}
+
+export interface OralPrewarmProgress {
+  total: number;
+  processed: number;
+  generated: number;
+  skipped: number;
+  errors: number;
+  currentQuestionId: string | null;
+  done?: boolean;
+}
+
+export async function streamOralPrewarm(
+  params: { examId?: string },
+  onProgress: (p: OralPrewarmProgress) => void
+): Promise<void> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (typeof window !== 'undefined') {
+    const user = readTelegramUser();
+    if (user?.telegramId) headers['x-telegram-id'] = user.telegramId;
+  }
+  const res = await fetch(`${API_BASE_URL}/admin/ai/oral/prewarm/stream`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw (err as ApiError) ?? new Error('Oral prewarm failed');
+  }
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error('No response body');
+  const dec = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += dec.decode(value, { stream: true });
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop() ?? '';
+      for (const block of lines) {
+        const m = block.match(/^data:\s*(.+)$/m);
+        if (m) {
+          try {
+            const p = JSON.parse(m[1]) as OralPrewarmProgress;
+            onProgress(p);
+          } catch {
+            // skip
+          }
+        }
+      }
+    }
+    if (buffer) {
+      const m = buffer.match(/^data:\s*(.+)$/m);
+      if (m) {
+        try {
+          const p = JSON.parse(m[1]) as OralPrewarmProgress;
           onProgress(p);
         } catch {
           // skip

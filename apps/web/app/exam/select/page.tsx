@@ -25,6 +25,18 @@ interface DirectionOption {
   examId: string;
 }
 
+type OrderModeKey = 'random' | 'order';
+
+interface OralDirectionGroup {
+  direction: string;
+  exams: { id: string; categoryLabel: string }[];
+}
+
+interface OralExamOption {
+  id: string;
+  categoryLabel: string;
+}
+
 const professionLabelsByLang: Record<Language, Record<ProfessionKey, string>> = {
   Русский: { doctors: 'Врачи', nurses: 'Медсестры' },
   Английский: { doctors: 'Doctors', nurses: 'Nurses' },
@@ -41,6 +53,10 @@ function ExamSelectClient() {
   const [examLanguage, setExamLanguage] = useState<ExamLanguageKey | null>(null);
   const [direction, setDirection] = useState<DirectionOption | null>(null);
   const [directions, setDirections] = useState<DirectionOption[]>([]);
+  const [orderMode, setOrderMode] = useState<OrderModeKey | null>(null);
+  const [oralDirections, setOralDirections] = useState<OralDirectionGroup[]>([]);
+  const [selectedDirection, setSelectedDirection] = useState<string | null>(null);
+  const [selectedOralExam, setSelectedOralExam] = useState<OralExamOption | null>(null);
   const [directionsLoading, setDirectionsLoading] = useState(false);
   const [directionsError, setDirectionsError] = useState(false);
   const [language, setLanguage] = useState<Language>(readSettings().language);
@@ -86,6 +102,9 @@ function ExamSelectClient() {
     setDirectionsLoading(true);
     setDirectionsError(false);
     setDirection(null);
+    setSelectedDirection(null);
+    setSelectedOralExam(null);
+    setOralDirections([]);
     const professionParam = profession === 'doctors' ? 'DOCTOR' : 'NURSE';
     const languageParam = examLanguage === 'uz' ? 'UZ' : 'RU';
     const typeParam = examType === 'test' ? 'TEST' : 'ORAL';
@@ -98,17 +117,32 @@ function ExamSelectClient() {
         setDirections([]);
         return;
       }
-      const payload = data as { directions?: { id: string; label: string }[] } | null;
-      setDirections(
-        (payload?.directions ?? []).map((entry) => ({
-          id: entry.id,
-          label: entry.label,
-          examId: entry.id,
-        }))
-      );
+      const payload = data as {
+        directions?: { id?: string; label?: string; direction?: string; exams?: { id: string; categoryLabel: string }[] }[];
+      } | null;
+      const list = payload?.directions ?? [];
+      if (typeParam === 'ORAL') {
+        setOralDirections(
+          list.map((entry) => ({
+            direction: entry.direction ?? '',
+            exams: entry.exams ?? [],
+          }))
+        );
+        setDirections([]);
+      } else {
+        setDirections(
+          list.map((entry: { id: string; label: string }) => ({
+            id: entry.id,
+            label: entry.label ?? entry.id,
+            examId: entry.id,
+          }))
+        );
+        setOralDirections([]);
+      }
     } catch {
       setDirectionsError(true);
       setDirections([]);
+      setOralDirections([]);
     } finally {
       setDirectionsLoading(false);
     }
@@ -146,6 +180,11 @@ function ExamSelectClient() {
         oneTimeTitle: 'One-time access',
         oneTimeHint: 'One-time access to this test costs',
         payCta: 'Pay and start test',
+        orderModeTitle: 'Question order',
+        orderRandom: 'Random',
+        orderSequential: 'In order',
+        categoryLabel: 'Category',
+        startOral: 'Start oral',
       };
     }
     if (language === 'Узбекский') {
@@ -179,6 +218,11 @@ function ExamSelectClient() {
         oneTimeTitle: 'Bir martalik kirish',
         oneTimeHint: 'Bu test uchun bir martalik kirish narxi',
         payCta: 'To‘lash va testni boshlash',
+        orderModeTitle: 'Savollar tartibi',
+        orderRandom: 'Tasodifiy',
+        orderSequential: 'Ketma-ket',
+        categoryLabel: 'Kategoriya',
+        startOral: "Og'zaki boshlash",
       };
     }
     return {
@@ -211,6 +255,11 @@ function ExamSelectClient() {
       oneTimeTitle: 'Разовый доступ',
       oneTimeHint: 'Разовый доступ к этому тесту стоит',
       payCta: 'Оплатить и начать тест',
+      orderModeTitle: 'Порядок вопросов',
+      orderRandom: 'Рандомно',
+      orderSequential: 'По очереди',
+      categoryLabel: 'Категория',
+      startOral: 'Начать устный',
     };
   }, [language]);
 
@@ -240,7 +289,22 @@ function ExamSelectClient() {
     })();
   }
 
-  const canStart = profession && examType && examType !== 'oral' && mode && examLanguage && direction && !directionsLoading;
+  function startOral() {
+    if (!selectedOralExam || !orderMode || isStarting) return;
+    router.push(`/exam/oral/${selectedOralExam.id}?order=${orderMode}`);
+  }
+
+  const canStartTest =
+    profession && examType === 'test' && mode && examLanguage && direction && !directionsLoading;
+  const canStartOral =
+    profession &&
+    examType === 'oral' &&
+    orderMode &&
+    examLanguage &&
+    selectedDirection &&
+    selectedOralExam &&
+    !directionsLoading;
+  const canStart = canStartTest || canStartOral;
 
   // Refs for scrolling
   const examTypeRef = useRef<HTMLDivElement>(null);
@@ -265,9 +329,15 @@ function ExamSelectClient() {
       ref = examTypeRef as React.RefObject<HTMLDivElement>;
     } else if (profession && examType === 'test' && !mode) {
       ref = modeRef as React.RefObject<HTMLDivElement>;
+    } else if (profession && examType === 'oral' && !orderMode) {
+      ref = modeRef as React.RefObject<HTMLDivElement>;
     } else if (profession && examType === 'test' && mode && !examLanguage) {
       ref = languageRef as React.RefObject<HTMLDivElement>;
+    } else if (profession && examType === 'oral' && orderMode && !examLanguage) {
+      ref = languageRef as React.RefObject<HTMLDivElement>;
     } else if (profession && examType === 'test' && mode && examLanguage && !direction) {
+      ref = directionRef as React.RefObject<HTMLDivElement>;
+    } else if (profession && examType === 'oral' && orderMode && examLanguage && !selectedDirection) {
       ref = directionRef as React.RefObject<HTMLDivElement>;
     }
 
@@ -276,7 +346,7 @@ function ExamSelectClient() {
         ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 100);
     }
-  }, [profession, examType, mode, examLanguage, direction]);
+  }, [profession, examType, mode, orderMode, examLanguage, direction, selectedDirection]);
 
   return (
     <>
@@ -342,8 +412,11 @@ function ExamSelectClient() {
                     onClick={() => {
                       setExamType('oral');
                       setMode(null);
+                      setOrderMode(null);
                       setExamLanguage(null);
                       setDirection(null);
+                      setSelectedDirection(null);
+                      setSelectedOralExam(null);
                       setStartError(null);
                     }}
                   >
@@ -354,7 +427,43 @@ function ExamSelectClient() {
               </div>
             )}
 
-            {/* Режим */}
+            {/* Order mode (oral only) */}
+            {profession && examType === 'oral' && (
+              <div ref={modeRef}>
+                <Card title={copy.orderModeTitle}>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      size="lg"
+                      variant={orderMode === 'random' ? 'primary' : 'secondary'}
+                      onClick={() => {
+                        setOrderMode('random');
+                        setExamLanguage(null);
+                        setSelectedDirection(null);
+                        setSelectedOralExam(null);
+                        setStartError(null);
+                      }}
+                    >
+                      {copy.orderRandom}
+                    </Button>
+                    <Button
+                      size="lg"
+                      variant={orderMode === 'order' ? 'primary' : 'secondary'}
+                      onClick={() => {
+                        setOrderMode('order');
+                        setExamLanguage(null);
+                        setSelectedDirection(null);
+                        setSelectedOralExam(null);
+                        setStartError(null);
+                      }}
+                    >
+                      {copy.orderSequential}
+                    </Button>
+                  </div>
+                </Card>
+              </div>
+            )}
+
+            {/* Режим (test only) */}
             {profession && examType === 'test' && (
               <div ref={modeRef}>
                 <Card title={copy.modeTitle}>
@@ -389,7 +498,7 @@ function ExamSelectClient() {
             )}
 
             {/* Язык */}
-            {profession && examType === 'test' && mode && (
+            {(profession && examType === 'test' && mode) || (profession && examType === 'oral' && orderMode) ? (
               <div ref={languageRef}>
                 <Card title={copy.languageTitle}>
                 <div className="grid grid-cols-2 gap-3">
@@ -399,6 +508,8 @@ function ExamSelectClient() {
                     onClick={() => {
                       setExamLanguage('uz');
                       setDirection(null);
+                      setSelectedDirection(null);
+                      setSelectedOralExam(null);
                       setStartError(null);
                     }}
                   >
@@ -410,6 +521,8 @@ function ExamSelectClient() {
                     onClick={() => {
                       setExamLanguage('ru');
                       setDirection(null);
+                      setSelectedDirection(null);
+                      setSelectedOralExam(null);
                       setStartError(null);
                     }}
                   >
@@ -418,9 +531,9 @@ function ExamSelectClient() {
                 </div>
               </Card>
               </div>
-            )}
+            ) : null}
 
-            {/* Направление */}
+            {/* Направление (test) */}
             {profession && examType === 'test' && mode && examLanguage && (
               <div ref={directionRef}>
                 <Card title={copy.directionLabel}>
@@ -457,11 +570,61 @@ function ExamSelectClient() {
               </div>
             )}
 
-            {/* Устный экзамен заглушка */}
-            {profession && examType === 'oral' && (
-              <Card>
-                <p className="text-sm text-slate-600">{copy.oralStub}</p>
-              </Card>
+            {/* Направление + Категория (oral) */}
+            {profession && examType === 'oral' && orderMode && examLanguage && (
+              <div ref={directionRef}>
+                <Card title={copy.directionLabel}>
+                  {directionsLoading ? (
+                    <p className="text-sm text-slate-600">{copy.directionsLoading}</p>
+                  ) : directionsError || oralDirections.length === 0 ? (
+                    <p className="text-sm text-slate-500">{copy.directionsEmpty}</p>
+                  ) : (
+                    <select
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      value={selectedDirection ?? ''}
+                      onChange={(e) => {
+                        setSelectedDirection(e.target.value || null);
+                        setSelectedOralExam(null);
+                        setStartError(null);
+                      }}
+                    >
+                      <option value="" disabled>—</option>
+                      {oralDirections.map((g) => (
+                        <option key={g.direction} value={g.direction}>
+                          {g.direction}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </Card>
+                {selectedDirection && (
+                  <Card title={copy.categoryLabel} className="mt-4">
+                    {(() => {
+                      const group = oralDirections.find((g) => g.direction === selectedDirection);
+                      const exams = group?.exams ?? [];
+                      if (exams.length === 0) return <p className="text-sm text-slate-500">—</p>;
+                      return (
+                        <select
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                          value={selectedOralExam?.id ?? ''}
+                          onChange={(e) => {
+                            const opt = exams.find((ex) => ex.id === e.target.value);
+                            setSelectedOralExam(opt ?? null);
+                            setStartError(null);
+                          }}
+                        >
+                          <option value="" disabled>—</option>
+                          {exams.map((ex) => (
+                            <option key={ex.id} value={ex.id}>
+                              {ex.categoryLabel}
+                            </option>
+                          ))}
+                        </select>
+                      );
+                    })()}
+                  </Card>
+                )}
+              </div>
             )}
 
             {/* Кнопка старта */}
@@ -469,10 +632,10 @@ function ExamSelectClient() {
               <Button
                 size="lg"
                 className="w-full"
-                onClick={startExam}
+                onClick={canStartOral ? startOral : startExam}
                 disabled={isStarting}
               >
-                {isStarting ? 'Запуск...' : copy.start}
+                {isStarting ? 'Запуск...' : canStartOral ? copy.startOral : copy.start}
               </Button>
             )}
 

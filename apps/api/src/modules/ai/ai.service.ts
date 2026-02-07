@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import { prisma } from '../../db/prisma';
 import { generateZiyodaExplanation } from './ziyoda.generator';
+import { generateOralAnswer } from './oralAnswer.generator';
 import type { ZiyodaLang } from './ziyoda.generator';
 
 export type AiLang = ZiyodaLang;
@@ -264,4 +265,163 @@ export async function getAiStats(): Promise<AiStats> {
   });
 
   return { totalQuestions, withExplanation, missing, byExam };
+}
+
+/** Get oral answer from DB or generate via AI and save. Language from question's exam. */
+export async function getOrCreateOralAnswer(
+  questionId: string
+): Promise<GetOrCreateResult | GetOrCreateError> {
+  const question = await prisma.question.findUnique({
+    where: { id: questionId },
+    include: {
+      exam: { select: { language: true } },
+      oralAnswer: true,
+    },
+  });
+
+  if (!question) {
+    return { success: false, reasonCode: 'QUESTION_NOT_FOUND', message: 'Вопрос не найден.' };
+  }
+
+  if (question.type !== 'ORAL') {
+    return { success: false, reasonCode: 'NOT_ORAL', message: 'Вопрос не устный.' };
+  }
+
+  const existing = question.oralAnswer?.answerHtml?.trim();
+  if (existing) {
+    return { success: true, content: existing };
+  }
+
+  const lang: AiLang = question.exam.language === 'UZ' ? 'uz' : 'ru';
+
+  try {
+    const content = await generateOralAnswer({
+      lang,
+      question: question.prompt,
+    });
+
+    await prisma.oralAnswer.upsert({
+      where: { questionId },
+      create: { questionId, answerHtml: content },
+      update: { answerHtml: content },
+    });
+
+    return { success: true, content };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Не удалось сгенерировать ответ.';
+    return { success: false, reasonCode: 'GENERATION_FAILED', message };
+  }
+}
+
+export interface OralStatsByExam {
+  examId: string;
+  title: string;
+  total: number;
+  withAnswer: number;
+}
+
+export interface OralStats {
+  totalOralQuestions: number;
+  withAnswer: number;
+  missing: number;
+  byExam: OralStatsByExam[];
+}
+
+export async function getOralStats(): Promise<OralStats> {
+  const [questions, exams] = await Promise.all([
+    prisma.question.findMany({
+      where: { type: 'ORAL' },
+      select: { id: true, examId: true },
+    }),
+    prisma.exam.findMany({
+      where: { type: 'ORAL' },
+      select: { id: true, title: true },
+      orderBy: { title: 'asc' },
+    }),
+  ]);
+  const withAnswerIds = await prisma.oralAnswer.findMany({
+    where: { questionId: { in: questions.map((q) => q.id) } },
+    select: { questionId: true },
+  });
+  const withAnswerSet = new Set(withAnswerIds.map((o) => o.questionId));
+  const totalOralQuestions = questions.length;
+  const withAnswer = withAnswerSet.size;
+  const missing = Math.max(0, totalOralQuestions - withAnswer);
+
+  const byExam: OralStatsByExam[] = exams.map((exam) => {
+    const examQuestions = questions.filter((q) => q.examId === exam.id);
+    const total = examQuestions.length;
+    const withA = examQuestions.filter((q) => withAnswerSet.has(q.id)).length;
+    return { examId: exam.id, title: exam.title, total, withAnswer: withA };
+  });
+
+  return { totalOralQuestions, withAnswer, missing, byExam };
+}
+
+export interface OralPrewarmProgress {
+  total: number;
+  processed: number;
+  generated: number;
+  skipped: number;
+  errors: number;
+  currentQuestionId: string | null;
+  done?: boolean;
+}
+
+export async function* prewarmOral(
+  examId?: string
+): AsyncGenerator<OralPrewarmProgress, void, unknown> {
+  const where = examId ? { examId, type: 'ORAL' as const } : { type: 'ORAL' as const };
+  const questions = await prisma.question.findMany({
+    where,
+    include: { exam: { select: { language: true } } },
+    orderBy: { order: 'asc' },
+  });
+
+  const total = questions.length;
+  let processed = 0;
+  let generated = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  for (const question of questions) {
+    const existing = await prisma.oralAnswer.findUnique({
+      where: { questionId: question.id },
+    });
+    if (existing?.answerHtml?.trim()) {
+      skipped += 1;
+    } else {
+      try {
+        const lang: AiLang = question.exam.language === 'UZ' ? 'uz' : 'ru';
+        const content = await generateOralAnswer({ lang, question: question.prompt });
+        await prisma.oralAnswer.upsert({
+          where: { questionId: question.id },
+          create: { questionId: question.id, answerHtml: content },
+          update: { answerHtml: content },
+        });
+        generated += 1;
+      } catch {
+        errors += 1;
+      }
+    }
+    processed += 1;
+    yield {
+      total,
+      processed,
+      generated,
+      skipped,
+      errors,
+      currentQuestionId: question.id,
+    };
+  }
+
+  yield {
+    total,
+    processed,
+    generated,
+    skipped,
+    errors,
+    currentQuestionId: null,
+    done: true,
+  };
 }
