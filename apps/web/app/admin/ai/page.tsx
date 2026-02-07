@@ -13,15 +13,20 @@ import { readSettings, Language } from '../../../lib/uiSettings';
 import {
   getAdminAiStats,
   getAdminOralStats,
+  getKnowledgeStats,
+  uploadKnowledge,
+  reindexKnowledgeStream,
   type AdminAiStats,
   type AdminOralStats,
   type PrewarmProgress,
   type OralPrewarmProgress,
+  type KnowledgeStats,
+  type ReindexProgress,
 } from '../../../lib/api';
 import { API_BASE_URL } from '../../../lib/api/config';
 import { readTelegramUser } from '../../../lib/telegramUser';
 
-type AiTab = 'test' | 'oral';
+type AiTab = 'test' | 'oral' | 'ziyoda';
 type ExamOption = { id: string; title: string; type?: string; category?: string };
 
 function streamPrewarmFetch(
@@ -125,12 +130,12 @@ function AdminAIPageContent() {
   const tabParam = searchParams.get('tab');
   const [language, setLanguage] = useState<Language>(readSettings().language);
   const [tab, setTab] = useState<AiTab>(() =>
-    tabParam === 'oral' ? 'oral' : tabParam === 'test' ? 'test' : 'test'
+    tabParam === 'ziyoda' ? 'ziyoda' : tabParam === 'oral' ? 'oral' : tabParam === 'test' ? 'test' : 'test'
   );
 
   useEffect(() => {
     const t = searchParams.get('tab');
-    if (t === 'oral' || t === 'test') setTab(t);
+    if (t === 'ziyoda' || t === 'oral' || t === 'test') setTab(t);
   }, [searchParams]);
 
   const [testExams, setTestExams] = useState<ExamOption[]>([]);
@@ -152,6 +157,16 @@ function AdminAIPageContent() {
 
   const testAbortRef = useRef<AbortController | null>(null);
   const oralAbortRef = useRef<AbortController | null>(null);
+
+  // Ziyoda RAG state
+  const [knowledgeStats, setKnowledgeStats] = useState<KnowledgeStats | null>(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [reindexRunning, setReindexRunning] = useState(false);
+  const [reindexProgress, setReindexProgress] = useState<ReindexProgress | null>(null);
+  const [reindexError, setReindexError] = useState<string | null>(null);
 
   useEffect(() => {
     const update = () => setLanguage(readSettings().language);
@@ -185,6 +200,12 @@ function AdminAIPageContent() {
     getAdminOralStats().then(setOralStats).catch(() => setOralStats(null));
   }, [tab, oralRunning, oralProgress?.done]);
 
+  useEffect(() => {
+    if (tab === 'ziyoda') {
+      getKnowledgeStats().then(setKnowledgeStats).catch(() => setKnowledgeStats(null));
+    }
+  }, [tab, uploadSuccess, reindexProgress?.done]);
+
   const copy = useMemo(() => {
     if (language === 'Английский') {
       return {
@@ -192,6 +213,7 @@ function AdminAIPageContent() {
         subtitle: 'Generate Зиёда explanations and oral answers.',
         tabTests: 'Tests',
         tabOral: 'Oral',
+        tabZiyoda: 'Ziyoda AI',
         exam: 'Exam (optional)',
         all: 'All questions',
         generate: 'Generate explanations',
@@ -208,6 +230,12 @@ function AdminAIPageContent() {
         statsMissing: 'Missing',
         statsByExam: 'By exam',
         oralTotal: 'Oral questions',
+        knowledgeBase: 'Knowledge Base',
+        reindex: 'Reindex',
+        upload: 'Upload',
+        uploadHint: 'PDF, DOCX, TXT',
+        statsEntries: 'Chunks',
+        statsCache: 'Cached answers',
       };
     }
     if (language === 'Узбекский') {
@@ -216,6 +244,7 @@ function AdminAIPageContent() {
         subtitle: "Ziyoda tushuntirishlari va og'zaki javoblarni yaratish.",
         tabTests: 'Testlar',
         tabOral: "Og'zaki",
+        tabZiyoda: 'Ziyoda AI',
         exam: 'Imtihon (ixtiyoriy)',
         all: 'Barcha savollar',
         generate: "Tushuntirishlarni yaratish",
@@ -232,6 +261,12 @@ function AdminAIPageContent() {
         statsMissing: 'Yetishmayapti',
         statsByExam: 'Imtihon bo‘yicha',
         oralTotal: "Og'zaki savollar",
+        knowledgeBase: 'Bilimlar bazasi',
+        reindex: 'Qayta indekslash',
+        upload: 'Yuklash',
+        uploadHint: 'PDF, DOCX, TXT',
+        statsEntries: 'Bloklar',
+        statsCache: 'Kesh javoblar',
       };
     }
     return {
@@ -239,6 +274,7 @@ function AdminAIPageContent() {
       subtitle: 'Генерация объяснений Зиёды и устных ответов.',
       tabTests: 'Тесты',
       tabOral: 'Устные',
+      tabZiyoda: 'Зиёда AI',
       exam: 'Экзамен (необязательно)',
       all: 'Все вопросы',
       generate: 'Сгенерировать объяснения',
@@ -255,6 +291,12 @@ function AdminAIPageContent() {
       statsMissing: 'Отсутствует',
       statsByExam: 'По экзаменам',
       oralTotal: 'Устных вопросов',
+      knowledgeBase: 'База знаний',
+      reindex: 'Переиндексация',
+      upload: 'Загрузить',
+      uploadHint: 'PDF, DOCX, TXT',
+      statsEntries: 'Фрагментов',
+      statsCache: 'Кэш ответов',
     };
   }, [language]);
 
@@ -342,6 +384,13 @@ function AdminAIPageContent() {
                 onClick={() => setTab('oral')}
               >
                 {copy.tabOral}
+              </Button>
+              <Button
+                size="md"
+                variant={tab === 'ziyoda' ? 'primary' : 'secondary'}
+                onClick={() => setTab('ziyoda')}
+              >
+                {copy.tabZiyoda}
               </Button>
             </div>
 
@@ -513,6 +562,103 @@ function AdminAIPageContent() {
                 {oralError && (
                   <Card><p className="text-sm text-rose-600">{oralError}</p></Card>
                 )}
+              </>
+            )}
+
+            {tab === 'ziyoda' && (
+              <>
+                {knowledgeStats != null && (
+                  <Card>
+                    <p className="text-sm font-medium text-slate-700">{copy.statsTitle}</p>
+                    <p className="mt-2 text-slate-600">
+                      {copy.statsEntries}: {knowledgeStats.totalEntries}, {copy.statsCache}: {knowledgeStats.totalCacheEntries}
+                    </p>
+                  </Card>
+                )}
+                <Card>
+                  <p className="text-sm font-medium text-slate-700">{copy.knowledgeBase}</p>
+                  <p className="mt-1 text-xs text-slate-500">{copy.uploadHint}</p>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <input
+                      type="file"
+                      accept=".pdf,.docx,.doc,.txt"
+                      className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        setUploadFile(f ?? null);
+                        setUploadError(null);
+                        setUploadSuccess(null);
+                      }}
+                      disabled={uploadLoading}
+                      key={uploadSuccess ?? 'upload'}
+                    />
+                    <Button
+                      type="button"
+                      onClick={async () => {
+                        if (!uploadFile || uploadLoading) return;
+                        setUploadLoading(true);
+                        setUploadError(null);
+                        setUploadSuccess(null);
+                        try {
+                          const { chunksCreated } = await uploadKnowledge(uploadFile);
+                          setUploadSuccess(`${chunksCreated} ${copy.statsEntries.toLowerCase()}`);
+                          setUploadFile(null);
+                          getKnowledgeStats().then(setKnowledgeStats).catch(() => {});
+                        } catch (err) {
+                          setUploadError(err instanceof Error ? err.message : copy.error);
+                        } finally {
+                          setUploadLoading(false);
+                        }
+                      }}
+                      disabled={!uploadFile || uploadLoading}
+                    >
+                      {uploadLoading ? '...' : copy.upload}
+                    </Button>
+                  </div>
+                  {uploadSuccess && <p className="mt-2 text-sm text-emerald-600">{uploadSuccess}</p>}
+                  {uploadError && <p className="mt-2 text-sm text-rose-600">{uploadError}</p>}
+                </Card>
+                <Card>
+                  <p className="text-sm font-medium text-slate-700">{copy.reindex}</p>
+                  <p className="mt-1 text-xs text-slate-500">Re-embed all knowledge chunks</p>
+                  <div className="mt-3">
+                    <Button
+                      type="button"
+                      onClick={async () => {
+                        if (reindexRunning) return;
+                        setReindexRunning(true);
+                        setReindexError(null);
+                        setReindexProgress(null);
+                        try {
+                          await reindexKnowledgeStream((p) => setReindexProgress(p));
+                        } catch (err) {
+                          setReindexError(err instanceof Error ? err.message : copy.error);
+                        } finally {
+                          setReindexRunning(false);
+                        }
+                      }}
+                      disabled={reindexRunning}
+                    >
+                      {reindexRunning ? copy.progress : copy.reindex}
+                    </Button>
+                  </div>
+                  {reindexRunning && reindexProgress && (
+                    <div className="mt-3">
+                      <p className="text-sm text-slate-600">
+                        {reindexProgress.processed} / {reindexProgress.total} ({reindexProgress.total > 0 ? Math.round((reindexProgress.processed / reindexProgress.total) * 100) : 0}%)
+                      </p>
+                      <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-slate-200">
+                        <div
+                          className="h-full bg-[#2AABEE] transition-all duration-300"
+                          style={{
+                            width: `${reindexProgress.total > 0 ? (reindexProgress.processed / reindexProgress.total) * 100 : 0}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {reindexError && <p className="mt-2 text-sm text-rose-600">{reindexError}</p>}
+                </Card>
               </>
             )}
           </AdminGuard>

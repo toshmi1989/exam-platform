@@ -28,6 +28,11 @@ import {
   importOralQuestionBank,
 } from './import.service';
 import { prewarm, getAiStats, getOralStats, prewarmOral } from '../ai/ai.service';
+import {
+  uploadKnowledge,
+  reindexKnowledge,
+  getKnowledgeStats,
+} from '../ai/knowledge.service';
 import { sendBroadcastToUsers } from '../../services/broadcastSender.service';
 
 const router = Router();
@@ -789,6 +794,55 @@ router.post('/ai/oral/prewarm/stream', async (req, res) => {
     res.write(`data: ${JSON.stringify({ error: 'Oral prewarm failed' })}\n\n`);
   } finally {
     res.end();
+  }
+});
+
+router.post('/knowledge/upload', async (req, res) => {
+  try {
+    const fileBase64 = typeof req.body?.file === 'string' ? req.body.file : '';
+    const filename = typeof req.body?.filename === 'string' ? req.body.filename.trim() : 'document';
+    if (!fileBase64) {
+      res.status(400).json({ ok: false, error: 'file (base64) is required' });
+      return;
+    }
+    const result = await uploadKnowledge({ fileBase64, filename });
+    res.json({ ok: true, chunksCreated: result.chunksCreated });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[admin/knowledge/upload]', err);
+    res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+router.post('/knowledge/reindex/stream', async (_req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders?.();
+
+  try {
+    await reindexKnowledge((p) => {
+      res.write(`data: ${JSON.stringify(p)}\n\n`);
+      if (typeof (res as unknown as { flush?: () => void }).flush === 'function') {
+        (res as unknown as { flush: () => void }).flush();
+      }
+    });
+  } catch (err) {
+    console.error('[admin/knowledge/reindex/stream]', err);
+    res.write(`data: ${JSON.stringify({ error: 'Reindex failed' })}\n\n`);
+  } finally {
+    res.end();
+  }
+});
+
+router.get('/knowledge/stats', async (_req, res) => {
+  try {
+    const stats = await getKnowledgeStats();
+    res.json(stats);
+  } catch (err) {
+    console.error('[admin/knowledge/stats]', err);
+    res.status(500).json({ totalEntries: 0, totalCacheEntries: 0 });
   }
 });
 

@@ -237,3 +237,19 @@ model PaymentInvoice {
   @@index([invoiceId])
   @@index([status])
 }
+
+model KnowledgeBaseEntry {
+  id        String   @id @default(uuid())
+  title     String
+  source    String
+  content   String
+  embedding Json
+  createdAt DateTime @default(now())
+}
+
+model BotAnswerCache {
+  id           String   @id @default(uuid())
+  questionHash String   @unique
+  answer       String
+  createdAt    DateTime @default(now())
+}

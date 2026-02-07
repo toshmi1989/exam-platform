@@ -720,4 +720,101 @@ export async function streamOralPrewarm(
   }
 }
 
+export interface KnowledgeStats {
+  totalEntries: number;
+  totalCacheEntries: number;
+}
+
+export async function getKnowledgeStats(): Promise<KnowledgeStats> {
+  const { response, data } = await apiFetch('/admin/knowledge/stats');
+  if (!response.ok) throw data as ApiError;
+  const payload = data as KnowledgeStats | null;
+  return payload ?? { totalEntries: 0, totalCacheEntries: 0 };
+}
+
+export interface ReindexProgress {
+  total: number;
+  processed: number;
+  done?: boolean;
+  error?: string;
+}
+
+export async function reindexKnowledgeStream(
+  onProgress: (p: ReindexProgress) => void
+): Promise<void> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (typeof window !== 'undefined') {
+    const user = readTelegramUser();
+    if (user?.telegramId) headers['x-telegram-id'] = user.telegramId;
+  }
+  const res = await fetch(`${API_BASE_URL}/admin/knowledge/reindex/stream`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw (err as ApiError) ?? new Error('Reindex failed');
+  }
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error('No response body');
+  const dec = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += dec.decode(value, { stream: true });
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop() ?? '';
+      for (const block of lines) {
+        const m = block.match(/^data:\s*(.+)$/m);
+        if (m) {
+          try {
+            const p = JSON.parse(m[1]) as ReindexProgress;
+            onProgress(p);
+          } catch {
+            // skip
+          }
+        }
+      }
+    }
+    if (buffer) {
+      const m = buffer.match(/^data:\s*(.+)$/m);
+      if (m) {
+        try {
+          onProgress(JSON.parse(m[1]) as ReindexProgress);
+        } catch {
+          // skip
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const s = r.result;
+      resolve(typeof s === 'string' ? s : '');
+    };
+    r.onerror = () => reject(new Error('Failed to read file'));
+    r.readAsDataURL(file);
+  });
+}
+
+export async function uploadKnowledge(file: File): Promise<{ chunksCreated: number }> {
+  const fileBase64 = await fileToBase64(file);
+  const { response, data } = await apiFetch('/admin/knowledge/upload', {
+    method: 'POST',
+    json: { file: fileBase64, filename: file.name },
+  });
+  if (!response.ok) throw (data as ApiError) ?? new Error('Upload failed');
+  const payload = data as { chunksCreated?: number };
+  return { chunksCreated: payload?.chunksCreated ?? 0 };
+}
+
 export type { ApiError };
