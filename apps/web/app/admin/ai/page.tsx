@@ -14,6 +14,7 @@ import {
   getAdminAiStats,
   getAdminOralStats,
   getKnowledgeStats,
+  addTextToKnowledge,
   uploadKnowledge,
   reindexKnowledgeStream,
   type AdminAiStats,
