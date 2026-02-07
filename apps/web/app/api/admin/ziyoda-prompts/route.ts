@@ -15,16 +15,31 @@ export async function GET(request: Request) {
       headers: { 'x-telegram-id': telegramId },
     });
     const text = await res.text();
-    return new Response(text, {
-      status: res.status,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    if (res.ok) {
+      return new Response(text, { status: res.status, headers: { 'Content-Type': 'application/json' } });
+    }
+    try {
+      const j = JSON.parse(text) as { error?: string };
+      return new Response(JSON.stringify({ ok: false, error: j?.error ?? text || 'Ошибка API' }), {
+        status: res.status,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch {
+      return new Response(JSON.stringify({ ok: false, error: text || 'Ошибка API' }), {
+        status: res.status,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
   } catch (e) {
     console.error('[api/admin/ziyoda-prompts GET]', e);
-    return new Response(
-      JSON.stringify({ ok: false, error: 'Сервер не смог связаться с API.' }),
-      { status: 502, headers: { 'Content-Type': 'application/json' } }
-    );
+    const msg =
+      e && typeof e === 'object' && 'message' in e && typeof (e as { message: string }).message === 'string'
+        ? (e as { message: string }).message
+        : 'Сервер не смог связаться с API. Проверьте API_INTERNAL_URL или NEXT_PUBLIC_API_BASE_URL.';
+    return new Response(JSON.stringify({ ok: false, error: msg }), {
+      status: 502,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }
 
@@ -49,15 +64,26 @@ export async function PUT(request: Request) {
       body,
     });
     const text = await res.text();
-    return new Response(text, {
+    let errorBody = text;
+    try {
+      const j = JSON.parse(text) as { error?: string };
+      if (res.status >= 400 && j?.error) errorBody = JSON.stringify({ ok: false, error: j.error });
+    } catch {
+      if (res.status >= 400) errorBody = JSON.stringify({ ok: false, error: text || 'Ошибка API' });
+    }
+    return new Response(res.ok ? text : errorBody, {
       status: res.status,
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (e) {
     console.error('[api/admin/ziyoda-prompts PUT]', e);
-    return new Response(
-      JSON.stringify({ ok: false, error: 'Сервер не смог связаться с API.' }),
-      { status: 502, headers: { 'Content-Type': 'application/json' } }
-    );
+    const msg =
+      e && typeof e === 'object' && 'message' in e && typeof (e as { message: string }).message === 'string'
+        ? (e as { message: string }).message
+        : 'Сервер не смог связаться с API. Проверьте API_INTERNAL_URL или NEXT_PUBLIC_API_BASE_URL.';
+    return new Response(JSON.stringify({ ok: false, error: msg }), {
+      status: 502,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }

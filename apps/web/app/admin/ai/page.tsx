@@ -295,6 +295,7 @@ function AdminAIPageContent() {
         maxContextCharsLabel: 'Max context chars',
         maxContextMsgLenLabel: 'Max context msg len',
         savePrompts: 'Save prompts',
+        promptsNarrowHint: 'To narrow answers: lower "Max chunks" or "Max context chars". To allow more context: raise them. Response style (brief/detailed) can be set in the system instruction.',
       };
     }
     if (language === 'Узбекский') {
@@ -345,6 +346,7 @@ function AdminAIPageContent() {
         maxContextCharsLabel: 'Maks kontekst belgilari',
         maxContextMsgLenLabel: 'Maks xabar uzunligi',
         savePrompts: "Promptlarni saqlash",
+        promptsNarrowHint: "Javoblarni toraytirish: \"Maks bloklar\" yoki \"Maks kontekst belgilari\"ni kamaytiring. Ko'proq kontekst: oshiring. Javob uslubi tizim ko'rsatmasida.",
       };
     }
     return {
@@ -394,6 +396,7 @@ function AdminAIPageContent() {
       maxContextCharsLabel: 'Макс. символов контекста',
       maxContextMsgLenLabel: 'Макс. длина сообщения в контексте',
       savePrompts: 'Сохранить промпты',
+      promptsNarrowHint: 'Сузить ответы: уменьшите «Макс. чанков» или «Макс. символов контекста». Ослабить (больше контекста): увеличьте эти значения. Стиль ответа (кратко/развёрнуто) задаётся в системной инструкции.',
     };
   }, [language]);
 
@@ -871,6 +874,7 @@ function AdminAIPageContent() {
                 <Card>
                   <p className="text-sm font-medium text-slate-700">{copy.promptsTitle}</p>
                   <p className="mt-1 text-xs text-slate-500">{copy.promptsHint}</p>
+                  <p className="mt-2 text-xs text-slate-500 italic">{copy.promptsNarrowHint}</p>
                   {promptsLoading ? (
                     <p className="mt-3 text-sm text-slate-500">Загрузка…</p>
                   ) : (

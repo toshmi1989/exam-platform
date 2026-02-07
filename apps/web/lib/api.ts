@@ -755,6 +755,16 @@ export async function deleteKnowledgeEntry(id: string): Promise<void> {
 
 export type ZiyodaPrompts = Record<string, string>;
 
+function ziyodaPromptsError(data: unknown, fallback: string): never {
+  const msg =
+    (data && typeof data === 'object' && ('error' in data) && typeof (data as { error: unknown }).error === 'string'
+      ? (data as { error: string }).error
+      : (data && typeof data === 'object' && 'message' in data && typeof (data as { message: unknown }).message === 'string'
+        ? (data as { message: string }).message
+        : null)) ?? fallback;
+  throw new Error(msg);
+}
+
 /** Same-origin proxy для промптов Зиёды (избегаем CORS / Failed to fetch). */
 export async function getZiyodaPrompts(): Promise<ZiyodaPrompts> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -762,9 +772,18 @@ export async function getZiyodaPrompts(): Promise<ZiyodaPrompts> {
     const user = readTelegramUser();
     if (user?.telegramId) headers['x-telegram-id'] = user.telegramId;
   }
-  const res = await fetch('/api/admin/ziyoda-prompts', { method: 'GET', headers });
+  let res: Response;
+  try {
+    res = await fetch('/api/admin/ziyoda-prompts', { method: 'GET', headers });
+  } catch (e) {
+    throw new Error(
+      typeof e === 'object' && e && 'message' in e && typeof (e as { message: string }).message === 'string'
+        ? (e as { message: string }).message
+        : 'Нет связи с сервером. Проверьте интернет и что приложение открыто с того же домена.'
+    );
+  }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw (data as ApiError) ?? { message: 'Failed to fetch' };
+  if (!res.ok) ziyodaPromptsError(data, 'Не удалось загрузить промпты.');
   return (data as ZiyodaPrompts) ?? {};
 }
 
@@ -774,13 +793,22 @@ export async function updateZiyodaPrompts(prompts: ZiyodaPrompts): Promise<Ziyod
     const user = readTelegramUser();
     if (user?.telegramId) headers['x-telegram-id'] = user.telegramId;
   }
-  const res = await fetch('/api/admin/ziyoda-prompts', {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify(prompts),
-  });
+  let res: Response;
+  try {
+    res = await fetch('/api/admin/ziyoda-prompts', {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(prompts),
+    });
+  } catch (e) {
+    throw new Error(
+      typeof e === 'object' && e && 'message' in e && typeof (e as { message: string }).message === 'string'
+        ? (e as { message: string }).message
+        : 'Нет связи с сервером. Проверьте интернет и что приложение открыто с того же домена.'
+    );
+  }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw (data as ApiError) ?? { message: 'Failed to fetch' };
+  if (!res.ok) ziyodaPromptsError(data, 'Не удалось сохранить промпты. Проверьте, что API доступен (NEXT_PUBLIC_API_BASE_URL / API_INTERNAL_URL).');
   return (data as ZiyodaPrompts) ?? {};
 }
 
