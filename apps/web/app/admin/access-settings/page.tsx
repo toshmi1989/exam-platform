@@ -18,6 +18,7 @@ export default function AdminAccessSettingsPage() {
   const [freeAttempts, setFreeAttempts] = useState('yes');
   const [dailyLimit, setDailyLimit] = useState('1');
   const [oralDailyLimit, setOralDailyLimit] = useState('5');
+  const [botAiDailyLimit, setBotAiDailyLimit] = useState('3');
   const [showAnswers, setShowAnswers] = useState('no');
   const [oneTimePrice, setOneTimePrice] = useState('15000');
   const [oneTimeAnswers, setOneTimeAnswers] = useState('no');
@@ -51,6 +52,8 @@ export default function AdminAccessSettingsPage() {
         freeHint: 'Controls access without subscription.',
         dailyLimitHint: 'How many full attempts per day are allowed.',
         oralDailyLimitHint: 'Oral mode: how many questions per day without subscription. Subscribers have no limit.',
+        botAiDailyLimit: 'AI bot: requests per day (no subscription)',
+        botAiDailyLimitHint: 'Daily limit of Ziyoda AI replies for users without subscription. 0 = no free AI.',
         showAnswersHint: 'Show correct answers after finishing a free attempt.',
         oneTime: 'One‑time access',
         oneTimeHint: 'Single exam access without subscription. Oral mode is not available for one‑time access.',
@@ -78,6 +81,8 @@ export default function AdminAccessSettingsPage() {
         freeHint: 'Obunasiz kirish qoidalari.',
         dailyLimitHint: 'Kuniga nechta to‘liq urinish ruxsat etiladi.',
         oralDailyLimitHint: 'Og‘zaki rejim: obunasiz kuniga nechta savol. Obunachilarda limit yo‘q.',
+        botAiDailyLimit: 'AI bot: kunlik so‘rovlar (obunasiz)',
+        botAiDailyLimitHint: 'Obunasiz foydalanuvchilar uchun Ziyoda AI javoblari limiti. 0 = bepul AI yo‘q.',
         showAnswersHint: 'Bepul urinishdan so‘ng to‘g‘ri javoblarni ko‘rsatish.',
         oneTime: 'Bir martalik kirish',
         oneTimeHint: 'Obunasiz bitta imtihon. Og‘zaki rejim bir martalik kirishda mavjud emas.',
@@ -104,6 +109,8 @@ export default function AdminAccessSettingsPage() {
       freeHint: 'Правила доступа без подписки.',
       dailyLimitHint: 'Сколько полных попыток в день разрешено.',
       oralDailyLimitHint: 'Устный режим: сколько вопросов в день без подписки. Для подписчиков лимита нет.',
+      botAiDailyLimit: 'ИИ-бот: запросов в день (без подписки)',
+      botAiDailyLimitHint: 'Дневной лимит ответов Зиёды для пользователей без подписки. 0 = нет бесплатных запросов к ИИ.',
       showAnswersHint: 'Показывать ответы после бесплатной попытки.',
       oneTime: 'Разовый доступ',
       oneTimeHint: 'Единичный доступ к экзамену без подписки. Устный режим для разового доступа недоступен.',
@@ -136,6 +143,7 @@ export default function AdminAccessSettingsPage() {
     setFreeAttempts(payload.settings.allowFreeAttempts ? 'yes' : 'no');
     setDailyLimit(String(payload.settings.freeDailyLimit));
     setOralDailyLimit(String(payload.settings.freeOralDailyLimit ?? 5));
+    setBotAiDailyLimit(String((payload.settings as { botAiDailyLimitFree?: number }).botAiDailyLimitFree ?? 3));
     setShowAnswers(payload.settings.showAnswersWithoutSubscription ? 'yes' : 'no');
     setOneTimePrice(String(payload.settings.oneTimePrice));
     setOneTimeAnswers(payload.settings.showAnswersForOneTime ? 'yes' : 'no');
@@ -151,6 +159,7 @@ export default function AdminAccessSettingsPage() {
         allowFreeAttempts: freeAttempts === 'yes',
         freeDailyLimit: Number(dailyLimit),
         freeOralDailyLimit: Number(oralDailyLimit),
+        botAiDailyLimitFree: Number(botAiDailyLimit),
         showAnswersWithoutSubscription: showAnswers === 'yes',
         oneTimePrice: Number(oneTimePrice),
         showAnswersForOneTime: oneTimeAnswers === 'yes',
@@ -228,6 +237,17 @@ export default function AdminAccessSettingsPage() {
                   className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#2AABEE]"
                 />
                 <p className="mt-1 text-xs text-slate-500">{copy.oralDailyLimitHint}</p>
+              </div>
+              <div className="mt-4">
+                <input
+                  value={botAiDailyLimit}
+                  onChange={(event) => setBotAiDailyLimit(event.target.value)}
+                  placeholder={copy.botAiDailyLimit}
+                  type="number"
+                  min={0}
+                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#2AABEE]"
+                />
+                <p className="mt-1 text-xs text-slate-500">{copy.botAiDailyLimitHint}</p>
               </div>
               <div className="mt-4">
                 <p className="mb-2 text-sm text-slate-600">{copy.showAnswers}</p>

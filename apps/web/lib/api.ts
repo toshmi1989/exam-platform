@@ -755,18 +755,32 @@ export async function deleteKnowledgeEntry(id: string): Promise<void> {
 
 export type ZiyodaPrompts = Record<string, string>;
 
+/** Same-origin proxy для промптов Зиёды (избегаем CORS / Failed to fetch). */
 export async function getZiyodaPrompts(): Promise<ZiyodaPrompts> {
-  const { response, data } = await apiFetch('/admin/ziyoda-prompts');
-  if (!response.ok) throw data as ApiError;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (typeof window !== 'undefined') {
+    const user = readTelegramUser();
+    if (user?.telegramId) headers['x-telegram-id'] = user.telegramId;
+  }
+  const res = await fetch('/api/admin/ziyoda-prompts', { method: 'GET', headers });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw (data as ApiError) ?? { message: 'Failed to fetch' };
   return (data as ZiyodaPrompts) ?? {};
 }
 
 export async function updateZiyodaPrompts(prompts: ZiyodaPrompts): Promise<ZiyodaPrompts> {
-  const { response, data } = await apiFetch('/admin/ziyoda-prompts', {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (typeof window !== 'undefined') {
+    const user = readTelegramUser();
+    if (user?.telegramId) headers['x-telegram-id'] = user.telegramId;
+  }
+  const res = await fetch('/api/admin/ziyoda-prompts', {
     method: 'PUT',
-    json: prompts,
+    headers,
+    body: JSON.stringify(prompts),
   });
-  if (!response.ok) throw data as ApiError;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw (data as ApiError) ?? { message: 'Failed to fetch' };
   return (data as ZiyodaPrompts) ?? {};
 }
 

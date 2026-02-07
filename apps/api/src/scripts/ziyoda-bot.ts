@@ -90,19 +90,53 @@ function getPlatformButtonLabel(lang: 'ru' | 'uz'): string {
   return lang === 'uz' ? 'ZiyoMed ni ochish' : 'Открыть ZiyoMed';
 }
 
-const conversationContext = new Map<string, { lastUserMessage: string; lastBotMessage: string }>();
-
-async function getUpdates(): Promise<{ update_id: number; message?: { chat: { id: number }; from?: { id: number; first_name?: string }; text?: string } }[]> {
-  const url = `${TELEGRAM_API}/getUpdates?timeout=30&offset=${offset}`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`Telegram getUpdates ${res.status}`);
+/** Инлайн-кнопки главного меню (Открыть MedTest, Как пользоваться, Мой профиль, Купить подписку). */
+function getMainMenuKeyboard(lang: 'ru' | 'uz'): TelegramInlineKeyboard {
+  const openLabel = lang === 'uz' ? '🚀 MedTest ni ochish' : '🚀 Открыть MedTest';
+  const helpLabel = lang === 'uz' ? "📘 Qanday foydalanish" : '📘 Как пользоваться';
+  const profileLabel = lang === 'uz' ? "👤 Mening profilim" : '👤 Мой профиль';
+  const buyLabel = lang === 'uz' ? "Obuna sotib olish" : 'Купить подписку';
+  const rows: TelegramInlineButton[][] = [];
+  if (PLATFORM_URL) {
+    rows.push([{ text: openLabel, url: PLATFORM_URL }]);
+    rows.push([{ text: buyLabel, url: `${PLATFORM_URL}/cabinet` }]);
   }
-  const data = (await res.json()) as { ok: boolean; result?: { update_id: number; message?: { chat: { id: number }; from?: { id: number; first_name?: string }; text?: string } }[] };
-  return Array.isArray(data.result) ? data.result : [];
+  rows.push([{ text: helpLabel, callback_data: 'help' }]);
+  rows.push([{ text: profileLabel, callback_data: 'profile' }]);
+  return { inline_keyboard: rows };
 }
 
-type ReplyMarkup = { inline_keyboard: { text: string; url: string }[][] };
+const HELP_TEXT_RU = `📘 Как пользоваться ZiyoMed
+
+• Как начать тест
+Откройте платформу по кнопке «Открыть MedTest», выберите экзамен (врачи или медсёстры) и режим — тест или устный экзамен. Нажмите «Начать» и отвечайте на вопросы.
+
+• Как оплатить
+В личном кабинете нажмите «Купить подписку» или «Сдать разовый тест». Оплата доступна через платёжную систему после авторизации через Telegram.
+
+• Как работает устный экзамен
+В устном режиме вы отвечаете на вопросы голосом или текстом. Доступно ограниченное число вопросов в день без подписки; с подпиской — без ограничений.
+
+• Что такое подписка
+Подписка даёт полный доступ к тестам и устному экзамену без дневных лимитов, а также к просмотру правильных ответов и пояснений Зиёды.`;
+
+const HELP_TEXT_UZ = `📘 ZiyoMed dan qanday foydalanish
+
+• Testni qanday boshlash
+«MedTest ni ochish» tugmasini bosing, imtihonni (shifokorlar yoki hamshiralar) va rejimni tanlang. «Boshlash» tugmasini bosing va savollarga javob bering.
+
+• Qanday to‘lash
+Shaxsiy kabinetda «Obuna sotib olish» yoki «Bir martalik test» tugmasini bosing. Telegram orqali kirgach, to‘lov tizimi orqali to‘lash mumkin.
+
+• Og‘zaki imtihon qanday ishlaydi
+Og‘zaki rejimda savollarga ovoz yoki matn orqali javob berasiz. Obunasiz kuniga cheklangan savol; obuna bilan cheklovsiz.
+
+• Obuna nima
+Obuna testlar va og‘zaki imtihonga to‘liq kirish, kunlik limitlarsiz, to‘g‘ri javoblar va Ziyoda tushuntirishlarini ko‘rish imkonini beradi.`;
+
+type TelegramInlineButton = { text: string; url?: string; callback_data?: string };
+type TelegramInlineKeyboard = { inline_keyboard: TelegramInlineButton[][] };
+type ReplyMarkup = TelegramInlineKeyboard;
 
 async function sendMessage(chatId: number, text: string, replyMarkup?: ReplyMarkup): Promise<void> {
   const url = `${TELEGRAM_API}/sendMessage`;
@@ -120,11 +154,44 @@ async function sendMessage(chatId: number, text: string, replyMarkup?: ReplyMark
   }
 }
 
+async function answerCallbackQuery(callbackQueryId: string, text?: string): Promise<void> {
+  const url = `${TELEGRAM_API}/answerCallbackQuery`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ callback_query_id: callbackQueryId, text: text ?? undefined }),
+  });
+  if (!res.ok) console.error('[answerCallbackQuery]', await res.text());
+}
+
+const conversationContext = new Map<string, { lastUserMessage: string; lastBotMessage: string }>();
+
+type TelegramUpdate = {
+  update_id: number;
+  message?: { chat: { id: number }; from?: { id: number; first_name?: string }; text?: string };
+  callback_query?: {
+    id: string;
+    from: { id: number; first_name?: string };
+    message?: { chat: { id: number } };
+    data?: string;
+  };
+};
+
+async function getUpdates(): Promise<TelegramUpdate[]> {
+  const url = `${TELEGRAM_API}/getUpdates?timeout=30&offset=${offset}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Telegram getUpdates ${res.status}`);
+  const data = (await res.json()) as { ok: boolean; result?: TelegramUpdate[] };
+  return Array.isArray(data.result) ? data.result : [];
+}
+
 const MAX_CONTEXT_LEN = 280;
 function truncateContext(s: string): string {
   const t = s.trim();
   return t.length <= MAX_CONTEXT_LEN ? t : t.slice(0, MAX_CONTEXT_LEN);
 }
+
+type AskZiyodaResult = { answer: string; limitReached?: boolean; inlineButtons?: { text: string; url?: string; callback_data?: string }[][] };
 
 async function askZiyoda(
   telegramId: string,
@@ -132,7 +199,7 @@ async function askZiyoda(
   message: string,
   previousUserMessage?: string,
   previousBotMessage?: string
-): Promise<string> {
+): Promise<AskZiyodaResult> {
   const body: Record<string, unknown> = {
     telegramId: String(telegramId),
     firstName: firstName ?? 'User',
@@ -149,17 +216,69 @@ async function askZiyoda(
     const err = await res.json().catch(() => ({})) as { error?: string };
     throw new Error(err?.error ?? `API ${res.status}`);
   }
-  const data = (await res.json()) as { answer?: string };
-  return data.answer ?? '';
+  const data = (await res.json()) as { answer?: string; limitReached?: boolean; inlineButtons?: { text: string; url?: string; callback_data?: string }[][] };
+  return {
+    answer: data.answer ?? '',
+    limitReached: data.limitReached,
+    inlineButtons: data.inlineButtons,
+  };
+}
+
+function isUzbekCyrillic(text: string): boolean {
+  return /[\u04E6\u0493\u049B\u04B3\u04B7\u04E9]/.test(text);
 }
 
 async function run(): Promise<void> {
   console.log('[ziyoda-bot] Started. API:', BOT_API_URL);
+  await fetch(`${TELEGRAM_API}/setMyCommands`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      commands: [
+        { command: 'start', description: 'Запуск / Start' },
+        { command: 'menu', description: 'Меню / Menu' },
+      ],
+    }),
+  }).catch(() => {});
+
   while (true) {
     try {
       const updates = await getUpdates();
       for (const u of updates) {
         offset = u.update_id + 1;
+        const cq = u.callback_query;
+        if (cq) {
+          const chatId = cq.message?.chat?.id ?? 0;
+          const telegramId = String(cq.from?.id ?? '');
+          const data = cq.data ?? '';
+          const lang = isUzbekCyrillic(telegramId) ? 'uz' : 'ru';
+          try {
+            await answerCallbackQuery(cq.id);
+            if (data === 'help') {
+              const helpText = lang === 'uz' ? HELP_TEXT_UZ : HELP_TEXT_RU;
+              await sendMessage(chatId, helpText);
+            } else if (data === 'profile') {
+              const pr = await fetch(`${BOT_API_URL}/bot/profile?telegramId=${encodeURIComponent(telegramId)}`);
+              const profile = (await pr.json()) as { ok?: boolean; telegramId?: string; hasSubscription?: boolean; subscriptionEndsAt?: string | null; cabinetUrl?: string | null };
+              if (profile?.ok) {
+                const endAt = profile.subscriptionEndsAt ? new Date(profile.subscriptionEndsAt).toLocaleDateString() : '—';
+                const msgRu = `👤 Профиль\n\nTelegram ID: ${profile.telegramId ?? telegramId}\nПодписка: ${profile.hasSubscription ? 'активна' : 'нет'}\nДействует до: ${endAt}`;
+                const msgUz = `👤 Profil\n\nTelegram ID: ${profile.telegramId ?? telegramId}\nObuna: ${profile.hasSubscription ? 'faol' : 'yo\'q'}\nAmal qiladi: ${endAt}`;
+                const msg = lang === 'uz' ? msgUz : msgRu;
+                const kb: ReplyMarkup | undefined = profile.cabinetUrl
+                  ? { inline_keyboard: [[{ text: lang === 'uz' ? 'Kabinetni ochish' : 'Открыть кабинет', url: profile.cabinetUrl }]] }
+                  : undefined;
+                await sendMessage(chatId, msg, kb);
+              } else {
+                await sendMessage(chatId, lang === 'uz' ? 'Profil yuklanmadi.' : 'Не удалось загрузить профиль.');
+              }
+            }
+          } catch (e) {
+            console.error('[ziyoda-bot] callback', e);
+          }
+          continue;
+        }
+
         const msg = u.message;
         if (!msg?.text || !msg.chat) continue;
         const chatId = msg.chat.id;
@@ -168,25 +287,34 @@ async function run(): Promise<void> {
         const firstName = from?.first_name;
         const text = msg.text.trim();
         if (!text) continue;
+        const lang = isUzbekCyrillic(text) ? 'uz' : 'ru';
+
         try {
           let answer: string;
           let replyMarkup: ReplyMarkup | undefined;
-          const lang = /[\u0400-\u04FF]/.test(text) ? 'ru' : 'uz';
 
-          if (isGreetingOrStart(text)) {
+          if (text === '/menu') {
+            answer = lang === 'uz' ? 'Quyidagi tugmalardan foydalaning:' : 'Воспользуйтесь кнопками ниже:';
+            replyMarkup = getMainMenuKeyboard(lang);
+          } else if (isGreetingOrStart(text)) {
             answer = getWelcomeMessage(firstName ?? 'User', lang);
+            replyMarkup = getMainMenuKeyboard(lang);
           } else if (PLATFORM_URL && isStartTestIntent(text)) {
             answer = getStartTestMessage(lang);
             replyMarkup = { inline_keyboard: [[{ text: getPlatformButtonLabel(lang), url: PLATFORM_URL }]] };
           } else {
             const ctx = conversationContext.get(telegramId);
-            answer = await askZiyoda(
+            const result = await askZiyoda(
               telegramId,
               firstName,
               text,
               ctx?.lastUserMessage,
               ctx?.lastBotMessage
             );
+            answer = result.answer;
+            if (result.limitReached && result.inlineButtons?.length) {
+              replyMarkup = { inline_keyboard: result.inlineButtons };
+            }
             conversationContext.set(telegramId, {
               lastUserMessage: text,
               lastBotMessage: answer,

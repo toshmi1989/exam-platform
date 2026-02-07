@@ -36,6 +36,21 @@ import { readTelegramUser } from '../../../lib/telegramUser';
 type AiTab = 'test' | 'oral' | 'ziyoda';
 type ExamOption = { id: string; title: string; type?: string; category?: string };
 
+/** Промпты Зиёды по умолчанию (уже в полях, можно только править). */
+const DEFAULT_ZIYODA_PROMPTS: ZiyodaPrompts = {
+  system_instruction:
+    'Ziyoda, ассистент ZiyoMed. Отвечай ТОЛЬКО на основе фрагментов в <chunks>. Если ответа в контексте нет — ответь точно этой фразой: {fallback}. Язык ответа: {lang}. Кратко, без приветствия, если пользователь не поздоровался. При наличии предыдущего обмена учитывай контекст (например, медсёстры = hamshira, врачи = shifokor).',
+  fallback_ru: 'К сожалению, в официальных материалах ZiyoMed это не указано.',
+  fallback_uz: "Afsuski, ZiyoMed rasmiy materiallarida bu ko'rsatilmagan.",
+  unavailable_ru: 'Зиёда временно недоступна. Попробуйте позже.',
+  unavailable_uz: "Ziyoda vaqtincha mavjud emas. Keyinroq urunib ko'ring.",
+  empty_kb_ru: 'База знаний ZiyoMed пока пуста. Обратитесь к администратору для загрузки материалов.',
+  empty_kb_uz: "ZiyoMed bilim bazasi hali bo'sh. Materiallarni yuklash uchun administratorga murojaat qiling.",
+  max_chunks: '6',
+  max_context_chars: '4000',
+  max_context_msg_len: '500',
+};
+
 function streamPrewarmFetch(
   url: string,
   body: Record<string, unknown>,
@@ -181,7 +196,7 @@ function AdminAIPageContent() {
   const [pasteError, setPasteError] = useState<string | null>(null);
   const [knowledgeEntries, setKnowledgeEntries] = useState<KnowledgeEntryItem[]>([]);
   const [entryDeletingId, setEntryDeletingId] = useState<string | null>(null);
-  const [ziyodaPrompts, setZiyodaPrompts] = useState<ZiyodaPrompts>({});
+  const [ziyodaPrompts, setZiyodaPrompts] = useState<ZiyodaPrompts>(() => ({ ...DEFAULT_ZIYODA_PROMPTS }));
   const [promptsLoading, setPromptsLoading] = useState(false);
   const [promptsSaving, setPromptsSaving] = useState(false);
   const [promptsError, setPromptsError] = useState<string | null>(null);
@@ -225,8 +240,8 @@ function AdminAIPageContent() {
       getKnowledgeEntries().then(setKnowledgeEntries).catch(() => setKnowledgeEntries([]));
       setPromptsLoading(true);
       getZiyodaPrompts()
-        .then(setZiyodaPrompts)
-        .catch(() => setZiyodaPrompts({}))
+        .then((data) => setZiyodaPrompts({ ...DEFAULT_ZIYODA_PROMPTS, ...data }))
+        .catch(() => setZiyodaPrompts({ ...DEFAULT_ZIYODA_PROMPTS }))
         .finally(() => setPromptsLoading(false));
     }
   }, [tab, uploadSuccess, pasteSuccess, reindexProgress?.done]);
@@ -276,6 +291,9 @@ function AdminAIPageContent() {
         unavailableUzLabel: 'Unavailable (UZ)',
         emptyKbRuLabel: 'Empty knowledge base (RU)',
         emptyKbUzLabel: 'Empty knowledge base (UZ)',
+        maxChunksLabel: 'Max chunks (context)',
+        maxContextCharsLabel: 'Max context chars',
+        maxContextMsgLenLabel: 'Max context msg len',
         savePrompts: 'Save prompts',
       };
     }
@@ -323,6 +341,9 @@ function AdminAIPageContent() {
         unavailableUzLabel: "Mavjud emas (UZ)",
         emptyKbRuLabel: "Bo'sh baza (RU)",
         emptyKbUzLabel: "Bo'sh baza (UZ)",
+        maxChunksLabel: 'Maks bloklar',
+        maxContextCharsLabel: 'Maks kontekst belgilari',
+        maxContextMsgLenLabel: 'Maks xabar uzunligi',
         savePrompts: "Promptlarni saqlash",
       };
     }
@@ -369,6 +390,9 @@ function AdminAIPageContent() {
       unavailableUzLabel: 'Временно недоступна (UZ)',
       emptyKbRuLabel: 'Пустая база знаний (RU)',
       emptyKbUzLabel: 'Пустая база знаний (UZ)',
+      maxChunksLabel: 'Макс. чанков (контекст)',
+      maxContextCharsLabel: 'Макс. символов контекста',
+      maxContextMsgLenLabel: 'Макс. длина сообщения в контексте',
       savePrompts: 'Сохранить промпты',
     };
   }, [language]);
@@ -854,7 +878,7 @@ function AdminAIPageContent() {
                       <div>
                         <label className="block text-xs font-medium text-slate-600">{copy.systemInstructionLabel}</label>
                         <textarea
-                          value={ziyodaPrompts.system_instruction ?? ''}
+                          value={ziyodaPrompts.system_instruction ?? DEFAULT_ZIYODA_PROMPTS.system_instruction}
                           onChange={(e) => setZiyodaPrompts((p) => ({ ...p, system_instruction: e.target.value }))}
                           rows={4}
                           className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
@@ -865,7 +889,7 @@ function AdminAIPageContent() {
                         <label className="block text-xs font-medium text-slate-600">{copy.fallbackRuLabel}</label>
                         <input
                           type="text"
-                          value={ziyodaPrompts.fallback_ru ?? ''}
+                          value={ziyodaPrompts.fallback_ru ?? DEFAULT_ZIYODA_PROMPTS.fallback_ru}
                           onChange={(e) => setZiyodaPrompts((p) => ({ ...p, fallback_ru: e.target.value }))}
                           className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                         />
@@ -874,7 +898,7 @@ function AdminAIPageContent() {
                         <label className="block text-xs font-medium text-slate-600">{copy.fallbackUzLabel}</label>
                         <input
                           type="text"
-                          value={ziyodaPrompts.fallback_uz ?? ''}
+                          value={ziyodaPrompts.fallback_uz ?? DEFAULT_ZIYODA_PROMPTS.fallback_uz}
                           onChange={(e) => setZiyodaPrompts((p) => ({ ...p, fallback_uz: e.target.value }))}
                           className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                         />
@@ -883,7 +907,7 @@ function AdminAIPageContent() {
                         <label className="block text-xs font-medium text-slate-600">{copy.unavailableRuLabel}</label>
                         <input
                           type="text"
-                          value={ziyodaPrompts.unavailable_ru ?? ''}
+                          value={ziyodaPrompts.unavailable_ru ?? DEFAULT_ZIYODA_PROMPTS.unavailable_ru}
                           onChange={(e) => setZiyodaPrompts((p) => ({ ...p, unavailable_ru: e.target.value }))}
                           className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                         />
@@ -892,7 +916,7 @@ function AdminAIPageContent() {
                         <label className="block text-xs font-medium text-slate-600">{copy.unavailableUzLabel}</label>
                         <input
                           type="text"
-                          value={ziyodaPrompts.unavailable_uz ?? ''}
+                          value={ziyodaPrompts.unavailable_uz ?? DEFAULT_ZIYODA_PROMPTS.unavailable_uz}
                           onChange={(e) => setZiyodaPrompts((p) => ({ ...p, unavailable_uz: e.target.value }))}
                           className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                         />
@@ -901,7 +925,7 @@ function AdminAIPageContent() {
                         <label className="block text-xs font-medium text-slate-600">{copy.emptyKbRuLabel}</label>
                         <input
                           type="text"
-                          value={ziyodaPrompts.empty_kb_ru ?? ''}
+                          value={ziyodaPrompts.empty_kb_ru ?? DEFAULT_ZIYODA_PROMPTS.empty_kb_ru}
                           onChange={(e) => setZiyodaPrompts((p) => ({ ...p, empty_kb_ru: e.target.value }))}
                           className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                         />
@@ -910,8 +934,38 @@ function AdminAIPageContent() {
                         <label className="block text-xs font-medium text-slate-600">{copy.emptyKbUzLabel}</label>
                         <input
                           type="text"
-                          value={ziyodaPrompts.empty_kb_uz ?? ''}
+                          value={ziyodaPrompts.empty_kb_uz ?? DEFAULT_ZIYODA_PROMPTS.empty_kb_uz}
                           onChange={(e) => setZiyodaPrompts((p) => ({ ...p, empty_kb_uz: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600">{copy.maxChunksLabel}</label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={ziyodaPrompts.max_chunks ?? DEFAULT_ZIYODA_PROMPTS.max_chunks}
+                          onChange={(e) => setZiyodaPrompts((p) => ({ ...p, max_chunks: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600">{copy.maxContextCharsLabel}</label>
+                        <input
+                          type="number"
+                          min={500}
+                          value={ziyodaPrompts.max_context_chars ?? DEFAULT_ZIYODA_PROMPTS.max_context_chars}
+                          onChange={(e) => setZiyodaPrompts((p) => ({ ...p, max_context_chars: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600">{copy.maxContextMsgLenLabel}</label>
+                        <input
+                          type="number"
+                          min={100}
+                          value={ziyodaPrompts.max_context_msg_len ?? DEFAULT_ZIYODA_PROMPTS.max_context_msg_len}
+                          onChange={(e) => setZiyodaPrompts((p) => ({ ...p, max_context_msg_len: e.target.value }))}
                           className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                         />
                       </div>

@@ -6,6 +6,7 @@ export type AccessSettings = {
   allowFreeAttempts: boolean;
   freeDailyLimit: number;
   freeOralDailyLimit: number;
+  botAiDailyLimitFree: number;
   showAnswersWithoutSubscription: boolean;
   oneTimePrice: number;
   showAnswersForOneTime: boolean;
@@ -20,6 +21,7 @@ const DEFAULT_SETTINGS: AccessSettings = {
   allowFreeAttempts: true,
   freeDailyLimit: 1,
   freeOralDailyLimit: 5,
+  botAiDailyLimitFree: 3,
   showAnswersWithoutSubscription: false,
   oneTimePrice: 15000,
   showAnswersForOneTime: false,
@@ -44,6 +46,7 @@ export async function getAccessSettings(): Promise<AccessSettings> {
       allowFreeAttempts: existing.allowFreeAttempts,
       freeDailyLimit: existing.freeDailyLimit,
       freeOralDailyLimit: existing.freeOralDailyLimit,
+      botAiDailyLimitFree: (existing as { botAiDailyLimitFree?: number }).botAiDailyLimitFree ?? DEFAULT_SETTINGS.botAiDailyLimitFree,
       showAnswersWithoutSubscription: existing.showAnswersWithoutSubscription,
       oneTimePrice: existing.oneTimePrice,
       showAnswersForOneTime: existing.showAnswersForOneTime,
@@ -55,7 +58,15 @@ export async function getAccessSettings(): Promise<AccessSettings> {
   const created = await prisma.accessSettings.create({
     data: {
       id: SETTINGS_ID,
-      ...DEFAULT_SETTINGS,
+      subscriptionPrice: DEFAULT_SETTINGS.subscriptionPrice,
+      subscriptionDurationDays: DEFAULT_SETTINGS.subscriptionDurationDays,
+      allowFreeAttempts: DEFAULT_SETTINGS.allowFreeAttempts,
+      freeDailyLimit: DEFAULT_SETTINGS.freeDailyLimit,
+      freeOralDailyLimit: DEFAULT_SETTINGS.freeOralDailyLimit,
+      botAiDailyLimitFree: DEFAULT_SETTINGS.botAiDailyLimitFree,
+      showAnswersWithoutSubscription: DEFAULT_SETTINGS.showAnswersWithoutSubscription,
+      oneTimePrice: DEFAULT_SETTINGS.oneTimePrice,
+      showAnswersForOneTime: DEFAULT_SETTINGS.showAnswersForOneTime,
     },
   });
 
@@ -65,6 +76,7 @@ export async function getAccessSettings(): Promise<AccessSettings> {
     allowFreeAttempts: created.allowFreeAttempts,
     freeDailyLimit: created.freeDailyLimit,
     freeOralDailyLimit: created.freeOralDailyLimit,
+    botAiDailyLimitFree: (created as { botAiDailyLimitFree?: number }).botAiDailyLimitFree ?? DEFAULT_SETTINGS.botAiDailyLimitFree,
     showAnswersWithoutSubscription: created.showAnswersWithoutSubscription,
     oneTimePrice: created.oneTimePrice,
     showAnswersForOneTime: created.showAnswersForOneTime,
@@ -89,6 +101,7 @@ export async function updateAccessSettings(
     allowFreeAttempts: updated.allowFreeAttempts,
     freeDailyLimit: updated.freeDailyLimit,
     freeOralDailyLimit: updated.freeOralDailyLimit,
+    botAiDailyLimitFree: (updated as { botAiDailyLimitFree?: number }).botAiDailyLimitFree ?? DEFAULT_SETTINGS.botAiDailyLimitFree,
     showAnswersWithoutSubscription: updated.showAnswersWithoutSubscription,
     oneTimePrice: updated.oneTimePrice,
     showAnswersForOneTime: updated.showAnswersForOneTime,

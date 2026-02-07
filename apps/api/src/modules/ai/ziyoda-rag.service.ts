@@ -9,16 +9,27 @@ import { getEmbedding, findTopK } from './embedding';
 import { generateForZiyoda } from './ziyoda-llm.client';
 import { getZiyodaPrompts, DEFAULT_PROMPTS } from './ziyoda-prompts.service';
 
-/** Лимиты контекста (увеличены для качества ответов) */
-const MAX_CONTEXT_MSG_LEN = 500;
-const MAX_CHUNKS = 6;
-const MAX_CONTEXT_CHARS = 4000;
+/** Лимиты по умолчанию (переопределяются из промптов в БД: max_chunks, max_context_chars, max_context_msg_len) */
+const DEFAULT_MAX_CONTEXT_MSG_LEN = 500;
+const DEFAULT_MAX_CHUNKS = 6;
+const DEFAULT_MAX_CONTEXT_CHARS = 4000;
+
+function getIntPrompt(prompts: Record<string, string>, key: string, def: number): number {
+  const v = prompts[key];
+  if (v === undefined || v === null) return def;
+  const n = parseInt(String(v).trim(), 10);
+  return Number.isFinite(n) && n > 0 ? n : def;
+}
 
 export type ZiyodaLang = 'ru' | 'uz';
+
+/** Узбекская кириллица: ӯ ғ қ ҳ ҷ ў (в русском нет). Если есть — считаем язык узбекским. */
+const UZBEK_CYRILLIC = /[\u04E6\u0493\u049B\u04B3\u04B7\u04E9]/; // ӯ ғ қ ҳ ҷ ў
 
 export function detectLang(text: string): ZiyodaLang {
   const trimmed = text.trim();
   if (!trimmed) return 'ru';
+  if (UZBEK_CYRILLIC.test(trimmed)) return 'uz';
   let cyrillic = 0;
   let latin = 0;
   for (const ch of trimmed) {
@@ -42,12 +53,15 @@ function buildPrompt(
   question: string,
   previousExchange?: { user: string; bot: string }
 ): string {
+  const maxChunks = getIntPrompt(prompts, 'max_chunks', DEFAULT_MAX_CHUNKS);
+  const maxContextChars = getIntPrompt(prompts, 'max_context_chars', DEFAULT_MAX_CONTEXT_CHARS);
+  const maxContextMsgLen = getIntPrompt(prompts, 'max_context_msg_len', DEFAULT_MAX_CONTEXT_MSG_LEN);
   let contextText =
     contextChunks.length > 0
-      ? contextChunks.slice(0, MAX_CHUNKS).join('\n\n')
+      ? contextChunks.slice(0, maxChunks).join('\n\n')
       : '';
-  if (contextText.length > MAX_CONTEXT_CHARS) {
-    contextText = contextText.slice(0, MAX_CONTEXT_CHARS);
+  if (contextText.length > maxContextChars) {
+    contextText = contextText.slice(0, maxContextChars);
   }
   const langLabel = lang === 'uz' ? 'uz' : 'ru';
   const fallback = lang === 'uz' ? (prompts.fallback_uz ?? DEFAULT_PROMPTS.fallback_uz) : (prompts.fallback_ru ?? DEFAULT_PROMPTS.fallback_ru);
@@ -57,7 +71,7 @@ function buildPrompt(
     .replace(/\{fallback\}/g, fallback);
 
   const recentContext = previousExchange
-    ? `\nPrev: User: ${truncateForContext(previousExchange.user, MAX_CONTEXT_MSG_LEN)}\nBot: ${truncateForContext(previousExchange.bot, MAX_CONTEXT_MSG_LEN)}\n`
+    ? `\nPrev: User: ${truncateForContext(previousExchange.user, maxContextMsgLen)}\nBot: ${truncateForContext(previousExchange.bot, maxContextMsgLen)}\n`
     : '';
 
   return `${systemPart}${recentContext}
@@ -112,6 +126,7 @@ export async function askZiyoda(
       return lang === 'uz' ? emptyKbUz : emptyKbRu;
     }
 
+    const maxChunks = getIntPrompt(prompts, 'max_chunks', DEFAULT_MAX_CHUNKS);
     const top = findTopK(
       queryEmbedding,
       entries.map((e) => ({
@@ -119,7 +134,7 @@ export async function askZiyoda(
         content: e.content,
         embedding: e.embedding,
       })),
-      MAX_CHUNKS
+      maxChunks
     );
     const contextChunks = top.map((e) => e.content);
 
@@ -127,10 +142,11 @@ export async function askZiyoda(
       console.warn('[ziyoda-rag] Нет подходящих чанков (возможно, эмбеддинги другой размерности или модель изменилась). Запрос:', trimmed.slice(0, 80));
     }
 
+    const maxContextMsgLen = getIntPrompt(prompts, 'max_context_msg_len', DEFAULT_MAX_CONTEXT_MSG_LEN);
     const previousExchange = hasContext && user.previousUserMessage && user.previousBotMessage
       ? {
-          user: truncateForContext(user.previousUserMessage, MAX_CONTEXT_MSG_LEN),
-          bot: truncateForContext(user.previousBotMessage, MAX_CONTEXT_MSG_LEN),
+          user: truncateForContext(user.previousUserMessage, maxContextMsgLen),
+          bot: truncateForContext(user.previousBotMessage, maxContextMsgLen),
         }
       : undefined;
     const prompt = buildPrompt(prompts, lang, firstName, contextChunks, trimmed, previousExchange);

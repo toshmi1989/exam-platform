@@ -12,6 +12,9 @@ export const ZIYODA_PROMPT_KEYS = [
   'unavailable_uz',
   'empty_kb_ru',
   'empty_kb_uz',
+  'max_chunks',
+  'max_context_chars',
+  'max_context_msg_len',
 ] as const;
 
 export type ZiyodaPromptKey = (typeof ZIYODA_PROMPT_KEYS)[number];
@@ -25,6 +28,9 @@ export const DEFAULT_PROMPTS: Record<ZiyodaPromptKey, string> = {
   unavailable_uz: "Ziyoda vaqtincha mavjud emas. Keyinroq urunib ko'ring.",
   empty_kb_ru: 'База знаний ZiyoMed пока пуста. Обратитесь к администратору для загрузки материалов.',
   empty_kb_uz: "ZiyoMed bilim bazasi hali bo'sh. Materiallarni yuklash uchun administratorga murojaat qiling.",
+  max_chunks: '6',
+  max_context_chars: '4000',
+  max_context_msg_len: '500',
 };
 
 export async function getZiyodaPrompts(): Promise<Record<string, string>> {
@@ -41,11 +47,11 @@ export async function getZiyodaPrompts(): Promise<Record<string, string>> {
 export async function setZiyodaPrompts(prompts: Record<string, string>): Promise<void> {
   for (const key of ZIYODA_PROMPT_KEYS) {
     const value = prompts[key];
-    if (typeof value === 'string') {
+    if (typeof value === 'string' && value.trim() !== '') {
       await prisma.ziyodaPrompt.upsert({
         where: { key },
-        create: { key, value },
-        update: { value },
+        create: { key, value: value.trim() },
+        update: { value: value.trim() },
       });
     }
   }

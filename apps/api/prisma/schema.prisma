@@ -204,10 +204,19 @@ model AccessSettings {
   allowFreeAttempts           Boolean
   freeDailyLimit              Int
   freeOralDailyLimit          Int     @default(5)
+  botAiDailyLimitFree         Int     @default(3)
   showAnswersWithoutSubscription Boolean
   oneTimePrice                Int
   showAnswersForOneTime        Boolean
   updatedAt                   DateTime @updatedAt
+}
+
+model BotAiRequestLog {
+  id        String   @id @default(cuid())
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model OralAccessLog {
