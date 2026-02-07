@@ -272,6 +272,10 @@ export async function previewOralQuestionBank(params: {
   };
 }
 
+// Unique exam key: (title, categoryId). One sheet produces one exam per column (category),
+// so the same direction name appears in multiple exams (e.g. nurses: 3 categories = 3 exams per sheet).
+// overwrite: upsert exam, delete existing ORAL questions, create new — no duplicate exams.
+// add: skip (title, categoryId) if exam already exists; only create new directions.
 export async function importOralQuestionBank(params: {
   profession: Profession;
   fileBase64: string;

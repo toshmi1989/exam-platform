@@ -149,13 +149,19 @@ export interface PrewarmProgress {
 
 /**
  * Pre-generate explanations for questions in the language of each question's exam.
- * One explanation per question (lang = exam language). Skip when hash matches.
+ * mode 'missing': skip when hash matches. mode 'all': regenerate all (overwrite).
  */
 export async function* prewarm(
   examId?: string,
-  langFilter?: AiLang
+  langFilter?: AiLang,
+  options?: { mode?: 'missing' | 'all' }
 ): AsyncGenerator<PrewarmProgress, void, unknown> {
-  const where: { examId?: string; exam?: { language: 'RU' | 'UZ' } } = examId ? { examId } : {};
+  const regenerateAll = options?.mode === 'all';
+  const where: {
+    examId?: string;
+    type?: 'TEST';
+    exam?: { language: 'RU' | 'UZ' };
+  } = examId ? { examId, type: 'TEST' } : { type: 'TEST' };
   if (langFilter) {
     where.exam = { language: langFilter === 'uz' ? 'UZ' : 'RU' };
   }
@@ -189,7 +195,7 @@ export async function* prewarm(
       where: { questionId: question.id },
     });
 
-    if (existing && existing.hash === hash) {
+    if (!regenerateAll && existing && existing.hash === hash) {
       skipped += 1;
     } else {
       try {
@@ -316,6 +322,7 @@ export async function getOrCreateOralAnswer(
 export interface OralStatsByExam {
   examId: string;
   title: string;
+  category?: string;
   total: number;
   withAnswer: number;
 }
@@ -335,7 +342,7 @@ export async function getOralStats(): Promise<OralStats> {
     }),
     prisma.exam.findMany({
       where: { type: 'ORAL' },
-      select: { id: true, title: true },
+      select: { id: true, title: true, category: { select: { name: true } } },
       orderBy: { title: 'asc' },
     }),
   ]);
@@ -352,7 +359,13 @@ export async function getOralStats(): Promise<OralStats> {
     const examQuestions = questions.filter((q) => q.examId === exam.id);
     const total = examQuestions.length;
     const withA = examQuestions.filter((q) => withAnswerSet.has(q.id)).length;
-    return { examId: exam.id, title: exam.title, total, withAnswer: withA };
+    return {
+      examId: exam.id,
+      title: exam.title,
+      category: exam.category?.name,
+      total,
+      withAnswer: withA,
+    };
   });
 
   return { totalOralQuestions, withAnswer, missing, byExam };

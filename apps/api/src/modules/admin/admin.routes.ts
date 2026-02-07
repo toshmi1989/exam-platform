@@ -46,27 +46,41 @@ router.get('/stats', async (_req, res) => {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const endOfToday = new Date(startOfToday);
   endOfToday.setDate(endOfToday.getDate() + 1);
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-  const [totalUsers, activeSubscriptions, attemptsToday, totalAttempts] =
-    await Promise.all([
-      prisma.user.count(),
-      prisma.userSubscription.count({
-        where: {
-          status: 'ACTIVE',
-          startsAt: { lte: now },
-          endsAt: { gt: now },
-        },
-      }),
-      prisma.examAttempt.count({
-        where: {
-          status: { in: ['SUBMITTED', 'COMPLETED'] },
-          submittedAt: { not: null, gte: startOfToday, lt: endOfToday },
-        },
-      }),
-      prisma.examAttempt.count({
-        where: { status: { in: ['SUBMITTED', 'COMPLETED'] } },
-      }),
-    ]);
+  const [
+    totalUsers,
+    activeSubscriptions,
+    attemptsToday,
+    totalAttempts,
+    subscriptionsToday,
+    subscriptionsThisMonth,
+  ] = await Promise.all([
+    prisma.user.count(),
+    prisma.userSubscription.count({
+      where: {
+        status: 'ACTIVE',
+        startsAt: { lte: now },
+        endsAt: { gt: now },
+      },
+    }),
+    prisma.examAttempt.count({
+      where: {
+        status: { in: ['SUBMITTED', 'COMPLETED'] },
+        submittedAt: { not: null, gte: startOfToday, lt: endOfToday },
+      },
+    }),
+    prisma.examAttempt.count({
+      where: { status: { in: ['SUBMITTED', 'COMPLETED'] } },
+    }),
+    prisma.userSubscription.count({
+      where: { createdAt: { gte: startOfToday, lt: endOfToday } },
+    }),
+    prisma.userSubscription.count({
+      where: { createdAt: { gte: startOfMonth, lt: endOfMonth } },
+    }),
+  ]);
 
   const conversion =
     totalAttempts > 0
@@ -78,6 +92,8 @@ router.get('/stats', async (_req, res) => {
     activeSubscriptions,
     attemptsToday,
     conversion,
+    subscriptionsToday,
+    subscriptionsThisMonth,
   });
 });
 
@@ -113,19 +129,55 @@ router.get('/analytics', async (_req, res) => {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, count]) => ({ date, count }));
 
+  const uniqueExamIds = [...new Set(attempts.map((a) => a.examId))];
+  const examTypes =
+    uniqueExamIds.length > 0
+      ? await prisma.exam.findMany({
+          where: { id: { in: uniqueExamIds } },
+          select: { id: true, type: true },
+        })
+      : [];
+  const examTypeMap = Object.fromEntries(examTypes.map((e) => [e.id, e.type]));
+
   const byExam: Record<string, number> = {};
+  const byExamOral: Record<string, number> = {};
   for (const a of attempts) {
-    byExam[a.examId] = (byExam[a.examId] ?? 0) + 1;
+    const type = examTypeMap[a.examId];
+    if (type === 'ORAL') {
+      byExamOral[a.examId] = (byExamOral[a.examId] ?? 0) + 1;
+    } else {
+      byExam[a.examId] = (byExam[a.examId] ?? 0) + 1;
+    }
   }
   const examIds = Object.entries(byExam)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 10)
     .map(([id]) => id);
-  const exams = await prisma.exam.findMany({
-    where: { id: { in: examIds } },
-    select: { id: true, title: true },
-  });
+  const oralExamIds = Object.entries(byExamOral)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 10)
+    .map(([id]) => id);
+  const [exams, oralExams] = await Promise.all([
+    examIds.length
+      ? prisma.exam.findMany({
+          where: { id: { in: examIds } },
+          select: { id: true, title: true },
+        })
+      : [],
+    oralExamIds.length
+      ? prisma.exam.findMany({
+          where: { id: { in: oralExamIds } },
+          select: { id: true, title: true, category: { select: { name: true } } },
+        })
+      : [],
+  ]);
   const examMap = Object.fromEntries(exams.map((e) => [e.id, e.title]));
+  const oralExamMap = Object.fromEntries(
+    oralExams.map((e) => [
+      e.id,
+      { title: e.title, category: e.category?.name },
+    ])
+  );
   const topExams = Object.entries(byExam)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 10)
@@ -134,6 +186,17 @@ router.get('/analytics', async (_req, res) => {
       title: examMap[examId] ?? examId,
       attemptCount,
     }));
+  const topOralExams = Object.entries(byExamOral)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 10)
+    .map(([examId, attemptCount]) => {
+      const oral = oralExamMap[examId];
+      const title =
+        oral?.category != null
+          ? `${oral.title} (${oral.category})`
+          : oral?.title ?? examId;
+      return { examId, title, attemptCount };
+    });
 
   const [totalUsers, activeSubscriptions] = await Promise.all([
     prisma.user.count(),
@@ -153,6 +216,7 @@ router.get('/analytics', async (_req, res) => {
   res.json({
     attemptsByDay,
     topExams,
+    topOralExams,
     conversion,
   });
 });
@@ -300,17 +364,18 @@ router.post('/users/:telegramId/one-time/revoke', async (req, res) => {
 
 router.get('/exams', async (req, res) => {
   const search = String(req.query.search ?? '').trim();
-  const where: Prisma.ExamWhereInput | undefined = search
-    ? {
-        OR: [
-          { title: { contains: search, mode: Prisma.QueryMode.insensitive } },
-          { direction: { contains: search, mode: Prisma.QueryMode.insensitive } },
-          { category: { name: { contains: search, mode: Prisma.QueryMode.insensitive } } },
-        ],
-      }
-    : undefined;
+  const typeFilter = req.query.type === 'ORAL' ? 'ORAL' : req.query.type === 'TEST' ? 'TEST' : undefined;
+  const where: Prisma.ExamWhereInput = {};
+  if (typeFilter) where.type = typeFilter;
+  if (search) {
+    where.OR = [
+      { title: { contains: search, mode: Prisma.QueryMode.insensitive } },
+      { direction: { contains: search, mode: Prisma.QueryMode.insensitive } },
+      { category: { name: { contains: search, mode: Prisma.QueryMode.insensitive } } },
+    ];
+  }
   const exams = await prisma.exam.findMany({
-    where,
+    where: Object.keys(where).length > 0 ? where : undefined,
     include: {
       category: true,
       _count: { select: { questions: true } },
@@ -668,6 +733,7 @@ router.get('/ai/stats', async (_req, res) => {
 router.post('/ai/prewarm/stream', async (req, res) => {
   const examId = typeof req.body?.examId === 'string' ? req.body.examId.trim() : undefined;
   const lang = req.body?.lang === 'uz' ? 'uz' : req.body?.lang === 'ru' ? 'ru' : undefined;
+  const mode = req.body?.mode === 'all' ? ('all' as const) : ('missing' as const);
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -676,7 +742,7 @@ router.post('/ai/prewarm/stream', async (req, res) => {
   res.flushHeaders?.();
 
   try {
-    for await (const progress of prewarm(examId, lang)) {
+    for await (const progress of prewarm(examId, lang, { mode })) {
       res.write(`data: ${JSON.stringify(progress)}\n\n`);
       if (typeof (res as unknown as { flush?: () => void }).flush === 'function') {
         (res as unknown as { flush: () => void }).flush();

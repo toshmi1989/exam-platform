@@ -20,6 +20,8 @@ export default function AdminDashboardPage() {
     activeSubscriptions: number;
     attemptsToday: number;
     conversion: number;
+    subscriptionsToday: number;
+    subscriptionsThisMonth: number;
   } | null>(null);
 
   useEffect(() => {
@@ -99,6 +101,18 @@ export default function AdminDashboardPage() {
                 <p className="text-sm text-slate-500">{copy.conversion}</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-900">
                   {stats != null ? `${stats.conversion}%` : '—'}
+                </p>
+              </Card>
+              <Card>
+                <p className="text-sm text-slate-500">{copy.subsToday}</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-900">
+                  {stats != null ? stats.subscriptionsToday : '—'}
+                </p>
+              </Card>
+              <Card>
+                <p className="text-sm text-slate-500">{copy.subsThisMonth}</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-900">
+                  {stats != null ? stats.subscriptionsThisMonth : '—'}
                 </p>
               </Card>
               <Card className="sm:col-span-2">

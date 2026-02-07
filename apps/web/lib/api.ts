@@ -225,6 +225,8 @@ export interface AdminStats {
   activeSubscriptions: number;
   attemptsToday: number;
   conversion: number;
+  subscriptionsToday: number;
+  subscriptionsThisMonth: number;
 }
 
 export async function getAdminStats(): Promise<AdminStats> {
@@ -239,6 +241,8 @@ export async function getAdminStats(): Promise<AdminStats> {
       activeSubscriptions: 0,
       attemptsToday: 0,
       conversion: 0,
+      subscriptionsToday: 0,
+      subscriptionsThisMonth: 0,
     }
   );
 }
@@ -246,6 +250,7 @@ export async function getAdminStats(): Promise<AdminStats> {
 export interface AdminAnalytics {
   attemptsByDay: { date: string; count: number }[];
   topExams: { examId: string; title: string; attemptCount: number }[];
+  topOralExams: { examId: string; title: string; attemptCount: number }[];
   conversion: { subscribed: number; total: number };
 }
 
@@ -259,6 +264,7 @@ export async function getAdminAnalytics(): Promise<AdminAnalytics> {
     payload ?? {
       attemptsByDay: [],
       topExams: [],
+      topOralExams: [],
       conversion: { subscribed: 0, total: 0 },
     }
   );
@@ -482,6 +488,7 @@ export async function streamPrewarm(
 export interface AdminOralStatsByExam {
   examId: string;
   title: string;
+  category?: string;
   total: number;
   withAnswer: number;
 }

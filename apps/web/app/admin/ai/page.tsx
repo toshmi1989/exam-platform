@@ -22,7 +22,7 @@ import { API_BASE_URL } from '../../../lib/api/config';
 import { readTelegramUser } from '../../../lib/telegramUser';
 
 type AiTab = 'test' | 'oral';
-type ExamOption = { id: string; title: string };
+type ExamOption = { id: string; title: string; type?: string; category?: string };
 
 function streamPrewarmFetch(
   url: string,
@@ -133,8 +133,8 @@ function AdminAIPageContent() {
     if (t === 'oral' || t === 'test') setTab(t);
   }, [searchParams]);
 
-  // Shared
-  const [exams, setExams] = useState<ExamOption[]>([]);
+  const [testExams, setTestExams] = useState<ExamOption[]>([]);
+  const [oralExams, setOralExams] = useState<ExamOption[]>([]);
 
   // Test state
   const [testExamId, setTestExamId] = useState('');
@@ -163,12 +163,18 @@ function AdminAIPageContent() {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     const user = readTelegramUser();
     if (user?.telegramId) headers['x-telegram-id'] = user.telegramId;
-    fetch(`${API_BASE_URL}/admin/exams?search=`, { headers })
-      .then((r) => r.json())
-      .then((data: { items?: { id: string; title: string }[] }) => {
-        setExams(data?.items ?? []);
+    Promise.all([
+      fetch(`${API_BASE_URL}/admin/exams?search=&type=TEST`, { headers }).then((r) => r.json()),
+      fetch(`${API_BASE_URL}/admin/exams?search=&type=ORAL`, { headers }).then((r) => r.json()),
+    ])
+      .then(([testData, oralData]) => {
+        setTestExams((testData as { items?: ExamOption[] })?.items ?? []);
+        setOralExams((oralData as { items?: ExamOption[] })?.items ?? []);
       })
-      .catch(() => setExams([]));
+      .catch(() => {
+        setTestExams([]);
+        setOralExams([]);
+      });
   }, []);
 
   useEffect(() => {
@@ -252,13 +258,16 @@ function AdminAIPageContent() {
     };
   }, [language]);
 
-  const handleTestStart = useCallback(() => {
+  const handleTestStart = useCallback((mode: 'missing' | 'all') => {
     if (testRunning) return;
     setTestRunning(true);
     setTestError(null);
     setTestProgress(null);
     testAbortRef.current = new AbortController();
-    const params = { examId: testExamId.trim() || undefined };
+    const params = {
+      examId: testExamId.trim() || undefined,
+      mode,
+    };
     streamPrewarmFetch(
       `${API_BASE_URL}/admin/ai/prewarm/stream`,
       params,
@@ -370,14 +379,26 @@ function AdminAIPageContent() {
                         className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-[#2AABEE] disabled:opacity-60"
                       >
                         <option value="">{copy.all}</option>
-                        {exams.map((exam) => (
+                        {testExams.map((exam) => (
                           <option key={exam.id} value={exam.id}>{exam.title}</option>
                         ))}
                       </select>
                     </div>
-                    <div className="flex gap-2">
-                      <Button type="button" onClick={handleTestStart} disabled={testRunning}>
-                        ⚡ {copy.generate}
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        onClick={() => handleTestStart('missing')}
+                        disabled={testRunning}
+                      >
+                        ⚡ {copy.generateMissing}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => handleTestStart('all')}
+                        disabled={testRunning}
+                      >
+                        🔄 {copy.generateAll}
                       </Button>
                       {testRunning && (
                         <Button type="button" variant="secondary" onClick={handleTestStop}>
@@ -417,12 +438,15 @@ function AdminAIPageContent() {
                       <div className="mt-4">
                         <p className="mb-2 text-xs font-medium text-slate-500">{copy.statsByExam}</p>
                         <ul className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-slate-100 bg-slate-50/50 p-2 text-sm">
-                          {oralStats.byExam.map((row) => (
-                            <li key={row.examId} className="flex items-center justify-between gap-2 py-1">
-                              <span className="min-w-0 truncate text-slate-700" title={row.title}>{row.title}</span>
-                              <span className="shrink-0 tabular-nums text-slate-600">{row.withAnswer} / {row.total}</span>
-                            </li>
-                          ))}
+                          {oralStats.byExam.map((row) => {
+                            const label = row.category ? `${row.title} (${row.category})` : row.title;
+                            return (
+                              <li key={row.examId} className="flex items-center justify-between gap-2 py-1">
+                                <span className="min-w-0 truncate text-slate-700" title={label}>{label}</span>
+                                <span className="shrink-0 tabular-nums text-slate-600">{row.withAnswer} / {row.total}</span>
+                              </li>
+                            );
+                          })}
                         </ul>
                       </div>
                     )}
@@ -439,9 +463,12 @@ function AdminAIPageContent() {
                         className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-[#2AABEE] disabled:opacity-60"
                       >
                         <option value="">{copy.all}</option>
-                        {exams.map((exam) => (
-                          <option key={exam.id} value={exam.id}>{exam.title}</option>
-                        ))}
+                        {oralExams.map((exam) => {
+                          const label = exam.category ? `${exam.title} (${exam.category})` : exam.title;
+                          return (
+                            <option key={exam.id} value={exam.id}>{label}</option>
+                          );
+                        })}
                       </select>
                     </div>
                     <div className="flex flex-wrap gap-2">
