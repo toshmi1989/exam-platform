@@ -14,8 +14,8 @@ import {
   getAdminAiStats,
   getAdminOralStats,
   getKnowledgeStats,
-  getKnowledgeEntries,
-  deleteKnowledgeEntry,
+  getKnowledgeFiles,
+  deleteKnowledgeBySource,
   getZiyodaPrompts,
   updateZiyodaPrompts,
   addTextToKnowledge,
@@ -27,7 +27,7 @@ import {
   type PrewarmProgress,
   type OralPrewarmProgress,
   type KnowledgeStats,
-  type KnowledgeEntryItem,
+  type KnowledgeFileItem,
   type ReindexProgress,
   type ZiyodaPrompts,
 } from '../../../lib/api';
@@ -40,9 +40,19 @@ type ExamOption = { id: string; title: string; type?: string; category?: string 
 /** Промпты Зиёды по умолчанию (уже в полях, можно только править). */
 const DEFAULT_ZIYODA_PROMPTS: ZiyodaPrompts = {
   system_instruction:
-    'Ziyoda, ассистент ZiyoMed. Главное: понимай суть вопроса и отвечай на основе фрагментов в <chunks>. Ищи в контексте любую связанную по смыслу информацию (темы: категории, требования, стаж, экзамены и т.д.) и обобщай своими словами. Фразу {fallback} используй ТОЛЬКО когда в контексте действительно нет ничего по теме вопроса. Если есть хотя бы частично подходящая информация — дай ответ по смыслу. Только если вопрос совсем неконкретный («расскажи про экзамен» без уточнения) — задай одно короткое уточнение. Язык ответа совпадает с языком вопроса. Начинай с обращения по имени (если передано): {name_greeting} Формат: короткий абзац, затем пункты при необходимости. Без длинных текстов. Учитывай предыдущий обмен (медсёстры = hamshira, врачи = shifokor).',
-  fallback_ru: 'К сожалению, в официальных материалах ZiyoMed это не указано.',
-  fallback_uz: "Afsuski, ZiyoMed rasmiy materiallarida bu ko'rsatilmagan.",
+    `Ты — Зиёда, виртуальный помощник медицинской платформы ZiyoMed.
+
+Твоя задача: помогать пользователям разбираться в экзаменах, аттестации и работе платформы; отвечать ТОЛЬКО на основе переданного контекста в <chunks>; если информации нет — честно сказать; если вопрос неясный — задать уточняющий вопрос.
+
+СТРОГО ЗАПРЕЩЕНО: выдумывать факты; использовать знания вне контекста; отвечать абстрактно; писать длинные эссе.
+
+Если в контексте нет ответа, говори точно: {fallback}
+
+Правила: (1) Всегда начинай с короткого обращения по имени (если передано): {name_greeting} (2) Язык ответа совпадает с языком вопроса ({lang}). (3) Формат: короткий абзац, затем пункты при необходимости. Пример: 🧠 Кратко • ... 📘 Детали • ... (4) Если вопрос слишком общий — не отвечай сразу, задай уточнение (например: «Вы про устный экзамен или тестирование?»). (5) При нескольких трактовках — предложи варианты. (6) Вопросы о платформе — только из контекста; об аттестации — только из нормативных документов в контексте.
+
+Максимум 8 предложений. Без воды, без философии, без повтора вопроса. Учитывай предыдущий обмен (медсёстры = hamshira, врачи = shifokor). Ты — практичный медицинский консультант.`,
+  fallback_ru: 'В базе Зиёды нет этой информации. Можешь уточнить вопрос?',
+  fallback_uz: "Ziyoda bazasida bu haqda ma'lumot yo'q. Iltimos, savolni aniqlashtiring.",
   unavailable_ru: 'Зиёда временно недоступна. Попробуйте позже.',
   unavailable_uz: "Ziyoda vaqtincha mavjud emas. Keyinroq urunib ko'ring.",
   empty_kb_ru: 'База знаний ZiyoMed пока пуста. Обратитесь к администратору для загрузки материалов.',
@@ -199,8 +209,8 @@ function AdminAIPageContent() {
   const [pasteLoading, setPasteLoading] = useState(false);
   const [pasteSuccess, setPasteSuccess] = useState<string | null>(null);
   const [pasteError, setPasteError] = useState<string | null>(null);
-  const [knowledgeEntries, setKnowledgeEntries] = useState<KnowledgeEntryItem[]>([]);
-  const [entryDeletingId, setEntryDeletingId] = useState<string | null>(null);
+  const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeFileItem[]>([]);
+  const [fileDeletingSource, setFileDeletingSource] = useState<string | null>(null);
   const [ziyodaPrompts, setZiyodaPrompts] = useState<ZiyodaPrompts>(() => ({ ...DEFAULT_ZIYODA_PROMPTS }));
   const [promptsLoading, setPromptsLoading] = useState(false);
   const [promptsSaving, setPromptsSaving] = useState(false);
@@ -242,7 +252,7 @@ function AdminAIPageContent() {
   useEffect(() => {
     if (tab === 'ziyoda') {
       getKnowledgeStats().then(setKnowledgeStats).catch(() => setKnowledgeStats(null));
-      getKnowledgeEntries().then(setKnowledgeEntries).catch(() => setKnowledgeEntries([]));
+      getKnowledgeFiles().then(setKnowledgeFiles).catch(() => setKnowledgeFiles([]));
       setPromptsLoading(true);
       getZiyodaPrompts()
         .then((data) => setZiyodaPrompts({ ...DEFAULT_ZIYODA_PROMPTS, ...data }))
@@ -280,6 +290,7 @@ function AdminAIPageContent() {
         upload: 'Upload',
         uploadHint: 'PDF, DOCX, TXT',
         statsEntries: 'Chunks',
+        filesLabel: 'Files',
         statsCache: 'Cached answers',
         pasteLabel: 'Paste text',
         pastePlaceholder: 'Paste rules, FAQs, or any text here…',
@@ -335,6 +346,7 @@ function AdminAIPageContent() {
         upload: 'Yuklash',
         uploadHint: 'PDF, DOCX, TXT',
         statsEntries: 'Bloklar',
+        filesLabel: 'Fayllar',
         statsCache: 'Kesh javoblar',
         pasteLabel: "Matn qo'shish",
         pastePlaceholder: "Qoidalar, savol-javoblar yoki istalgan matnni shu yerga joylashtiring…",
@@ -389,6 +401,7 @@ function AdminAIPageContent() {
       upload: 'Загрузить',
       uploadHint: 'PDF, DOCX, TXT',
       statsEntries: 'Фрагментов',
+      filesLabel: 'Файлов',
       statsCache: 'Кэш ответов',
       pasteLabel: 'Вставить текст',
       pastePlaceholder: 'Вставьте сюда правила, ответы на вопросы или любой текст…',
@@ -695,43 +708,43 @@ function AdminAIPageContent() {
                 <Card>
                   <p className="text-sm font-medium text-slate-700">{copy.loadedMaterials}</p>
                   <p className="mt-1 text-xs text-slate-500">
-                    {copy.statsEntries}: {knowledgeEntries.length}. {copy.uploadHint}
+                    {copy.filesLabel}: {knowledgeFiles.length}. {copy.uploadHint}
                   </p>
-                  {knowledgeEntries.length === 0 ? (
+                  {knowledgeFiles.length === 0 ? (
                     <p className="mt-3 text-sm text-slate-500">{copy.pastePlaceholder}</p>
                   ) : (
                     <ul className="mt-3 space-y-2">
-                      {knowledgeEntries.map((entry) => (
+                      {knowledgeFiles.map((file) => (
                         <li
-                          key={entry.id}
+                          key={file.source}
                           className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm"
                         >
-                          <span className="min-w-0 truncate font-medium text-slate-800" title={entry.title}>
-                            {entry.title}
+                          <span className="min-w-0 truncate font-medium text-slate-800" title={file.name}>
+                            {file.name}
                           </span>
                           <span className="shrink-0 text-xs text-slate-500">
-                            {new Date(entry.createdAt).toLocaleDateString()}
+                            {file.chunkCount} {copy.statsEntries.toLowerCase()}, {new Date(file.createdAt).toLocaleDateString()}
                           </span>
                           <Button
                             type="button"
                             variant="secondary"
                             size="md"
-                            disabled={entryDeletingId === entry.id}
+                            disabled={fileDeletingSource === file.source}
                             onClick={async () => {
-                              if (entryDeletingId) return;
-                              setEntryDeletingId(entry.id);
+                              if (fileDeletingSource) return;
+                              setFileDeletingSource(file.source);
                               try {
-                                await deleteKnowledgeEntry(entry.id);
-                                setKnowledgeEntries((prev) => prev.filter((e) => e.id !== entry.id));
+                                await deleteKnowledgeBySource(file.source);
+                                setKnowledgeFiles((prev) => prev.filter((f) => f.source !== file.source));
                                 getKnowledgeStats().then(setKnowledgeStats).catch(() => {});
                               } catch {
                                 // ignore
                               } finally {
-                                setEntryDeletingId(null);
+                                setFileDeletingSource(null);
                               }
                             }}
                           >
-                            {entryDeletingId === entry.id ? '…' : copy.deleteEntry}
+                            {fileDeletingSource === file.source ? '…' : copy.deleteEntry}
                           </Button>
                         </li>
                       ))}
@@ -778,6 +791,7 @@ function AdminAIPageContent() {
                           setPasteText('');
                           setPasteTitle('');
                           getKnowledgeStats().then(setKnowledgeStats).catch(() => {});
+                          getKnowledgeFiles().then(setKnowledgeFiles).catch(() => {});
                         } catch (err) {
                           const msg =
                             err && typeof err === 'object' && 'error' in err && typeof (err as { error: string }).error === 'string'
@@ -827,6 +841,7 @@ function AdminAIPageContent() {
                           setUploadSuccess(`${chunksCreated} ${copy.statsEntries.toLowerCase()}`);
                           setUploadFile(null);
                           getKnowledgeStats().then(setKnowledgeStats).catch(() => {});
+                          getKnowledgeFiles().then(setKnowledgeFiles).catch(() => {});
                         } catch (err) {
                           const msg =
                             err && typeof err === 'object' && 'error' in err && typeof (err as { error: string }).error === 'string'

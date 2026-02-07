@@ -732,6 +732,13 @@ export interface KnowledgeEntryItem {
   createdAt: string;
 }
 
+export interface KnowledgeFileItem {
+  source: string;
+  name: string;
+  chunkCount: number;
+  createdAt: string;
+}
+
 export async function getKnowledgeStats(): Promise<KnowledgeStats> {
   const { response, data } = await apiFetch('/admin/knowledge/stats');
   if (!response.ok) throw data as ApiError;
@@ -752,6 +759,23 @@ export async function getKnowledgeEntries(): Promise<KnowledgeEntryItem[]> {
   if (!response.ok) throw data as ApiError;
   const payload = data as { items?: KnowledgeEntryItem[] } | null;
   return payload?.items ?? [];
+}
+
+export async function getKnowledgeFiles(): Promise<KnowledgeFileItem[]> {
+  const { response, data } = await apiFetch('/admin/knowledge/files');
+  if (!response.ok) throw data as ApiError;
+  const payload = data as { items?: KnowledgeFileItem[] } | null;
+  return payload?.items ?? [];
+}
+
+export async function deleteKnowledgeBySource(source: string): Promise<{ deleted: number }> {
+  const { response, data } = await apiFetch('/admin/knowledge/delete-by-source', {
+    method: 'POST',
+    json: { source },
+  });
+  if (!response.ok) throw data as ApiError;
+  const payload = data as { deleted?: number } | null;
+  return { deleted: payload?.deleted ?? 0 };
 }
 
 export async function deleteKnowledgeEntry(id: string): Promise<void> {

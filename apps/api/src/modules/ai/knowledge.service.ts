@@ -227,6 +227,51 @@ export async function deleteKnowledgeEntry(id: string): Promise<void> {
   await prisma.knowledgeBaseEntry.delete({
     where: { id },
   });
-  // Invalidate cache entries that might have used this content (optional: clear whole cache)
   await prisma.botAnswerCache.deleteMany({});
+}
+
+export interface KnowledgeFileItem {
+  source: string;
+  name: string;
+  chunkCount: number;
+  createdAt: string;
+}
+
+/** Группировка по source (имя файла/вставки): один пункт на загруженный файл или вставленный текст. */
+export async function listKnowledgeFiles(): Promise<KnowledgeFileItem[]> {
+  const entries = await prisma.knowledgeBaseEntry.findMany({
+    select: { source: true, title: true, createdAt: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  const bySource = new Map<string, { name: string; count: number; createdAt: Date }>();
+  for (const e of entries) {
+    const key = e.source;
+    const existing = bySource.get(key);
+    if (existing) {
+      existing.count++;
+    } else {
+      bySource.set(key, {
+        name: (e.title || e.source || key).trim() || key,
+        count: 1,
+        createdAt: e.createdAt,
+      });
+    }
+  }
+  return Array.from(bySource.entries())
+    .map(([source, v]) => ({
+      source,
+      name: v.name,
+      chunkCount: v.count,
+      createdAt: v.createdAt.toISOString(),
+    }))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+/** Удалить все фрагменты с данным source (один «файл»). Не меняет структуру БД для RAG. */
+export async function deleteKnowledgeBySource(source: string): Promise<{ deleted: number }> {
+  const result = await prisma.knowledgeBaseEntry.deleteMany({
+    where: { source },
+  });
+  await prisma.botAnswerCache.deleteMany({});
+  return { deleted: result.count };
 }

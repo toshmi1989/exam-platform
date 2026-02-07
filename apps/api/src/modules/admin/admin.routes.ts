@@ -34,7 +34,9 @@ import {
   reindexKnowledge,
   getKnowledgeStats,
   listKnowledgeEntries,
+  listKnowledgeFiles,
   deleteKnowledgeEntry,
+  deleteKnowledgeBySource,
 } from '../ai/knowledge.service';
 import { getZiyodaPrompts, setZiyodaPrompts } from '../ai/ziyoda-prompts.service';
 import { sendBroadcastToUsers } from '../../services/broadcastSender.service';
@@ -887,6 +889,32 @@ router.get('/knowledge/entries', async (_req, res) => {
   } catch (err) {
     console.error('[admin/knowledge/entries]', err);
     res.status(500).json({ items: [] });
+  }
+});
+
+router.get('/knowledge/files', async (_req, res) => {
+  try {
+    const files = await listKnowledgeFiles();
+    res.json({ items: files });
+  } catch (err) {
+    console.error('[admin/knowledge/files]', err);
+    res.status(500).json({ items: [] });
+  }
+});
+
+router.post('/knowledge/delete-by-source', async (req, res) => {
+  try {
+    const source = typeof req.body?.source === 'string' ? req.body.source.trim() : '';
+    if (!source) {
+      res.status(400).json({ ok: false, error: 'source required' });
+      return;
+    }
+    const result = await deleteKnowledgeBySource(source);
+    res.json({ ok: true, deleted: result.deleted });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[admin/knowledge/delete-by-source]', err);
+    res.status(500).json({ ok: false, error: msg });
   }
 });
 

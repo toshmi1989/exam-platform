@@ -516,12 +516,19 @@ export default function AttemptPage() {
                     <p className="mt-2 text-sm text-rose-600">{ziyodaError}</p>
                   )}
                   {(ziyodaCache[currentQuestion.id] !== undefined || ziyodaLoadingId === currentQuestion.id) && (
-                    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 prose prose-slate max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0">
-                      {ziyodaCache[currentQuestion.id] ? (
-                        <ReactMarkdown>{ziyodaCache[currentQuestion.id]}</ReactMarkdown>
-                      ) : (
-                        <span className="text-slate-400">…</span>
-                      )}
+                    <div className="mt-3 flex gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <img
+                        src="/ziyoda-avatar.png"
+                        alt="Зиёда"
+                        className="h-12 w-12 shrink-0 rounded-full object-cover"
+                      />
+                      <div className="min-w-0 flex-1 text-sm text-slate-700 prose prose-slate max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0">
+                        {ziyodaCache[currentQuestion.id] ? (
+                          <ReactMarkdown>{ziyodaCache[currentQuestion.id]}</ReactMarkdown>
+                        ) : (
+                          <span className="text-slate-400">…</span>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
