@@ -153,6 +153,8 @@ function CabinetClient() {
         broadcastsTitle: 'Announcements',
         broadcastsEmpty: 'No announcements yet.',
         broadcastClose: 'Close',
+        broadcastBadge: 'Announcement',
+        broadcastHint: 'You can close each announcement with the red button.',
       };
     }
     if (language === 'Узбекский') {
@@ -175,6 +177,8 @@ function CabinetClient() {
         broadcastsTitle: 'E\'lonlar',
         broadcastsEmpty: 'Hali e\'lonlar yo‘q.',
         broadcastClose: 'Yopish',
+        broadcastBadge: 'E\'lon',
+        broadcastHint: 'Har bir e\'lonni qizil tugma bilan yoping.',
       };
     }
     return {
@@ -196,6 +200,8 @@ function CabinetClient() {
       broadcastsTitle: 'Объявления',
       broadcastsEmpty: 'Пока нет объявлений.',
       broadcastClose: 'Закрыть',
+      broadcastBadge: 'Рассылка',
+      broadcastHint: 'Каждое объявление можно закрыть красной кнопкой.',
     };
   }, [language]);
 
@@ -289,23 +295,29 @@ function CabinetClient() {
 
           {visibleBroadcasts.length > 0 ? (
             <Card title={copy.broadcastsTitle}>
+              <p className="mb-3 text-xs text-slate-500">
+                {copy.broadcastHint}
+              </p>
               <div className="flex flex-col gap-3">
                 {visibleBroadcasts.slice(0, 5).map((b) => (
                   <div
                     key={b.id}
-                    className="relative rounded-xl border border-slate-100 bg-slate-50/50 p-3 pr-10"
+                    className="relative rounded-xl border-2 border-amber-200 bg-amber-50/80 p-3 pr-24"
                   >
-                    <p className="text-sm font-semibold text-slate-900">{b.title}</p>
+                    <span className="inline-block rounded bg-amber-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+                      {copy.broadcastBadge}
+                    </span>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{b.title}</p>
                     <p className="mt-1 line-clamp-2 text-xs text-slate-600">
                       {b.text}
                     </p>
-                    <p className="mt-2 text-[10px] text-slate-400">
+                    <p className="mt-2 text-[10px] text-slate-500">
                       {new Date(b.createdAt).toLocaleDateString()}
                     </p>
                     <button
                       type="button"
                       onClick={() => dismissBroadcast(b.id)}
-                      className="absolute right-2 top-2 rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+                      className="absolute right-2 top-2 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
                       aria-label={copy.broadcastClose}
                     >
                       {copy.broadcastClose}
