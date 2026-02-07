@@ -228,6 +228,16 @@ function ExamSelectClient() {
   const modeRef = useRef<HTMLDivElement>(null);
   const languageRef = useRef<HTMLDivElement>(null);
   const directionRef = useRef<HTMLDivElement>(null);
+  const startErrorRef = useRef<HTMLDivElement>(null);
+
+  // When access denied / payment required — scroll notification into view so it's visible
+  useEffect(() => {
+    if (!startError) return;
+    const t = setTimeout(() => {
+      startErrorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 150);
+    return () => clearTimeout(t);
+  }, [startError]);
 
   // Scroll to center when step changes
   useEffect(() => {
@@ -449,7 +459,8 @@ function ExamSelectClient() {
 
             {/* Ошибки и информация об оплате */}
             {startError && (
-              accessMode === 'one-time' ? (
+              <div ref={startErrorRef}>
+              {accessMode === 'one-time' ? (
                 <div
                   className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm"
                   role="alert"
@@ -510,7 +521,8 @@ function ExamSelectClient() {
                     </Button>
                   </div>
                 </div>
-              )
+              )}
+              </div>
             )}
           </div>
         </main>

@@ -21,6 +21,7 @@ function computeHash(questionText: string, options: { id: string; label: string 
   return createHash('sha256').update(payload, 'utf8').digest('hex');
 }
 
+/** Обращение по имени (если есть) — разные варианты при каждой выдаче */
 const GREETINGS_RU = [
   (n: string) => `${n}, вот объяснение:\n\n`,
   (n: string) => `${n}, разберём:\n\n`,
@@ -43,39 +44,70 @@ const GREETINGS_UZ = [
   (n: string) => `${n}, mana tushuntirish:\n\n`,
 ];
 
-/** При выдаче пользователю добавляем обращение по имени; вариант выбирается случайно, как живое общение */
+/** Нейтральные приветствия без имени — когда имени нет в профиле */
+const NEUTRAL_RU = [
+  'Вот объяснение:\n\n',
+  'Разберём:\n\n',
+  'Смотри, что важно:\n\n',
+  'Держи объяснение:\n\n',
+  'Вот что здесь ключевое:\n\n',
+  'Коротко по сути:\n\n',
+  'Вот как это устроено:\n\n',
+  'Обрати внимание:\n\n',
+];
+
+const NEUTRAL_UZ = [
+  "Mana tushuntirish:\n\n",
+  "Keling ko'ramiz:\n\n",
+  "Mana javob:\n\n",
+  "Qisqacha:\n\n",
+  "Diqqat qiling:\n\n",
+  "Mana muhim qism:\n\n",
+  "Shuni bilish kerak:\n\n",
+  "Mana tushuntirish:\n\n",
+];
+
+/** При выдаче всегда добавляем одно из приветствий; с именем — персональное, без — нейтральное. Вариант выбирается случайно. */
 function addPersonalGreeting(content: string, lang: AiLang, userName?: string): string {
   const name = (userName ?? '').trim();
-  if (!name) return content;
-  const list = lang === 'uz' ? GREETINGS_UZ : GREETINGS_RU;
-  const greeting = list[Math.floor(Math.random() * list.length)](name);
+  if (name) {
+    const list = lang === 'uz' ? GREETINGS_UZ : GREETINGS_RU;
+    const greeting = list[Math.floor(Math.random() * list.length)](name);
+    return greeting + content;
+  }
+  const neutral = lang === 'uz' ? NEUTRAL_UZ : NEUTRAL_RU;
+  const greeting = neutral[Math.floor(Math.random() * neutral.length)];
   return greeting + content;
 }
 
 /**
- * Get explanation from QuestionAIExplanation (by questionId + lang, hash match) or generate via Ziyoda and upsert.
+ * Get explanation from QuestionAIExplanation (by questionId, hash match) or generate via Ziyoda and upsert.
+ * Language is taken from the question's exam — one explanation per question.
  */
 export async function getOrCreateExplanation(
   questionId: string,
-  lang: AiLang,
   userName?: string
 ): Promise<GetOrCreateResult | GetOrCreateError> {
   const question = await prisma.question.findUnique({
     where: { id: questionId },
-    include: { options: { orderBy: { order: 'asc' } } },
+    include: {
+      options: { orderBy: { order: 'asc' } },
+      exam: { select: { language: true } },
+    },
   });
 
   if (!question) {
     return { success: false, reasonCode: 'QUESTION_NOT_FOUND', message: 'Вопрос не найден.' };
   }
 
+  const lang: AiLang = question.exam.language === 'UZ' ? 'uz' : 'ru';
   const options = question.options.map((o) => ({ id: o.id, label: o.label }));
   const correctOption = question.options.find((o) => o.isCorrect);
   const correctAnswer = correctOption?.label ?? '';
   const hash = computeHash(question.prompt, options, correctAnswer);
 
   const existing = await prisma.questionAIExplanation.findUnique({
-    where: { questionId_lang: { questionId, lang } },
+    where: { questionId },
   });
 
   const cachedContent = existing?.hash === hash ? existing.content : null;
@@ -92,9 +124,9 @@ export async function getOrCreateExplanation(
     });
 
     await prisma.questionAIExplanation.upsert({
-      where: { questionId_lang: { questionId, lang } },
+      where: { questionId },
       create: { questionId, lang, hash, content },
-      update: { hash, content },
+      update: { hash, content, lang },
     });
 
     return { success: true, content: addPersonalGreeting(content, lang, userName) };
@@ -153,7 +185,7 @@ export async function* prewarm(
     const hash = computeHash(question.prompt, options, correctAnswer);
 
     const existing = await prisma.questionAIExplanation.findUnique({
-      where: { questionId_lang: { questionId: question.id, lang: l } },
+      where: { questionId: question.id },
     });
 
     if (existing && existing.hash === hash) {
@@ -167,9 +199,9 @@ export async function* prewarm(
           lang: l,
         });
         await prisma.questionAIExplanation.upsert({
-          where: { questionId_lang: { questionId: question.id, lang: l } },
+          where: { questionId: question.id },
           create: { questionId: question.id, lang: l, hash, content },
-          update: { hash, content },
+          update: { hash, content, lang: l },
         });
         generated += 1;
       } catch {

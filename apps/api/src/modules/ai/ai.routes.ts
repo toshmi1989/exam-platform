@@ -24,16 +24,6 @@ router.post('/explain', async (req: Request, res: Response): Promise<void> => {
     return;
   }
 
-  const questionWithExam = await prisma.question.findUnique({
-    where: { id: questionId },
-    select: { exam: { select: { language: true } } },
-  });
-  if (!questionWithExam) {
-    res.status(404).json({ ok: false, reasonCode: 'QUESTION_NOT_FOUND', message: 'Вопрос не найден.' });
-    return;
-  }
-  const lang = questionWithExam.exam.language === 'UZ' ? 'uz' : 'ru';
-
   let userName: string | undefined;
   if (telegramId) {
     const user = await prisma.user.findUnique({
@@ -43,7 +33,7 @@ router.post('/explain', async (req: Request, res: Response): Promise<void> => {
     userName = user?.firstName ?? undefined;
   }
 
-  const result = await getOrCreateExplanation(questionId, lang, userName);
+  const result = await getOrCreateExplanation(questionId, userName);
 
   if (!result.success) {
     const err = result as GetOrCreateError;
