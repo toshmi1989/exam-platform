@@ -253,3 +253,9 @@ model BotAnswerCache {
   answer       String
   createdAt    DateTime @default(now())
 }
+
+model ZiyodaPrompt {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String @db.Text
+}

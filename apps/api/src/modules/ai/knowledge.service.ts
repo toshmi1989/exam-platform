@@ -202,3 +202,31 @@ export async function getKnowledgeStats(): Promise<{
   ]);
   return { totalEntries, totalCacheEntries };
 }
+
+export interface KnowledgeEntryItem {
+  id: string;
+  title: string;
+  source: string;
+  createdAt: string;
+}
+
+export async function listKnowledgeEntries(): Promise<KnowledgeEntryItem[]> {
+  const entries = await prisma.knowledgeBaseEntry.findMany({
+    select: { id: true, title: true, source: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  return entries.map((e) => ({
+    id: e.id,
+    title: e.title,
+    source: e.source,
+    createdAt: e.createdAt.toISOString(),
+  }));
+}
+
+export async function deleteKnowledgeEntry(id: string): Promise<void> {
+  await prisma.knowledgeBaseEntry.delete({
+    where: { id },
+  });
+  // Invalidate cache entries that might have used this content (optional: clear whole cache)
+  await prisma.botAnswerCache.deleteMany({});
+}

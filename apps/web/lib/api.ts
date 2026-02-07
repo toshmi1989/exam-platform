@@ -725,11 +725,49 @@ export interface KnowledgeStats {
   totalCacheEntries: number;
 }
 
+export interface KnowledgeEntryItem {
+  id: string;
+  title: string;
+  source: string;
+  createdAt: string;
+}
+
 export async function getKnowledgeStats(): Promise<KnowledgeStats> {
   const { response, data } = await apiFetch('/admin/knowledge/stats');
   if (!response.ok) throw data as ApiError;
   const payload = data as KnowledgeStats | null;
   return payload ?? { totalEntries: 0, totalCacheEntries: 0 };
+}
+
+export async function getKnowledgeEntries(): Promise<KnowledgeEntryItem[]> {
+  const { response, data } = await apiFetch('/admin/knowledge/entries');
+  if (!response.ok) throw data as ApiError;
+  const payload = data as { items?: KnowledgeEntryItem[] } | null;
+  return payload?.items ?? [];
+}
+
+export async function deleteKnowledgeEntry(id: string): Promise<void> {
+  const { response, data } = await apiFetch(`/admin/knowledge/entries/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) throw data as ApiError;
+}
+
+export type ZiyodaPrompts = Record<string, string>;
+
+export async function getZiyodaPrompts(): Promise<ZiyodaPrompts> {
+  const { response, data } = await apiFetch('/admin/ziyoda-prompts');
+  if (!response.ok) throw data as ApiError;
+  return (data as ZiyodaPrompts) ?? {};
+}
+
+export async function updateZiyodaPrompts(prompts: ZiyodaPrompts): Promise<ZiyodaPrompts> {
+  const { response, data } = await apiFetch('/admin/ziyoda-prompts', {
+    method: 'PUT',
+    json: prompts,
+  });
+  if (!response.ok) throw data as ApiError;
+  return (data as ZiyodaPrompts) ?? {};
 }
 
 export interface ReindexProgress {

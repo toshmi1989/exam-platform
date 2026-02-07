@@ -14,6 +14,10 @@ import {
   getAdminAiStats,
   getAdminOralStats,
   getKnowledgeStats,
+  getKnowledgeEntries,
+  deleteKnowledgeEntry,
+  getZiyodaPrompts,
+  updateZiyodaPrompts,
   addTextToKnowledge,
   uploadKnowledge,
   reindexKnowledgeStream,
@@ -22,7 +26,9 @@ import {
   type PrewarmProgress,
   type OralPrewarmProgress,
   type KnowledgeStats,
+  type KnowledgeEntryItem,
   type ReindexProgress,
+  type ZiyodaPrompts,
 } from '../../../lib/api';
 import { API_BASE_URL } from '../../../lib/api/config';
 import { readTelegramUser } from '../../../lib/telegramUser';
@@ -173,6 +179,13 @@ function AdminAIPageContent() {
   const [pasteLoading, setPasteLoading] = useState(false);
   const [pasteSuccess, setPasteSuccess] = useState<string | null>(null);
   const [pasteError, setPasteError] = useState<string | null>(null);
+  const [knowledgeEntries, setKnowledgeEntries] = useState<KnowledgeEntryItem[]>([]);
+  const [entryDeletingId, setEntryDeletingId] = useState<string | null>(null);
+  const [ziyodaPrompts, setZiyodaPrompts] = useState<ZiyodaPrompts>({});
+  const [promptsLoading, setPromptsLoading] = useState(false);
+  const [promptsSaving, setPromptsSaving] = useState(false);
+  const [promptsError, setPromptsError] = useState<string | null>(null);
+  const [promptsSuccess, setPromptsSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     const update = () => setLanguage(readSettings().language);
@@ -209,6 +222,12 @@ function AdminAIPageContent() {
   useEffect(() => {
     if (tab === 'ziyoda') {
       getKnowledgeStats().then(setKnowledgeStats).catch(() => setKnowledgeStats(null));
+      getKnowledgeEntries().then(setKnowledgeEntries).catch(() => setKnowledgeEntries([]));
+      setPromptsLoading(true);
+      getZiyodaPrompts()
+        .then(setZiyodaPrompts)
+        .catch(() => setZiyodaPrompts({}))
+        .finally(() => setPromptsLoading(false));
     }
   }, [tab, uploadSuccess, pasteSuccess, reindexProgress?.done]);
 
@@ -246,6 +265,18 @@ function AdminAIPageContent() {
         pastePlaceholder: 'Paste rules, FAQs, or any text here…',
         pasteTitleLabel: 'Title (optional)',
         addToBase: 'Add to knowledge base',
+        loadedMaterials: 'Loaded materials',
+        deleteEntry: 'Delete',
+        promptsTitle: 'Ziyoda prompts',
+        promptsHint: 'How the bot communicates and replies. Use {lang} for language (ru/uz), {fallback} for the fallback phrase.',
+        systemInstructionLabel: 'System instruction (how to answer)',
+        fallbackRuLabel: 'Fallback (RU) — when answer not in context',
+        fallbackUzLabel: 'Fallback (UZ)',
+        unavailableRuLabel: 'Unavailable (RU)',
+        unavailableUzLabel: 'Unavailable (UZ)',
+        emptyKbRuLabel: 'Empty knowledge base (RU)',
+        emptyKbUzLabel: 'Empty knowledge base (UZ)',
+        savePrompts: 'Save prompts',
       };
     }
     if (language === 'Узбекский') {
@@ -281,6 +312,18 @@ function AdminAIPageContent() {
         pastePlaceholder: "Qoidalar, savol-javoblar yoki istalgan matnni shu yerga joylashtiring…",
         pasteTitleLabel: 'Sarlavha (ixtiyoriy)',
         addToBase: "Bilimlar bazasiga qo'shish",
+        loadedMaterials: "Yuklangan materiallar",
+        deleteEntry: "O'chirish",
+        promptsTitle: "Ziyoda promptlari",
+        promptsHint: "Bot qanday muloqot qiladi va javob beradi. {lang} — til, {fallback} — zaxira ibora.",
+        systemInstructionLabel: "Tizim ko'rsatmasi (qanday javob berish)",
+        fallbackRuLabel: "Fallback (RU)",
+        fallbackUzLabel: "Fallback (UZ)",
+        unavailableRuLabel: "Mavjud emas (RU)",
+        unavailableUzLabel: "Mavjud emas (UZ)",
+        emptyKbRuLabel: "Bo'sh baza (RU)",
+        emptyKbUzLabel: "Bo'sh baza (UZ)",
+        savePrompts: "Promptlarni saqlash",
       };
     }
     return {
@@ -315,6 +358,18 @@ function AdminAIPageContent() {
       pastePlaceholder: 'Вставьте сюда правила, ответы на вопросы или любой текст…',
       pasteTitleLabel: 'Название (необязательно)',
       addToBase: 'Добавить в базу знаний',
+      loadedMaterials: 'Загруженные материалы',
+      deleteEntry: 'Удалить',
+      promptsTitle: 'Промпты Зиёды',
+      promptsHint: 'Как бот общается и отвечает. Подставки: {lang} — язык (ru/uz), {fallback} — фраза при отсутствии ответа в контексте.',
+      systemInstructionLabel: 'Системная инструкция (как отвечать)',
+      fallbackRuLabel: 'Фраза при отсутствии в контексте (RU)',
+      fallbackUzLabel: 'Фраза при отсутствии в контексте (UZ)',
+      unavailableRuLabel: 'Временно недоступна (RU)',
+      unavailableUzLabel: 'Временно недоступна (UZ)',
+      emptyKbRuLabel: 'Пустая база знаний (RU)',
+      emptyKbUzLabel: 'Пустая база знаний (UZ)',
+      savePrompts: 'Сохранить промпты',
     };
   }, [language]);
 
@@ -594,6 +649,52 @@ function AdminAIPageContent() {
                   </Card>
                 )}
                 <Card>
+                  <p className="text-sm font-medium text-slate-700">{copy.loadedMaterials}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {copy.statsEntries}: {knowledgeEntries.length}. {copy.uploadHint}
+                  </p>
+                  {knowledgeEntries.length === 0 ? (
+                    <p className="mt-3 text-sm text-slate-500">{copy.pastePlaceholder}</p>
+                  ) : (
+                    <ul className="mt-3 space-y-2">
+                      {knowledgeEntries.map((entry) => (
+                        <li
+                          key={entry.id}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm"
+                        >
+                          <span className="min-w-0 truncate font-medium text-slate-800" title={entry.title}>
+                            {entry.title}
+                          </span>
+                          <span className="shrink-0 text-xs text-slate-500">
+                            {new Date(entry.createdAt).toLocaleDateString()}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            disabled={entryDeletingId === entry.id}
+                            onClick={async () => {
+                              if (entryDeletingId) return;
+                              setEntryDeletingId(entry.id);
+                              try {
+                                await deleteKnowledgeEntry(entry.id);
+                                setKnowledgeEntries((prev) => prev.filter((e) => e.id !== entry.id));
+                                getKnowledgeStats().then(setKnowledgeStats).catch(() => {});
+                              } catch {
+                                // ignore
+                              } finally {
+                                setEntryDeletingId(null);
+                              }
+                            }}
+                          >
+                            {entryDeletingId === entry.id ? '…' : copy.deleteEntry}
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </Card>
+                <Card>
                   <p className="text-sm font-medium text-slate-700">{copy.pasteLabel}</p>
                   <p className="mt-1 text-xs text-slate-500">{copy.pastePlaceholder}</p>
                   <div className="mt-3 flex flex-col gap-2">
@@ -742,6 +843,102 @@ function AdminAIPageContent() {
                     </div>
                   )}
                   {reindexError && <p className="mt-2 text-sm text-rose-600">{reindexError}</p>}
+                </Card>
+                <Card>
+                  <p className="text-sm font-medium text-slate-700">{copy.promptsTitle}</p>
+                  <p className="mt-1 text-xs text-slate-500">{copy.promptsHint}</p>
+                  {promptsLoading ? (
+                    <p className="mt-3 text-sm text-slate-500">Загрузка…</p>
+                  ) : (
+                    <div className="mt-3 space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600">{copy.systemInstructionLabel}</label>
+                        <textarea
+                          value={ziyodaPrompts.system_instruction ?? ''}
+                          onChange={(e) => setZiyodaPrompts((p) => ({ ...p, system_instruction: e.target.value }))}
+                          rows={4}
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                          placeholder="Ziyoda, ассистент ZiyoMed…"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600">{copy.fallbackRuLabel}</label>
+                        <input
+                          type="text"
+                          value={ziyodaPrompts.fallback_ru ?? ''}
+                          onChange={(e) => setZiyodaPrompts((p) => ({ ...p, fallback_ru: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600">{copy.fallbackUzLabel}</label>
+                        <input
+                          type="text"
+                          value={ziyodaPrompts.fallback_uz ?? ''}
+                          onChange={(e) => setZiyodaPrompts((p) => ({ ...p, fallback_uz: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600">{copy.unavailableRuLabel}</label>
+                        <input
+                          type="text"
+                          value={ziyodaPrompts.unavailable_ru ?? ''}
+                          onChange={(e) => setZiyodaPrompts((p) => ({ ...p, unavailable_ru: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600">{copy.unavailableUzLabel}</label>
+                        <input
+                          type="text"
+                          value={ziyodaPrompts.unavailable_uz ?? ''}
+                          onChange={(e) => setZiyodaPrompts((p) => ({ ...p, unavailable_uz: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600">{copy.emptyKbRuLabel}</label>
+                        <input
+                          type="text"
+                          value={ziyodaPrompts.empty_kb_ru ?? ''}
+                          onChange={(e) => setZiyodaPrompts((p) => ({ ...p, empty_kb_ru: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600">{copy.emptyKbUzLabel}</label>
+                        <input
+                          type="text"
+                          value={ziyodaPrompts.empty_kb_uz ?? ''}
+                          onChange={(e) => setZiyodaPrompts((p) => ({ ...p, empty_kb_uz: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        disabled={promptsSaving}
+                        onClick={async () => {
+                          setPromptsSaving(true);
+                          setPromptsError(null);
+                          setPromptsSuccess(null);
+                          try {
+                            await updateZiyodaPrompts(ziyodaPrompts);
+                            setPromptsSuccess('Сохранено');
+                            setTimeout(() => setPromptsSuccess(null), 3000);
+                          } catch (err) {
+                            setPromptsError(err instanceof Error ? err.message : copy.error);
+                          } finally {
+                            setPromptsSaving(false);
+                          }
+                        }}
+                      >
+                        {promptsSaving ? '…' : copy.savePrompts}
+                      </Button>
+                      {promptsSuccess && <p className="text-sm text-emerald-600">{promptsSuccess}</p>}
+                      {promptsError && <p className="text-sm text-rose-600">{promptsError}</p>}
+                    </div>
+                  )}
                 </Card>
               </>
             )}

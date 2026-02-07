@@ -1,25 +1,18 @@
 /**
  * RAG service for Ziyoda Telegram bot: cache, vector search, GPT-4.1 mini.
+ * Prompts and fallback texts are loaded from DB (editable in admin).
  */
 
 import * as crypto from 'crypto';
 import { prisma } from '../../db/prisma';
 import { getEmbedding, findTopK } from './embedding';
 import { generateForZiyoda } from './ziyoda-llm.client';
+import { getZiyodaPrompts, DEFAULT_PROMPTS } from './ziyoda-prompts.service';
 
-const FALLBACK_RU =
-  'К сожалению, в официальных материалах ZiyoMed это не указано.';
-const FALLBACK_UZ =
-  "Afsuski, ZiyoMed rasmiy materiallarida bu ko'rsatilmagan.";
-const UNAVAILABLE_RU = 'Зиёда временно недоступна. Попробуйте позже.';
-const UNAVAILABLE_UZ = "Ziyoda vaqtincha mavjud emas. Keyinroq urunib ko'ring.";
-const EMPTY_KB_RU = 'База знаний ZiyoMed пока пуста. Обратитесь к администратору для загрузки материалов.';
-const EMPTY_KB_UZ = "ZiyoMed bilim bazasi hali bo'sh. Materiallarni yuklash uchun administratorga murojaat qiling.";
-
-/** Макс. символов контекста диалога на сообщение (экономия токенов) */
-const MAX_CONTEXT_MSG_LEN = 280;
-const MAX_CHUNKS = 3;
-const MAX_CONTEXT_CHARS = 1800;
+/** Лимиты контекста (увеличены для качества ответов) */
+const MAX_CONTEXT_MSG_LEN = 500;
+const MAX_CHUNKS = 6;
+const MAX_CONTEXT_CHARS = 4000;
 
 export type ZiyodaLang = 'ru' | 'uz';
 
@@ -42,8 +35,9 @@ function truncateForContext(s: string, maxLen: number): string {
 }
 
 function buildPrompt(
+  prompts: Record<string, string>,
   lang: ZiyodaLang,
-  firstName: string,
+  _firstName: string,
   contextChunks: string[],
   question: string,
   previousExchange?: { user: string; bot: string }
@@ -56,21 +50,23 @@ function buildPrompt(
     contextText = contextText.slice(0, MAX_CONTEXT_CHARS);
   }
   const langLabel = lang === 'uz' ? 'uz' : 'ru';
-  const fallback = lang === 'uz' ? FALLBACK_UZ : FALLBACK_RU;
+  const fallback = lang === 'uz' ? (prompts.fallback_uz ?? DEFAULT_PROMPTS.fallback_uz) : (prompts.fallback_ru ?? DEFAULT_PROMPTS.fallback_ru);
+  const systemRaw = prompts.system_instruction ?? DEFAULT_PROMPTS.system_instruction;
+  const systemPart = systemRaw
+    .replace(/\{lang\}/g, langLabel)
+    .replace(/\{fallback\}/g, fallback);
 
   const recentContext = previousExchange
     ? `\nPrev: User: ${truncateForContext(previousExchange.user, MAX_CONTEXT_MSG_LEN)}\nBot: ${truncateForContext(previousExchange.bot, MAX_CONTEXT_MSG_LEN)}\n`
     : '';
 
-  const systemPart = `Ziyoda, ZiyoMed assistant. Answer ONLY from <chunks>. If not in context reply exactly: ${fallback}. Reply in ${langLabel}. Short, no greeting unless user said hello.${recentContext ? ` Use prev: e.g. nurse=hamshira rules, doctor=shifokor rules.` : ''}
+  return `${systemPart}${recentContext}
 
 <chunks>
 ${contextText || '(none)'}
 </chunks>
 
 Q: ${question}`;
-
-  return systemPart;
 }
 
 export async function askZiyoda(
@@ -78,8 +74,16 @@ export async function askZiyoda(
   user: { firstName?: string; previousUserMessage?: string; previousBotMessage?: string }
 ): Promise<string> {
   const trimmed = question.trim();
+  const prompts = await getZiyodaPrompts();
+  const fallbackRu = prompts.fallback_ru ?? DEFAULT_PROMPTS.fallback_ru;
+  const fallbackUz = prompts.fallback_uz ?? DEFAULT_PROMPTS.fallback_uz;
+  const unavailableRu = prompts.unavailable_ru ?? DEFAULT_PROMPTS.unavailable_ru;
+  const unavailableUz = prompts.unavailable_uz ?? DEFAULT_PROMPTS.unavailable_uz;
+  const emptyKbRu = prompts.empty_kb_ru ?? DEFAULT_PROMPTS.empty_kb_ru;
+  const emptyKbUz = prompts.empty_kb_uz ?? DEFAULT_PROMPTS.empty_kb_uz;
+
   if (!trimmed) {
-    return detectLang(question) === 'uz' ? FALLBACK_UZ : FALLBACK_RU;
+    return detectLang(question) === 'uz' ? fallbackUz : fallbackRu;
   }
 
   const lang = detectLang(trimmed);
@@ -105,7 +109,7 @@ export async function askZiyoda(
 
     if (entries.length === 0) {
       console.warn('[ziyoda-rag] База знаний пуста (KnowledgeBaseEntry = 0). Загрузите материалы в админке → AI → Зиёда AI.');
-      return lang === 'uz' ? EMPTY_KB_UZ : EMPTY_KB_RU;
+      return lang === 'uz' ? emptyKbUz : emptyKbRu;
     }
 
     const top = findTopK(
@@ -129,7 +133,7 @@ export async function askZiyoda(
           bot: truncateForContext(user.previousBotMessage, MAX_CONTEXT_MSG_LEN),
         }
       : undefined;
-    const prompt = buildPrompt(lang, firstName, contextChunks, trimmed, previousExchange);
+    const prompt = buildPrompt(prompts, lang, firstName, contextChunks, trimmed, previousExchange);
     const answer = await generateForZiyoda(prompt);
 
     if (!hasContext) {
@@ -145,8 +149,8 @@ export async function askZiyoda(
     const isLangUz = lang === 'uz';
     console.error('[ziyoda-rag] Ошибка:', err);
     if (err instanceof Error && (err.message.includes('OPENAI') || err.message.includes('API') || err.message.includes('не настроен'))) {
-      return isLangUz ? UNAVAILABLE_UZ : UNAVAILABLE_RU;
+      return isLangUz ? unavailableUz : unavailableRu;
     }
-    return isLangUz ? FALLBACK_UZ : FALLBACK_RU;
+    return isLangUz ? fallbackUz : fallbackRu;
   }
 }

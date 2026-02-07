@@ -33,7 +33,10 @@ import {
   addTextToKnowledge,
   reindexKnowledge,
   getKnowledgeStats,
+  listKnowledgeEntries,
+  deleteKnowledgeEntry,
 } from '../ai/knowledge.service';
+import { getZiyodaPrompts, setZiyodaPrompts } from '../ai/ziyoda-prompts.service';
 import { sendBroadcastToUsers } from '../../services/broadcastSender.service';
 
 const router = Router();
@@ -857,6 +860,55 @@ router.get('/knowledge/stats', async (_req, res) => {
   } catch (err) {
     console.error('[admin/knowledge/stats]', err);
     res.status(500).json({ totalEntries: 0, totalCacheEntries: 0 });
+  }
+});
+
+router.get('/knowledge/entries', async (_req, res) => {
+  try {
+    const entries = await listKnowledgeEntries();
+    res.json({ items: entries });
+  } catch (err) {
+    console.error('[admin/knowledge/entries]', err);
+    res.status(500).json({ items: [] });
+  }
+});
+
+router.delete('/knowledge/entries/:id', async (req, res) => {
+  try {
+    const id = typeof req.params?.id === 'string' ? req.params.id.trim() : '';
+    if (!id) {
+      res.status(400).json({ ok: false, error: 'id required' });
+      return;
+    }
+    await deleteKnowledgeEntry(id);
+    res.json({ ok: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[admin/knowledge/entries delete]', err);
+    res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+router.get('/ziyoda-prompts', async (_req, res) => {
+  try {
+    const prompts = await getZiyodaPrompts();
+    res.json(prompts);
+  } catch (err) {
+    console.error('[admin/ziyoda-prompts]', err);
+    res.status(500).json({});
+  }
+});
+
+router.put('/ziyoda-prompts', async (req, res) => {
+  try {
+    const prompts = req.body && typeof req.body === 'object' ? req.body as Record<string, string> : {};
+    await setZiyodaPrompts(prompts);
+    const updated = await getZiyodaPrompts();
+    res.json(updated);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[admin/ziyoda-prompts PUT]', err);
+    res.status(500).json({ ok: false, error: msg });
   }
 });
 
