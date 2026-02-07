@@ -6,6 +6,8 @@
 
 ## Обновление проекта
 
+Выполняйте из каталога проекта (например `/home/app/exam-platform`):
+
 ```bash
 cd /home/app/exam-platform
 git pull
@@ -16,6 +18,12 @@ cd apps/web && npm ci && npm run build && cd ../..
 cd apps/api && npx prisma migrate deploy && npx prisma generate && cd ../..
 
 pm2 restart all
+```
+
+**Одной строкой** (копировать на сервер целиком):
+
+```bash
+cd /home/app/exam-platform && git pull && cd apps/api && npm ci && npm run build && cd ../.. && cd apps/web && npm ci && npm run build && cd ../.. && cd apps/api && npx prisma migrate deploy && npx prisma generate && cd ../.. && pm2 restart all
 ```
 
 **Если после обновления не видно изменений** (например, устный экзамен по‑прежнему «будет доступен позже»): убедитесь, что в `apps/web` сборка прошла без ошибок (`npm run build`), выполните `pm2 restart exam-web`, затем в браузере сделайте жёсткое обновление (**Ctrl+Shift+R**) или откройте сайт в режиме инкогнито.

@@ -30,10 +30,14 @@ export interface AccessContext {
     isActive: boolean;
   };
 
+  /** For ORAL: one-time access does not apply; access is subscription or oralDailyLimitAvailable. */
+  examType?: 'TEST' | 'ORAL';
+
   entitlements: {
     subscriptionActive: boolean;
     hasOneTimeForExam: boolean;
     dailyLimitAvailable: boolean;
+    oralDailyLimitAvailable: boolean;
   };
 }
 
@@ -69,17 +73,27 @@ export function evaluateAccess(
     return { decision: 'allow', entitlementType: 'subscription' };
   }
 
-  // 6. One-time exam access
+  const isOral = ctx.examType === 'ORAL';
+
+  // 6. Oral: only subscription or daily oral limit (one-time does not allow oral)
+  if (isOral) {
+    if (entitlements.oralDailyLimitAvailable) {
+      return { decision: 'allow', entitlementType: 'daily' };
+    }
+    return { decision: 'deny', reasonCode: 'ACCESS_DENIED' };
+  }
+
+  // 7. One-time exam access (TEST only)
   if (entitlements.hasOneTimeForExam) {
     return { decision: 'allow', entitlementType: 'oneTime' };
   }
 
-  // 7. Daily free attempt
+  // 8. Daily free attempt (TEST only)
   if (entitlements.dailyLimitAvailable) {
     return { decision: 'allow', entitlementType: 'daily' };
   }
 
-  // 8. No access
+  // 9. No access
   return {
     decision: 'deny',
     reasonCode: 'ACCESS_DENIED',

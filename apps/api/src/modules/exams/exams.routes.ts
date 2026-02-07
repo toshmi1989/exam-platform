@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../../db/prisma';
+import { getEntitlementsForExam } from '../entitlements/entitlements.service';
+import { evaluateAccess, type AccessContext } from '../entitlements/policy/accessPolicy';
 
 const router = Router();
 
@@ -58,6 +60,10 @@ router.get('/directions', async (req, res) => {
 });
 
 router.get('/:examId/oral-questions', async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ ok: false, reasonCode: 'AUTH_REQUIRED' });
+  }
   const examId = String(req.params.examId ?? '').trim();
   if (!examId) {
     return res.status(400).json({ ok: false, reasonCode: 'INVALID_INPUT' });
@@ -69,6 +75,30 @@ router.get('/:examId/oral-questions', async (req, res) => {
   if (!exam) {
     return res.status(404).json({ ok: false, reasonCode: 'EXAM_NOT_FOUND' });
   }
+
+  const entitlements = await getEntitlementsForExam(userId, examId, 'ORAL');
+  const ctx: AccessContext = {
+    user: {
+      id: userId,
+      role: 'authorized',
+      status: 'active',
+      hasActiveAttempt: false,
+    },
+    exam: { id: examId, isActive: true },
+    examType: 'ORAL',
+    entitlements,
+  };
+  const decision = evaluateAccess(ctx);
+  if (decision.decision === 'deny') {
+    return res.status(403).json({ ok: false, reasonCode: decision.reasonCode });
+  }
+
+  if (decision.entitlementType === 'daily') {
+    await prisma.oralAccessLog.create({
+      data: { userId },
+    });
+  }
+
   const questions = await prisma.question.findMany({
     where: { examId, type: 'ORAL' },
     select: { id: true, prompt: true, order: true },

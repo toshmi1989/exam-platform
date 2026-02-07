@@ -6,10 +6,11 @@ import Button from '../../../../components/Button';
 import Card from '../../../../components/Card';
 import ErrorState from '../../../../components/ErrorState';
 import PageHeader from '../../../../components/PageHeader';
-import { getResult, getReview } from '../../../../lib/api';
+import { getResult, getReview, explainQuestion } from '../../../../lib/api';
 import type { ExamResult, ApiError, ExamReview } from '../../../../lib/types';
 import { readSettings, Language } from '../../../../lib/uiSettings';
 import { motion, AnimatePresence } from 'framer-motion';
+import ReactMarkdown from 'react-markdown';
 
 export default function AttemptResultPage() {
   const params = useParams<{ attemptId: string }>();
@@ -20,6 +21,9 @@ export default function AttemptResultPage() {
   const [error, setError] = useState<ApiError | null>(null);
   const [language, setLanguage] = useState<Language>(readSettings().language);
   const [reviewIndex, setReviewIndex] = useState(0);
+  const [ziyodaCache, setZiyodaCache] = useState<Record<string, string>>({});
+  const [ziyodaLoadingId, setZiyodaLoadingId] = useState<string | null>(null);
+  const [ziyodaErrorForId, setZiyodaErrorForId] = useState<string | null>(null);
 
   function localizeReason(reasonCode?: string) {
     if (!reasonCode) return null;
@@ -88,6 +92,9 @@ export default function AttemptResultPage() {
         back: 'Back to exams',
         tryAgain: 'Try again',
         questionLabel: 'Question',
+        ziyodaAsk: 'Ask Ziyoda',
+        ziyodaThinking: 'Ziyoda is thinking…',
+        ziyodaError: 'Could not load explanation.',
       };
     }
     if (language === 'Узбекский') {
@@ -110,6 +117,9 @@ export default function AttemptResultPage() {
         back: 'Imtihonlarga qaytish',
         tryAgain: 'Yana urinish',
         questionLabel: 'Savol',
+        ziyodaAsk: "Ziyodadan so'rang",
+        ziyodaThinking: "Ziyoda o'ylayapti…",
+        ziyodaError: 'Tushuntirish yuklanmadi.',
       };
     }
     return {
@@ -131,6 +141,9 @@ export default function AttemptResultPage() {
       back: 'Назад к экзаменам',
       tryAgain: 'Попробовать еще раз',
       questionLabel: 'Вопрос',
+      ziyodaAsk: 'Спросить Зиёду',
+      ziyodaThinking: 'Зиёда думает…',
+      ziyodaError: 'Не удалось загрузить объяснение.',
     };
   }, [language]);
 
@@ -184,6 +197,20 @@ export default function AttemptResultPage() {
       setReviewError(err as ApiError);
     } finally {
       setReviewLoading(false);
+    }
+  }
+
+  async function handleZiyodaClick(questionId: string) {
+    if (ziyodaCache[questionId] || ziyodaLoadingId) return;
+    setZiyodaLoadingId(questionId);
+    setZiyodaErrorForId(null);
+    try {
+      const { content } = await explainQuestion(questionId);
+      setZiyodaCache((prev) => ({ ...prev, [questionId]: content }));
+    } catch {
+      setZiyodaErrorForId(questionId);
+    } finally {
+      setZiyodaLoadingId(null);
     }
   }
 
@@ -299,6 +326,28 @@ export default function AttemptResultPage() {
                       })}
                     </div>
                   ) : null}
+                  <div className="mt-4">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="md"
+                      disabled={ziyodaLoadingId === review.questions[reviewIndex].id}
+                      onClick={() => handleZiyodaClick(review.questions[reviewIndex].id)}
+                    >
+                      🧠 {copy.ziyodaAsk}
+                    </Button>
+                    {ziyodaLoadingId === review.questions[reviewIndex].id && (
+                      <p className="mt-2 text-sm text-slate-500">{copy.ziyodaThinking}</p>
+                    )}
+                    {ziyodaErrorForId === review.questions[reviewIndex].id && (
+                      <p className="mt-2 text-sm text-rose-600">{copy.ziyodaError}</p>
+                    )}
+                    {ziyodaCache[review.questions[reviewIndex].id] && (
+                      <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 prose prose-slate max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0">
+                        <ReactMarkdown>{ziyodaCache[review.questions[reviewIndex].id]}</ReactMarkdown>
+                      </div>
+                    )}
+                  </div>
                 </Card>
               </motion.div>
             ) : null}

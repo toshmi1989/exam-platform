@@ -632,6 +632,7 @@ router.post('/settings/access', async (req, res) => {
     subscriptionDurationDays: Number(body.subscriptionDurationDays ?? 0),
     allowFreeAttempts: Boolean(body.allowFreeAttempts),
     freeDailyLimit: Number(body.freeDailyLimit ?? 0),
+    freeOralDailyLimit: Number(body.freeOralDailyLimit ?? 5),
     showAnswersWithoutSubscription: Boolean(body.showAnswersWithoutSubscription),
     oneTimePrice: Number(body.oneTimePrice ?? 0),
     showAnswersForOneTime: Boolean(body.showAnswersForOneTime),

@@ -5,6 +5,7 @@ export type AccessSettings = {
   subscriptionDurationDays: number;
   allowFreeAttempts: boolean;
   freeDailyLimit: number;
+  freeOralDailyLimit: number;
   showAnswersWithoutSubscription: boolean;
   oneTimePrice: number;
   showAnswersForOneTime: boolean;
@@ -18,6 +19,7 @@ const DEFAULT_SETTINGS: AccessSettings = {
   subscriptionDurationDays: 30,
   allowFreeAttempts: true,
   freeDailyLimit: 1,
+  freeOralDailyLimit: 5,
   showAnswersWithoutSubscription: false,
   oneTimePrice: 15000,
   showAnswersForOneTime: false,
@@ -41,6 +43,7 @@ export async function getAccessSettings(): Promise<AccessSettings> {
       subscriptionDurationDays: existing.subscriptionDurationDays,
       allowFreeAttempts: existing.allowFreeAttempts,
       freeDailyLimit: existing.freeDailyLimit,
+      freeOralDailyLimit: existing.freeOralDailyLimit,
       showAnswersWithoutSubscription: existing.showAnswersWithoutSubscription,
       oneTimePrice: existing.oneTimePrice,
       showAnswersForOneTime: existing.showAnswersForOneTime,
@@ -61,6 +64,7 @@ export async function getAccessSettings(): Promise<AccessSettings> {
     subscriptionDurationDays: created.subscriptionDurationDays,
     allowFreeAttempts: created.allowFreeAttempts,
     freeDailyLimit: created.freeDailyLimit,
+    freeOralDailyLimit: created.freeOralDailyLimit,
     showAnswersWithoutSubscription: created.showAnswersWithoutSubscription,
     oneTimePrice: created.oneTimePrice,
     showAnswersForOneTime: created.showAnswersForOneTime,
@@ -84,6 +88,7 @@ export async function updateAccessSettings(
     subscriptionDurationDays: updated.subscriptionDurationDays,
     allowFreeAttempts: updated.allowFreeAttempts,
     freeDailyLimit: updated.freeDailyLimit,
+    freeOralDailyLimit: updated.freeOralDailyLimit,
     showAnswersWithoutSubscription: updated.showAnswersWithoutSubscription,
     oneTimePrice: updated.oneTimePrice,
     showAnswersForOneTime: updated.showAnswersForOneTime,

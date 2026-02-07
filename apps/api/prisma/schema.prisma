@@ -203,10 +203,19 @@ model AccessSettings {
   subscriptionDurationDays    Int
   allowFreeAttempts           Boolean
   freeDailyLimit              Int
+  freeOralDailyLimit          Int     @default(5)
   showAnswersWithoutSubscription Boolean
   oneTimePrice                Int
   showAnswersForOneTime        Boolean
   updatedAt                   DateTime @updatedAt
+}
+
+model OralAccessLog {
+  id        String   @id @default(cuid())
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model PaymentInvoice {
