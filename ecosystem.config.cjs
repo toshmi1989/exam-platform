@@ -35,6 +35,7 @@ module.exports = {
       name: 'ziyoda-bot',
       cwd: './apps/api',
       script: 'dist/scripts/ziyoda-bot.js',
+      exec_mode: 'fork',
       instances: 1,
       autorestart: true,
       watch: false,
