@@ -14,35 +14,35 @@ export function getTelegramInitData(): string | null {
 
 /**
  * Вызывает вибрацию устройства через Telegram WebApp HapticFeedback API или стандартный Vibration API
- * @param style - стиль вибрации: 'light', 'medium', 'heavy', 'rigid', 'soft' для Telegram, или массив для стандартного API
+ * @param style - 'light' для лёгкого отклика на нажатие кнопок, 'medium'/'heavy' для более заметного (например ошибка)
  */
-export function triggerHapticFeedback(style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft' = 'medium'): void {
+export function triggerHapticFeedback(style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft' = 'light'): void {
   if (typeof window === 'undefined') return;
-  
+
   const tg = (window as {
     Telegram?: {
       WebApp?: {
         HapticFeedback?: {
-          impactOccurred?: (style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft') => void;
+          impactOccurred?: (s: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft') => void;
           notificationOccurred?: (type: 'error' | 'success' | 'warning') => void;
         };
       };
     };
   }).Telegram;
 
-  // Используем Telegram WebApp HapticFeedback API если доступен
   if (tg?.WebApp?.HapticFeedback?.impactOccurred) {
-    // Двойная вибрация средней силы с небольшой паузой
-    tg.WebApp.HapticFeedback.impactOccurred('medium');
-    setTimeout(() => {
-      tg.WebApp?.HapticFeedback?.impactOccurred?.('medium');
-    }, 100);
+    tg.WebApp.HapticFeedback.impactOccurred(style);
+    if (style === 'medium') {
+      setTimeout(() => tg.WebApp?.HapticFeedback?.impactOccurred?.('medium'), 100);
+    }
     return;
   }
 
-  // Fallback на стандартный Vibration API - двойная вибрация средней силы
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
-    // Паттерн: вибрация 80ms, пауза 100ms, вибрация 80ms
-    navigator.vibrate([80, 100, 80]);
+    if (style === 'light') {
+      navigator.vibrate(15);
+    } else {
+      navigator.vibrate([80, 100, 80]);
+    }
   }
 }

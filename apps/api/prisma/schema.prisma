@@ -159,16 +159,17 @@ model ExamAttempt {
 }
 
 model User {
-  id                String    @id
-  telegramId        String    @unique
-  firstName         String?
-  username          String?
-  role              UserRole  @default(USER)
-  acceptedTerms     Boolean   @default(false)
-  acceptedAt        DateTime?
-  agreementVersion  String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id                     String   @id
+  telegramId             String   @unique
+  firstName              String?
+  username               String?
+  role                   UserRole @default(USER)
+  acceptedTerms          Boolean  @default(false)
+  acceptedAt             DateTime?
+  agreementVersion       String?
+  dismissedBroadcastIds  String[]  @default([])
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 }
 
 model UserSubscription {

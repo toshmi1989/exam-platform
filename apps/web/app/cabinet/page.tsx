@@ -10,7 +10,7 @@ import PageHeader from '../../components/PageHeader';
 import { useRouter } from 'next/navigation';
 import { readTelegramUser, storeTelegramUser, TelegramUserSnapshot } from '../../lib/telegramUser';
 import { readSettings, Language } from '../../lib/uiSettings';
-import { getProfile, getChatUnread, getBroadcasts, type BroadcastItem } from '../../lib/api';
+import { getProfile, getChatUnread, getBroadcasts, dismissBroadcast as dismissBroadcastApi, type BroadcastItem } from '../../lib/api';
 import { getQuoteByIndex, CABINET_QUOTES } from '../../data/cabinetQuotes';
 
 export const dynamic = 'force-dynamic';
@@ -23,6 +23,7 @@ function CabinetClient() {
   const [subscriptionEndsAt, setSubscriptionEndsAt] = useState<string | null>(null);
   const [chatUnread, setChatUnread] = useState(0);
   const [broadcasts, setBroadcasts] = useState<BroadcastItem[]>([]);
+  const [dismissedBroadcastIds, setDismissedBroadcastIds] = useState<Set<string>>(new Set());
   const [quoteIndex] = useState(() =>
     Math.floor(Math.random() * CABINET_QUOTES.length)
   );
@@ -56,20 +57,6 @@ function CabinetClient() {
   }, []);
 
   useEffect(() => {
-    async function loadProfile() {
-      try {
-        const data = await getProfile();
-        setSubscriptionActive(Boolean(data.subscriptionActive));
-        setSubscriptionEndsAt(data.subscriptionEndsAt ?? null);
-      } catch {
-        setSubscriptionActive(false);
-        setSubscriptionEndsAt(null);
-      }
-    }
-    void loadProfile();
-  }, []);
-
-  useEffect(() => {
     async function loadChatUnread() {
       try {
         const n = await getChatUnread();
@@ -89,10 +76,43 @@ function CabinetClient() {
   }, []);
 
   useEffect(() => {
+    async function load() {
+      try {
+        const data = await getProfile();
+        setSubscriptionActive(Boolean(data.subscriptionActive));
+        setSubscriptionEndsAt(data.subscriptionEndsAt ?? null);
+        setDismissedBroadcastIds(new Set(data.dismissedBroadcastIds ?? []));
+      } catch {
+        setSubscriptionActive(false);
+        setSubscriptionEndsAt(null);
+      }
+    }
+    void load();
+  }, []);
+
+  useEffect(() => {
     getBroadcasts()
       .then(setBroadcasts)
       .catch(() => setBroadcasts([]));
   }, []);
+
+  async function dismissBroadcast(id: string) {
+    setDismissedBroadcastIds((prev) => new Set(prev).add(id));
+    try {
+      await dismissBroadcastApi(id);
+    } catch {
+      setDismissedBroadcastIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  }
+
+  const visibleBroadcasts = useMemo(
+    () => broadcasts.filter((b) => !dismissedBroadcastIds.has(b.id)),
+    [broadcasts, dismissedBroadcastIds]
+  );
 
   const greetingName = useMemo(
     () => profile?.firstName ?? profile?.username ?? '',
@@ -132,6 +152,7 @@ function CabinetClient() {
         oneTimeCardHint: 'Pay once and take one exam.',
         broadcastsTitle: 'Announcements',
         broadcastsEmpty: 'No announcements yet.',
+        broadcastClose: 'Close',
       };
     }
     if (language === 'Узбекский') {
@@ -153,6 +174,7 @@ function CabinetClient() {
         oneTimeCardHint: 'Bir marta to‘lang va bitta imtihon topshiring.',
         broadcastsTitle: 'E\'lonlar',
         broadcastsEmpty: 'Hali e\'lonlar yo‘q.',
+        broadcastClose: 'Yopish',
       };
     }
     return {
@@ -173,6 +195,7 @@ function CabinetClient() {
       oneTimeCardHint: 'Оплатите один раз и сдайте один экзамен.',
       broadcastsTitle: 'Объявления',
       broadcastsEmpty: 'Пока нет объявлений.',
+      broadcastClose: 'Закрыть',
     };
   }, [language]);
 
@@ -264,13 +287,13 @@ function CabinetClient() {
             </Card>
           )}
 
-          {broadcasts.length > 0 ? (
+          {visibleBroadcasts.length > 0 ? (
             <Card title={copy.broadcastsTitle}>
               <div className="flex flex-col gap-3">
-                {broadcasts.slice(0, 5).map((b) => (
+                {visibleBroadcasts.slice(0, 5).map((b) => (
                   <div
                     key={b.id}
-                    className="rounded-xl border border-slate-100 bg-slate-50/50 p-3"
+                    className="relative rounded-xl border border-slate-100 bg-slate-50/50 p-3 pr-10"
                   >
                     <p className="text-sm font-semibold text-slate-900">{b.title}</p>
                     <p className="mt-1 line-clamp-2 text-xs text-slate-600">
@@ -279,6 +302,14 @@ function CabinetClient() {
                     <p className="mt-2 text-[10px] text-slate-400">
                       {new Date(b.createdAt).toLocaleDateString()}
                     </p>
+                    <button
+                      type="button"
+                      onClick={() => dismissBroadcast(b.id)}
+                      className="absolute right-2 top-2 rounded-lg px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+                      aria-label={copy.broadcastClose}
+                    >
+                      {copy.broadcastClose}
+                    </button>
                   </div>
                 ))}
               </div>

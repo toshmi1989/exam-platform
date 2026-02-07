@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ReactNode } from 'react';
+import { triggerHapticFeedback } from '../lib/telegram';
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost';
 type ButtonSize = 'md' | 'lg';
@@ -53,9 +54,18 @@ export default function Button({
     ${classNameProp ?? ''}
   `;
 
+  const handleClick = (e: React.MouseEvent) => {
+    if (!disabled) triggerHapticFeedback('light');
+    onClick?.();
+  };
+
   if (href) {
     return (
-      <Link href={href} className={className}>
+      <Link
+        href={href}
+        className={className}
+        onClick={() => !disabled && triggerHapticFeedback('light')}
+      >
         {children}
       </Link>
     );
@@ -64,7 +74,7 @@ export default function Button({
   return (
     <button
       type={type}
-      onClick={onClick}
+      onClick={handleClick}
       className={className}
       disabled={disabled}
     >

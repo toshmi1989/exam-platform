@@ -69,7 +69,7 @@ app.get('/me', async (req, res, next) => {
     const [user, subscription, settings] = await Promise.all([
       prisma.user.findUnique({
         where: { telegramId },
-        select: { acceptedTerms: true, acceptedAt: true, agreementVersion: true },
+        select: { acceptedTerms: true, acceptedAt: true, agreementVersion: true, dismissedBroadcastIds: true },
       }),
       prisma.userSubscription.findFirst({
         where: {
@@ -91,6 +91,7 @@ app.get('/me', async (req, res, next) => {
       subscriptionEndsAt: subscription?.endsAt?.toISOString(),
       oneTimePrice: settings.oneTimePrice,
       subscriptionPrice: settings.subscriptionPrice,
+      dismissedBroadcastIds: user?.dismissedBroadcastIds ?? [],
     });
   } catch (e) {
     next(e);

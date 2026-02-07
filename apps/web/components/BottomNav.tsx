@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { readSettings, Language } from '../lib/uiSettings';
 import { readTelegramUser, TelegramUserSnapshot } from '../lib/telegramUser';
+import { getChatUnread } from '../lib/api';
 
 const activeColor = '#2AABEE';
 
@@ -14,6 +15,7 @@ export default function BottomNav() {
   const [user, setUser] = useState<TelegramUserSnapshot | null>(
     readTelegramUser()
   );
+  const [chatUnread, setChatUnread] = useState(0);
   const normalizedPath = pathname.length > 1 ? pathname.replace(/\/$/, '') : pathname;
   const navItems = useMemo(() => {
     const isAdmin = Boolean(user?.isAdmin || user?.role === 'admin');
@@ -52,6 +54,34 @@ export default function BottomNav() {
     window.addEventListener('telegram-user-changed', updateUser);
     return () => window.removeEventListener('telegram-user-changed', updateUser);
   }, []);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const n = await getChatUnread();
+        setChatUnread(n);
+      } catch {
+        setChatUnread(0);
+      }
+    }
+    function onVisible() {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        void load();
+      }
+    }
+    void load();
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        void load();
+      }
+    }, 15000);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+
   const activeIndex = (() => {
     let bestIndex = -1;
     let bestLength = -1;
@@ -92,6 +122,8 @@ export default function BottomNav() {
           >
             {navItems.map((item, index) => {
               const isActive = index === activeIndex;
+              const isCabinet = item.href === '/cabinet';
+              const showChatBadge = isCabinet && chatUnread > 0;
               return (
                 <Link
                   key={item.href}
@@ -103,6 +135,14 @@ export default function BottomNav() {
                   }`}
                 >
                   {item.label}
+                  {showChatBadge ? (
+                    <span
+                      className="absolute -right-1 -top-1 flex h-4 min-w-[1.25rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white shadow-sm"
+                      aria-label={chatUnread > 0 ? `Непрочитанных: ${chatUnread}` : undefined}
+                    >
+                      {chatUnread > 99 ? '99+' : chatUnread}
+                    </span>
+                  ) : null}
                 </Link>
               );
             })}

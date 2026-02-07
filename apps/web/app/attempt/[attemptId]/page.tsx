@@ -32,6 +32,7 @@ export default function AttemptPage() {
   const [ziyodaCache, setZiyodaCache] = useState<Record<string, string>>({});
   const [ziyodaLoadingId, setZiyodaLoadingId] = useState<string | null>(null);
   const [ziyodaError, setZiyodaError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   function localizeReason(reasonCode?: string) {
     if (!reasonCode) return null;
@@ -109,6 +110,7 @@ export default function AttemptPage() {
         ziyodaAsk: 'Ask Ziyoda',
         ziyodaThinking: 'Ziyoda is thinking…',
         ziyodaError: 'Could not load explanation.',
+        submitting: 'Submitting…',
       };
     }
     if (language === 'Узбекский') {
@@ -130,6 +132,7 @@ export default function AttemptPage() {
         ziyodaAsk: "Ziyodadan so'rang",
         ziyodaThinking: "Ziyoda o'ylayapti…",
         ziyodaError: 'Tushuntirish yuklanmadi.',
+        submitting: 'Yuborilmoqda…',
       };
     }
     return {
@@ -150,6 +153,7 @@ answerAll: 'Сначала ответьте на все вопросы.',
         ziyodaAsk: 'Спросить Зиёду',
         ziyodaThinking: 'Зиёда думает…',
         ziyodaError: 'Не удалось загрузить объяснение.',
+        submitting: 'Отправка…',
     };
   }, [language]);
 
@@ -262,7 +266,6 @@ answerAll: 'Сначала ответьте на все вопросы.',
   }
 
   async function handlePrimaryAction() {
-    // В режиме «Сдать тест» нужно ответить на все вопросы; в режиме «Готовиться к тесту» можно завершить в любой момент
     if (mode === 'exam') {
       const firstUnansweredIndex = questions.findIndex(
         (question) => !answers[question.id]
@@ -274,11 +277,14 @@ answerAll: 'Сначала ответьте на все вопросы.',
       }
     }
 
+    setIsSubmitting(true);
+    setWarning(null);
     try {
       await submitAttempt(params.attemptId);
       router.push(`/attempt/${params.attemptId}/result`);
     } catch (err) {
       setError(err as ApiError);
+      setIsSubmitting(false);
     }
   }
 
@@ -520,9 +526,19 @@ answerAll: 'Сначала ответьте на все вопросы.',
           size="lg"
           className="w-full"
           onClick={handlePrimaryAction}
-          disabled={!currentQuestion}
+          disabled={!currentQuestion || isSubmitting}
         >
-          {copy.finishTest}
+          {isSubmitting ? (
+            <span className="inline-flex items-center gap-2">
+              <span
+                className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+                aria-hidden
+              />
+              {copy.submitting}
+            </span>
+          ) : (
+            copy.finishTest
+          )}
         </Button>
       </div>
     </AnimatedPage>

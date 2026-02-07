@@ -43,6 +43,7 @@ export interface UserProfile {
   subscriptionEndsAt?: string;
   oneTimePrice?: number;
   subscriptionPrice?: number;
+  dismissedBroadcastIds?: string[];
 }
 
 export interface AttemptHistoryItem {

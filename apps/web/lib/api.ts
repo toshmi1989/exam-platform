@@ -127,6 +127,16 @@ export async function getProfile(): Promise<UserProfile> {
   return data as UserProfile;
 }
 
+export async function dismissBroadcast(broadcastId: string): Promise<void> {
+  const { response, data } = await apiFetch('/broadcasts/dismiss', {
+    method: 'POST',
+    json: { broadcastId },
+  });
+  if (!response.ok) {
+    throw data as ApiError;
+  }
+}
+
 export async function acceptAgreement(): Promise<void> {
   if (typeof window !== 'undefined') {
     const { readTelegramUser } = await import('./telegramUser');

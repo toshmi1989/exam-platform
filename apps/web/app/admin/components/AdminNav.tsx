@@ -26,9 +26,22 @@ export default function AdminNav() {
         setChatsUnread(0);
       }
     }
+    function onVisible() {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        void load();
+      }
+    }
     void load();
-    const interval = setInterval(load, 15000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        void load();
+      }
+    }, 15000);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
 
   const items = useMemo(() => {
@@ -94,7 +107,7 @@ export default function AdminNav() {
             {item.label}
             {showBadge ? (
               <span
-                className={`absolute -right-0.5 -top-0.5 flex h-2.5 min-w-[1rem] items-center justify-center rounded-full px-0.5 text-[9px] font-bold ${
+                className={`absolute -right-1 -top-1 flex h-4 min-w-[1.25rem] items-center justify-center rounded-full px-1 text-[10px] font-bold shadow-sm ${
                   isActive
                     ? 'bg-white text-rose-500'
                     : 'bg-rose-500 text-white'

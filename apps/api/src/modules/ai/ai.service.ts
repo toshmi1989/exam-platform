@@ -21,13 +21,34 @@ function computeHash(questionText: string, options: { id: string; label: string 
   return createHash('sha256').update(payload, 'utf8').digest('hex');
 }
 
-/** При выдаче пользователю добавляем обращение по имени; в БД хранится универсальный текст */
+const GREETINGS_RU = [
+  (n: string) => `${n}, вот объяснение:\n\n`,
+  (n: string) => `${n}, разберём:\n\n`,
+  (n: string) => `${n}, смотри, что важно:\n\n`,
+  (n: string) => `${n}, держи объяснение:\n\n`,
+  (n: string) => `${n}, вот что здесь ключевое:\n\n`,
+  (n: string) => `${n}, коротко по сути:\n\n`,
+  (n: string) => `${n}, вот как это устроено:\n\n`,
+  (n: string) => `${n}, обрати внимание:\n\n`,
+];
+
+const GREETINGS_UZ = [
+  (n: string) => `${n}, mana tushuntirish:\n\n`,
+  (n: string) => `${n}, keling ko'ramiz:\n\n`,
+  (n: string) => `${n}, mana javob:\n\n`,
+  (n: string) => `${n}, qisqacha:\n\n`,
+  (n: string) => `${n}, diqqat qiling:\n\n`,
+  (n: string) => `${n}, mana muhim qism:\n\n`,
+  (n: string) => `${n}, shuni bilish kerak:\n\n`,
+  (n: string) => `${n}, mana tushuntirish:\n\n`,
+];
+
+/** При выдаче пользователю добавляем обращение по имени; вариант выбирается случайно, как живое общение */
 function addPersonalGreeting(content: string, lang: AiLang, userName?: string): string {
   const name = (userName ?? '').trim();
   if (!name) return content;
-  const greeting = lang === 'uz'
-    ? `${name}, mana tushuntirish:\n\n`
-    : `${name}, вот объяснение:\n\n`;
+  const list = lang === 'uz' ? GREETINGS_UZ : GREETINGS_RU;
+  const greeting = list[Math.floor(Math.random() * list.length)](name);
   return greeting + content;
 }
 
