@@ -95,4 +95,14 @@ sudo tail -f /var/log/nginx/error.log
 ## Переменные окружения
 
 - **API** — `apps/api/.env` (не коммитить): `DATABASE_URL`, `PORT`, `NODE_ENV`, `CORS_ORIGIN`, `TELEGRAM_BOT_TOKEN`, `ADMIN_TELEGRAM_IDS`, `OPENAI_API_KEY`, Multicard, `FRONTEND_URL`, `API_PUBLIC_URL`.
+- **Ziyoda RAG (бот)** — в том же `apps/api/.env`: `OPENAI_API_KEY` (обязателен для генерации и эмбеддингов). По желанию: `ZIYODA_CHAT_MODEL=gpt-4.1-mini`, `OPENAI_EMBED_MODEL=text-embedding-3-small`.
 - **Web** — при `npm run build` используется `NEXT_PUBLIC_API_BASE_URL` из `.env.production` или `.env.local`.
+
+---
+
+## Ziyoda RAG (бот)
+
+- Эндпоинт бота: **POST** `https://ваш-домен/api/bot/ask` (прокси через Nginx на API, порт 3001).
+- Тело запроса: `{ "telegramId": "...", "firstName": "Имя", "message": "текст вопроса" }`. Ответ: `{ "answer": "..." }`.
+- После деплоя миграция `add_ziyoda_rag_models` применится командой `npx prisma migrate deploy` (она уже в цепочке обновления выше).
+- База знаний: в админке → AI → вкладка «Зиёда AI» — загрузка PDF/DOCX/TXT, переиндексация, статистика.
