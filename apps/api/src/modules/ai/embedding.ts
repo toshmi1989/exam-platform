@@ -35,6 +35,16 @@ export function findTopK(
   entries: EntryWithEmbedding[],
   k: number
 ): EntryWithEmbedding[] {
+  const result = findTopKWithScores(queryEmbedding, entries, k);
+  return result.map((x) => x.entry);
+}
+
+/** Returns top k entries with similarity scores (desc). */
+export function findTopKWithScores(
+  queryEmbedding: number[],
+  entries: EntryWithEmbedding[],
+  k: number
+): { entry: EntryWithEmbedding; score: number }[] {
   const parsed = entries.map((e) => ({
     entry: e,
     vec: Array.isArray(e.embedding) ? (e.embedding as number[]) : [],
@@ -46,5 +56,5 @@ export function findTopK(
       score: cosineSimilarity(queryEmbedding, p.vec),
     }));
   withScore.sort((a, b) => b.score - a.score);
-  return withScore.slice(0, k).map((x) => x.entry);
+  return withScore.slice(0, k);
 }

@@ -5,7 +5,7 @@
 
 import * as crypto from 'crypto';
 import { prisma } from '../../db/prisma';
-import { getEmbedding, findTopK } from './embedding';
+import { getEmbedding, findTopKWithScores } from './embedding';
 import { generateForZiyoda } from './ziyoda-llm.client';
 import { getZiyodaPrompts, DEFAULT_PROMPTS } from './ziyoda-prompts.service';
 
@@ -19,6 +19,13 @@ function getIntPrompt(prompts: Record<string, string>, key: string, def: number)
   if (v === undefined || v === null) return def;
   const n = parseInt(String(v).trim(), 10);
   return Number.isFinite(n) && n > 0 ? n : def;
+}
+
+function getFloatPrompt(prompts: Record<string, string>, key: string, def: number): number {
+  const v = prompts[key];
+  if (v === undefined || v === null) return def;
+  const n = parseFloat(String(v).trim());
+  return Number.isFinite(n) && n >= 0 ? n : def;
 }
 
 export type ZiyodaLang = 'ru' | 'uz';
@@ -48,7 +55,7 @@ function truncateForContext(s: string, maxLen: number): string {
 function buildPrompt(
   prompts: Record<string, string>,
   lang: ZiyodaLang,
-  _firstName: string,
+  firstName: string,
   contextChunks: string[],
   question: string,
   previousExchange?: { user: string; bot: string }
@@ -65,10 +72,15 @@ function buildPrompt(
   }
   const langLabel = lang === 'uz' ? 'uz' : 'ru';
   const fallback = lang === 'uz' ? (prompts.fallback_uz ?? DEFAULT_PROMPTS.fallback_uz) : (prompts.fallback_ru ?? DEFAULT_PROMPTS.fallback_ru);
+  const useName = firstName.trim() && firstName.trim().toLowerCase() !== 'user';
+  const nameGreeting = useName
+    ? (lang === 'uz' ? `${firstName.trim()}, qarang: ` : `${firstName.trim()}, смотрите: `)
+    : '';
   const systemRaw = prompts.system_instruction ?? DEFAULT_PROMPTS.system_instruction;
   const systemPart = systemRaw
     .replace(/\{lang\}/g, langLabel)
-    .replace(/\{fallback\}/g, fallback);
+    .replace(/\{fallback\}/g, fallback)
+    .replace(/\{name_greeting\}/g, nameGreeting);
 
   const recentContext = previousExchange
     ? `\nPrev: User: ${truncateForContext(previousExchange.user, maxContextMsgLen)}\nBot: ${truncateForContext(previousExchange.bot, maxContextMsgLen)}\n`
@@ -127,16 +139,18 @@ export async function askZiyoda(
     }
 
     const maxChunks = getIntPrompt(prompts, 'max_chunks', DEFAULT_MAX_CHUNKS);
-    const top = findTopK(
+    const minSimilarity = getFloatPrompt(prompts, 'min_similarity', 0.25);
+    const candidateCount = Math.min(entries.length, Math.max(maxChunks * 2, 20));
+    const withScores = findTopKWithScores(
       queryEmbedding,
-      entries.map((e) => ({
-        id: e.id,
-        content: e.content,
-        embedding: e.embedding,
-      })),
-      maxChunks
+      entries.map((e) => ({ id: e.id, content: e.content, embedding: e.embedding })),
+      candidateCount
     );
-    const contextChunks = top.map((e) => e.content);
+    const aboveThreshold = withScores.filter((x) => x.score >= minSimilarity).slice(0, maxChunks);
+    const contextChunks =
+      aboveThreshold.length > 0
+        ? aboveThreshold.map((x) => x.entry.content)
+        : withScores.slice(0, 1).map((x) => x.entry.content);
 
     if (contextChunks.length === 0) {
       console.warn('[ziyoda-rag] Нет подходящих чанков (возможно, эмбеддинги другой размерности или модель изменилась). Запрос:', trimmed.slice(0, 80));

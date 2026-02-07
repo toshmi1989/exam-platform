@@ -39,16 +39,17 @@ type ExamOption = { id: string; title: string; type?: string; category?: string 
 /** Промпты Зиёды по умолчанию (уже в полях, можно только править). */
 const DEFAULT_ZIYODA_PROMPTS: ZiyodaPrompts = {
   system_instruction:
-    'Ziyoda, ассистент ZiyoMed. Отвечай ТОЛЬКО на основе фрагментов в <chunks>. Если ответа в контексте нет — ответь точно этой фразой: {fallback}. Язык ответа: {lang}. Кратко, без приветствия, если пользователь не поздоровался. При наличии предыдущего обмена учитывай контекст (например, медсёстры = hamshira, врачи = shifokor).',
+    'Ziyoda, ассистент ZiyoMed. Правила: (1) Если вопрос слишком общий или неясный — НЕ отвечай сразу, сначала задай одно уточняющее вопрошение. Пример: "Вы спрашиваете про устный экзамен или тестирование?" (2) Язык ответа строго совпадает с языком вопроса. (3) Всегда начинай ответ с короткого обращения по имени (если имя передано): {name_greeting} (4) Формат ответа: короткий абзац, затем пункты (если применимо). Если несколько трактовок — предложи варианты кратко. Без огромных текстов. (5) Отвечай на основе фрагментов в <chunks>. Можно обобщать по смыслу. Если информации нет в контексте — ответь точно: {fallback}. При наличии предыдущего обмена учитывай контекст (медсёстры = hamshira, врачи = shifokor).',
   fallback_ru: 'К сожалению, в официальных материалах ZiyoMed это не указано.',
   fallback_uz: "Afsuski, ZiyoMed rasmiy materiallarida bu ko'rsatilmagan.",
   unavailable_ru: 'Зиёда временно недоступна. Попробуйте позже.',
   unavailable_uz: "Ziyoda vaqtincha mavjud emas. Keyinroq urunib ko'ring.",
   empty_kb_ru: 'База знаний ZiyoMed пока пуста. Обратитесь к администратору для загрузки материалов.',
   empty_kb_uz: "ZiyoMed bilim bazasi hali bo'sh. Materiallarni yuklash uchun administratorga murojaat qiling.",
-  max_chunks: '6',
-  max_context_chars: '4000',
+  max_chunks: '10',
+  max_context_chars: '6000',
   max_context_msg_len: '500',
+  min_similarity: '0.25',
 };
 
 function streamPrewarmFetch(
@@ -283,7 +284,7 @@ function AdminAIPageContent() {
         loadedMaterials: 'Loaded materials',
         deleteEntry: 'Delete',
         promptsTitle: 'Ziyoda prompts',
-        promptsHint: 'How the bot communicates and replies. Use {lang} for language (ru/uz), {fallback} for the fallback phrase.',
+        promptsHint: 'Use {lang} (ru/uz), {fallback} (when no answer in context), {name_greeting} (greeting by name if provided).',
         systemInstructionLabel: 'System instruction (how to answer)',
         fallbackRuLabel: 'Fallback (RU) — when answer not in context',
         fallbackUzLabel: 'Fallback (UZ)',
@@ -294,8 +295,10 @@ function AdminAIPageContent() {
         maxChunksLabel: 'Max chunks (context)',
         maxContextCharsLabel: 'Max context chars',
         maxContextMsgLenLabel: 'Max context msg len',
+        minSimilarityLabel: 'Min similarity (0–1)',
+        minSimilarityHint: 'Chunks below this relevance are skipped. Lower = more chunks, higher = stricter.',
         savePrompts: 'Save prompts',
-        promptsNarrowHint: 'To narrow answers: lower "Max chunks" or "Max context chars". To allow more context: raise them. Response style (brief/detailed) can be set in the system instruction.',
+        promptsNarrowHint: 'If the bot often says "not in materials": raise "Max chunks" and "Max context chars", lower "Min similarity" (e.g. 0.2), or run Reindex. Response style in system instruction.',
       };
     }
     if (language === 'Узбекский') {
@@ -334,7 +337,7 @@ function AdminAIPageContent() {
         loadedMaterials: "Yuklangan materiallar",
         deleteEntry: "O'chirish",
         promptsTitle: "Ziyoda promptlari",
-        promptsHint: "Bot qanday muloqot qiladi va javob beradi. {lang} — til, {fallback} — zaxira ibora.",
+        promptsHint: "{lang} — til, {fallback} — zaxira ibora, {name_greeting} — ism bilan salomlashish.",
         systemInstructionLabel: "Tizim ko'rsatmasi (qanday javob berish)",
         fallbackRuLabel: "Fallback (RU)",
         fallbackUzLabel: "Fallback (UZ)",
@@ -345,8 +348,10 @@ function AdminAIPageContent() {
         maxChunksLabel: 'Maks bloklar',
         maxContextCharsLabel: 'Maks kontekst belgilari',
         maxContextMsgLenLabel: 'Maks xabar uzunligi',
+        minSimilarityLabel: 'Min o\'xshashlik (0–1)',
+        minSimilarityHint: 'Shundan past bo\'lgan bloklar o\'tkazib yuboriladi.',
         savePrompts: "Promptlarni saqlash",
-        promptsNarrowHint: "Javoblarni toraytirish: \"Maks bloklar\" yoki \"Maks kontekst belgilari\"ni kamaytiring. Ko'proq kontekst: oshiring. Javob uslubi tizim ko'rsatmasida.",
+        promptsNarrowHint: "Bot tez-tez \"materialda yo\'q\" desa: Maks bloklar va kontekstni oshiring, Min o\'xshashlikni kamaytiring (0.2) yoki Qayta indekslashni ishlating.",
       };
     }
     return {
@@ -384,7 +389,7 @@ function AdminAIPageContent() {
       loadedMaterials: 'Загруженные материалы',
       deleteEntry: 'Удалить',
       promptsTitle: 'Промпты Зиёды',
-      promptsHint: 'Как бот общается и отвечает. Подставки: {lang} — язык (ru/uz), {fallback} — фраза при отсутствии ответа в контексте.',
+      promptsHint: 'Подставки: {lang} — язык (ru/uz), {fallback} — фраза при отсутствии ответа, {name_greeting} — обращение по имени (если передано).',
       systemInstructionLabel: 'Системная инструкция (как отвечать)',
       fallbackRuLabel: 'Фраза при отсутствии в контексте (RU)',
       fallbackUzLabel: 'Фраза при отсутствии в контексте (UZ)',
@@ -395,8 +400,10 @@ function AdminAIPageContent() {
       maxChunksLabel: 'Макс. чанков (контекст)',
       maxContextCharsLabel: 'Макс. символов контекста',
       maxContextMsgLenLabel: 'Макс. длина сообщения в контексте',
+      minSimilarityLabel: 'Мин. релевантность (0–1)',
+      minSimilarityHint: 'Фрагменты с релевантностью ниже не передаются в модель. Ниже значение — больше чанков.',
       savePrompts: 'Сохранить промпты',
-      promptsNarrowHint: 'Сузить ответы: уменьшите «Макс. чанков» или «Макс. символов контекста». Ослабить (больше контекста): увеличьте эти значения. Стиль ответа (кратко/развёрнуто) задаётся в системной инструкции.',
+      promptsNarrowHint: 'Если бот часто пишет «в материалах не указано»: увеличьте «Макс. чанков» и «Макс. символов контекста», уменьшите «Мин. релевантность» (например 0,2) или запустите «Переиндексация».',
     };
   }, [language]);
 
@@ -972,6 +979,19 @@ function AdminAIPageContent() {
                           onChange={(e) => setZiyodaPrompts((p) => ({ ...p, max_context_msg_len: e.target.value }))}
                           className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                         />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600">{copy.minSimilarityLabel}</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          value={ziyodaPrompts.min_similarity ?? DEFAULT_ZIYODA_PROMPTS.min_similarity}
+                          onChange={(e) => setZiyodaPrompts((p) => ({ ...p, min_similarity: e.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        />
+                        <p className="mt-1 text-xs text-slate-500">{copy.minSimilarityHint}</p>
                       </div>
                       <Button
                         type="button"
