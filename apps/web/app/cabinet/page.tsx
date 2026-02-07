@@ -24,6 +24,7 @@ function CabinetClient() {
   const [chatUnread, setChatUnread] = useState(0);
   const [broadcasts, setBroadcasts] = useState<BroadcastItem[]>([]);
   const [dismissedBroadcastIds, setDismissedBroadcastIds] = useState<Set<string>>(new Set());
+  const [expandedBroadcastId, setExpandedBroadcastId] = useState<string | null>(null);
   const [quoteIndex] = useState(() =>
     Math.floor(Math.random() * CABINET_QUOTES.length)
   );
@@ -155,6 +156,8 @@ function CabinetClient() {
         broadcastClose: 'Close',
         broadcastBadge: 'Announcement',
         broadcastHint: 'You can close each announcement with the red button.',
+        broadcastTapToOpen: 'Tap to read full',
+        broadcastModalClose: 'Close',
       };
     }
     if (language === 'Узбекский') {
@@ -179,6 +182,8 @@ function CabinetClient() {
         broadcastClose: 'Yopish',
         broadcastBadge: 'E\'lon',
         broadcastHint: 'Har bir e\'lonni qizil tugma bilan yoping.',
+        broadcastTapToOpen: 'To\'liq o\'qish uchun bosing',
+        broadcastModalClose: 'Yopish',
       };
     }
     return {
@@ -202,8 +207,15 @@ function CabinetClient() {
       broadcastClose: 'Закрыть',
       broadcastBadge: 'Рассылка',
       broadcastHint: 'Каждое объявление можно закрыть красной кнопкой.',
+      broadcastTapToOpen: 'Нажмите, чтобы открыть полностью',
+      broadcastModalClose: 'Закрыть',
     };
   }, [language]);
+
+  const expandedBroadcast = useMemo(
+    () => (expandedBroadcastId ? visibleBroadcasts.find((b) => b.id === expandedBroadcastId) : null),
+    [expandedBroadcastId, visibleBroadcasts]
+  );
 
   return (
     <>
@@ -304,20 +316,29 @@ function CabinetClient() {
                     key={b.id}
                     className="relative rounded-xl border-2 border-amber-200 bg-amber-50/80 p-3 pr-24"
                   >
-                    <span className="inline-block rounded bg-amber-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedBroadcastId(b.id)}
+                      className="absolute inset-0 left-0 top-0 z-0 rounded-xl border-0 bg-transparent text-left outline-none focus:ring-2 focus:ring-amber-400 focus:ring-inset focus:ring-offset-0"
+                      aria-label={copy.broadcastTapToOpen}
+                    />
+                    <span className="relative z-10 inline-block rounded bg-amber-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
                       {copy.broadcastBadge}
                     </span>
-                    <p className="mt-2 text-sm font-semibold text-slate-900">{b.title}</p>
-                    <p className="mt-1 line-clamp-2 text-xs text-slate-600">
+                    <p className="relative z-10 mt-2 text-sm font-semibold text-slate-900 pointer-events-none">{b.title}</p>
+                    <p className="relative z-10 mt-1 line-clamp-2 text-xs text-slate-600 pointer-events-none">
                       {b.text}
                     </p>
-                    <p className="mt-2 text-[10px] text-slate-500">
+                    <p className="relative z-10 mt-2 text-[10px] text-slate-500 pointer-events-none">
                       {new Date(b.createdAt).toLocaleDateString()}
                     </p>
                     <button
                       type="button"
-                      onClick={() => dismissBroadcast(b.id)}
-                      className="absolute right-2 top-2 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        dismissBroadcast(b.id);
+                      }}
+                      className="absolute right-2 top-2 z-20 rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
                       aria-label={copy.broadcastClose}
                     >
                       {copy.broadcastClose}
@@ -326,6 +347,47 @@ function CabinetClient() {
                 ))}
               </div>
             </Card>
+          ) : null}
+
+          {expandedBroadcast ? (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 transition-opacity duration-200 ease-out"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="broadcast-modal-title"
+              onClick={() => setExpandedBroadcastId(null)}
+            >
+              <div
+                className="flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl transition-transform duration-200 ease-out"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex shrink-0 items-center justify-between border-b border-slate-100 bg-amber-50/80 px-4 py-3">
+                  <span className="rounded bg-amber-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+                    {copy.broadcastBadge}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedBroadcastId(null)}
+                    className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  >
+                    {copy.broadcastModalClose}
+                  </button>
+                </div>
+                <div className="flex flex-1 flex-col overflow-hidden px-4 py-3">
+                  <h2 id="broadcast-modal-title" className="text-base font-semibold text-slate-900">
+                    {expandedBroadcast.title}
+                  </h2>
+                  <p className="mt-2 text-[10px] text-slate-500">
+                    {new Date(expandedBroadcast.createdAt).toLocaleDateString()}
+                  </p>
+                  <div className="mt-3 min-h-0 flex-1 overflow-y-auto">
+                    <p className="whitespace-pre-wrap text-sm text-slate-700">
+                      {expandedBroadcast.text}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           ) : null}
 
           <Card className="relative">
