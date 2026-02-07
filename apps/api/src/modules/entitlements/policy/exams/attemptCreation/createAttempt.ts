@@ -39,6 +39,7 @@ export interface CreateAttemptInput {
     subscriptionActive: boolean;
     hasOneTimeForExam: boolean;
     dailyLimitAvailable: boolean;
+    oralDailyLimitAvailable: boolean;
   };
 }
 
