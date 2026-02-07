@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import Script from 'next/script';
 import { useRouter } from 'next/navigation';
 import AnimatedPage from '../components/AnimatedPage';
 import Button from '../components/Button';
@@ -26,6 +25,7 @@ export default function EntryPage() {
   );
 
   const isTelegram = useMemo(() => (typeof window !== 'undefined' && isTelegramWebApp()), []);
+  const widgetContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -118,6 +118,23 @@ export default function EntryPage() {
       (window as unknown as { onTelegramAuth?: (user: Record<string, unknown>) => void }).onTelegramAuth = undefined;
     };
   }, [isTelegram]);
+
+  // Виджет авторизации Telegram: вставка скрипта в DOM (Next.js Script часто не рендерит кнопку)
+  useEffect(() => {
+    if (!mounted || isTelegram || !widgetContainerRef.current) return;
+    const container = widgetContainerRef.current;
+    if (container.querySelector('script[data-telegram-login]')) return;
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = 'https://telegram.org/js/telegram-widget.js?22';
+    script.setAttribute('data-telegram-login', TELEGRAM_BOT_USERNAME);
+    script.setAttribute('data-size', 'large');
+    script.setAttribute('data-onauth', 'onTelegramAuth');
+    container.appendChild(script);
+    return () => {
+      container.querySelector('script[data-telegram-login]')?.remove();
+    };
+  }, [mounted, isTelegram]);
 
   useEffect(() => {
     if (!isTelegram) return;
@@ -231,15 +248,18 @@ export default function EntryPage() {
           ) : (
             <>
               <div className="mt-6 flex flex-col gap-3">
-                <div id="telegram-login-widget" className="flex justify-center">
-                  <Script
-                    src="https://telegram.org/js/telegram-widget.js?22"
-                    data-telegram-login={TELEGRAM_BOT_USERNAME}
-                    data-size="large"
-                    data-onauth="onTelegramAuth"
-                    strategy="lazyOnload"
-                  />
-                </div>
+                <div
+                  ref={widgetContainerRef}
+                  id="telegram-login-widget"
+                  className="flex min-h-[44px] justify-center"
+                  aria-label="Telegram Login Widget"
+                />
+                <a
+                  href="/auth/telegram"
+                  className="flex items-center justify-center gap-2 rounded-xl border-2 border-[#2AABEE] bg-[#2AABEE] px-4 py-3 text-base font-medium text-white no-underline transition hover:opacity-90"
+                >
+                  {copy.continueTelegram}
+                </a>
                 {authStatus === 'loading' && (
                   <p className="text-center text-sm text-slate-600">{copy.connecting}</p>
                 )}
