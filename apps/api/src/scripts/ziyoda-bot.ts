@@ -30,6 +30,7 @@ try {
 
 const TELEGRAM_BOT_TOKEN = (process.env.TELEGRAM_BOT_TOKEN ?? '').trim();
 const BOT_API_URL = (process.env.BOT_API_URL ?? process.env.API_PUBLIC_URL ?? 'http://127.0.0.1:3001').replace(/\/$/, '');
+const PLATFORM_URL = (process.env.FRONTEND_URL ?? process.env.PLATFORM_URL ?? '').replace(/\/$/, '');
 
 if (!TELEGRAM_BOT_TOKEN) {
   console.error('[ziyoda-bot] TELEGRAM_BOT_TOKEN is required. Set it in apps/api/.env');
@@ -38,6 +39,58 @@ if (!TELEGRAM_BOT_TOKEN) {
 
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 let offset = 0;
+
+const GREETING_WORDS = [
+  '/start',
+  'salom', 'assalomu alaykum', 'assalom',
+  'привет', 'здравствуйте', 'здравствуй', 'добрый день', 'доброе утро', 'добрый вечер',
+  'hello', 'hi', 'hey', 'good morning', 'good afternoon',
+];
+function isGreetingOrStart(text: string): boolean {
+  const t = text.toLowerCase().trim().replace(/\s+/g, ' ');
+  if (t.length > 50) return false;
+  const normalized = t.replace(/[^\p{L}\s]/gu, '').trim();
+  for (const w of GREETING_WORDS) {
+    if (t === w || t.startsWith(w + ' ') || normalized === w.replace(/\s/g, '')) return true;
+    if (normalized.startsWith(w.replace(/\s/g, ''))) return true;
+  }
+  return false;
+}
+
+function getWelcomeMessage(firstName: string, lang: 'ru' | 'uz'): string {
+  const name = firstName?.trim() || 'User';
+  if (lang === 'uz') {
+    return `Salom, ${name}! ZiyoMed rasmiy yordamchisi — Ziyoda. Sizga qanday yordam bera olaman? Savolingizni yozing.`;
+  }
+  return `Здравствуйте, ${name}! Я Зиёда — официальный помощник ZiyoMed. Чем могу помочь? Напишите ваш вопрос.`;
+}
+
+const START_TEST_PHRASES = [
+  'начать тест', 'начать экзамен', 'пройти тест', 'пройти экзамен', 'тест', 'экзамен',
+  'test boshlash', 'imtihon boshlash', 'test', 'imtihon', 'testni boshlash',
+  'start test', 'begin test', 'take test', 'take exam',
+];
+function isStartTestIntent(text: string): boolean {
+  const t = text.toLowerCase().trim().replace(/\s+/g, ' ');
+  if (t.length > 60) return false;
+  for (const phrase of START_TEST_PHRASES) {
+    if (t === phrase || t.startsWith(phrase + ' ') || t.includes(phrase)) return true;
+  }
+  return false;
+}
+
+function getStartTestMessage(lang: 'ru' | 'uz'): string {
+  if (lang === 'uz') {
+    return "ZiyoMed platformasida test yoki imtihonni boshlashingiz mumkin. Quyidagi tugmani bosing.";
+  }
+  return "Вы можете начать тест или экзамен на платформе ZiyoMed. Нажмите кнопку ниже.";
+}
+
+function getPlatformButtonLabel(lang: 'ru' | 'uz'): string {
+  return lang === 'uz' ? 'ZiyoMed ni ochish' : 'Открыть ZiyoMed';
+}
+
+const conversationContext = new Map<string, { lastUserMessage: string; lastBotMessage: string }>();
 
 async function getUpdates(): Promise<{ update_id: number; message?: { chat: { id: number }; from?: { id: number; first_name?: string }; text?: string } }[]> {
   const url = `${TELEGRAM_API}/getUpdates?timeout=30&offset=${offset}`;
@@ -49,30 +102,48 @@ async function getUpdates(): Promise<{ update_id: number; message?: { chat: { id
   return Array.isArray(data.result) ? data.result : [];
 }
 
-async function sendMessage(chatId: number, text: string): Promise<void> {
+type ReplyMarkup = { inline_keyboard: { text: string; url: string }[][] };
+
+async function sendMessage(chatId: number, text: string, replyMarkup?: ReplyMarkup): Promise<void> {
   const url = `${TELEGRAM_API}/sendMessage`;
+  const body: { chat_id: number; text: string; reply_markup?: ReplyMarkup } = { chat_id: chatId, text };
+  if (replyMarkup) body.reply_markup = replyMarkup;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const errText = await res.text();
-    // 403 "blocked by the user" — нормально, пользователь заблокировал бота; не засоряем логи
     if (res.status === 403 && errText.includes('blocked by the user')) return;
     console.error('[sendMessage]', res.status, errText);
   }
 }
 
-async function askZiyoda(telegramId: string, firstName: string | undefined, message: string): Promise<string> {
+const MAX_CONTEXT_LEN = 280;
+function truncateContext(s: string): string {
+  const t = s.trim();
+  return t.length <= MAX_CONTEXT_LEN ? t : t.slice(0, MAX_CONTEXT_LEN);
+}
+
+async function askZiyoda(
+  telegramId: string,
+  firstName: string | undefined,
+  message: string,
+  previousUserMessage?: string,
+  previousBotMessage?: string
+): Promise<string> {
+  const body: Record<string, unknown> = {
+    telegramId: String(telegramId),
+    firstName: firstName ?? 'User',
+    message: message.trim(),
+  };
+  if (previousUserMessage?.trim()) body.previousUserMessage = truncateContext(previousUserMessage);
+  if (previousBotMessage?.trim()) body.previousBotMessage = truncateContext(previousBotMessage);
   const res = await fetch(`${BOT_API_URL}/bot/ask`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      telegramId: String(telegramId),
-      firstName: firstName ?? 'User',
-      message: message.trim(),
-    }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({})) as { error?: string };
@@ -98,9 +169,31 @@ async function run(): Promise<void> {
         const text = msg.text.trim();
         if (!text) continue;
         try {
-          const answer = await askZiyoda(telegramId, firstName, text);
+          let answer: string;
+          let replyMarkup: ReplyMarkup | undefined;
+          const lang = /[\u0400-\u04FF]/.test(text) ? 'ru' : 'uz';
+
+          if (isGreetingOrStart(text)) {
+            answer = getWelcomeMessage(firstName ?? 'User', lang);
+          } else if (PLATFORM_URL && isStartTestIntent(text)) {
+            answer = getStartTestMessage(lang);
+            replyMarkup = { inline_keyboard: [[{ text: getPlatformButtonLabel(lang), url: PLATFORM_URL }]] };
+          } else {
+            const ctx = conversationContext.get(telegramId);
+            answer = await askZiyoda(
+              telegramId,
+              firstName,
+              text,
+              ctx?.lastUserMessage,
+              ctx?.lastBotMessage
+            );
+            conversationContext.set(telegramId, {
+              lastUserMessage: text,
+              lastBotMessage: answer,
+            });
+          }
           const out = answer.length > 4096 ? answer.slice(0, 4093) + '...' : answer;
-          await sendMessage(chatId, out);
+          await sendMessage(chatId, out, replyMarkup);
         } catch (e) {
           console.error('[ziyoda-bot]', e);
           await sendMessage(chatId, 'Зиёда временно недоступна. Попробуйте позже.');

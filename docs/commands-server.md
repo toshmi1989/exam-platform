@@ -114,7 +114,7 @@ sudo tail -f /var/log/nginx/error.log
   cd /opt/exam/exam-platform/apps/api
   node dist/scripts/ziyoda-bot.js
   ```
-  Нужны в окружении: `TELEGRAM_BOT_TOKEN`, `BOT_API_URL` (или `API_PUBLIC_URL`, например `http://127.0.0.1:3001`).
+  Нужны в окружении: `TELEGRAM_BOT_TOKEN`, `BOT_API_URL` (или `API_PUBLIC_URL`, например `http://127.0.0.1:3001`). Чтобы при запросе «начать тест» показывалась кнопка «Открыть ZiyoMed», задайте `FRONTEND_URL` или `PLATFORM_URL` (URL вашей платформы или Mini App).
 - Эндпоинт API для бота: **POST** `https://ваш-домен/api/bot/ask` (прокси через Nginx на API, порт 3001). Бот-процесс на том же сервере вызывает `http://127.0.0.1:3001/bot/ask`.
 - Тело запроса: `{ "telegramId": "...", "firstName": "Имя", "message": "текст вопроса" }`. Ответ: `{ "answer": "..." }`.
 - После деплоя миграция `add_ziyoda_rag_models` применится командой `npx prisma migrate deploy` (она уже в цепочке обновления выше).

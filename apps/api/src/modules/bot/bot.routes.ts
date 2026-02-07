@@ -10,6 +10,10 @@ router.post('/ask', async (req: Request, res: Response): Promise<void> => {
     typeof req.body?.firstName === 'string' ? req.body.firstName.trim() : undefined;
   const message =
     typeof req.body?.message === 'string' ? req.body.message.trim() : '';
+  const previousUserMessage =
+    typeof req.body?.previousUserMessage === 'string' ? req.body.previousUserMessage.trim() : undefined;
+  const previousBotMessage =
+    typeof req.body?.previousBotMessage === 'string' ? req.body.previousBotMessage.trim() : undefined;
 
   if (!message) {
     res.status(400).json({ ok: false, error: 'message is required' });
@@ -19,6 +23,8 @@ router.post('/ask', async (req: Request, res: Response): Promise<void> => {
   try {
     const answer = await askZiyoda(message, {
       firstName: firstName ?? (telegramId ? undefined : 'User'),
+      previousUserMessage,
+      previousBotMessage,
     });
     res.json({ answer });
   } catch (err) {

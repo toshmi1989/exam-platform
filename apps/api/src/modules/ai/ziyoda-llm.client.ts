@@ -35,7 +35,7 @@ export async function generateForZiyoda(prompt: string): Promise<string> {
     model: CHAT_MODEL,
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.3,
-    max_tokens: 1024,
+    max_tokens: 512,
   });
   const raw = completion.choices[0]?.message?.content?.trim();
   if (raw == null || raw === '') {

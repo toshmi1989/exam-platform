@@ -14,6 +14,11 @@ const FALLBACK_UZ =
 const UNAVAILABLE_RU = 'Зиёда временно недоступна. Попробуйте позже.';
 const UNAVAILABLE_UZ = "Ziyoda vaqtincha mavjud emas. Keyinroq urunib ko'ring.";
 
+/** Макс. символов контекста диалога на сообщение (экономия токенов) */
+const MAX_CONTEXT_MSG_LEN = 280;
+const MAX_CHUNKS = 3;
+const MAX_CONTEXT_CHARS = 1800;
+
 export type ZiyodaLang = 'ru' | 'uz';
 
 export function detectLang(text: string): ZiyodaLang {
@@ -28,43 +33,47 @@ export function detectLang(text: string): ZiyodaLang {
   return cyrillic >= latin ? 'ru' : 'uz';
 }
 
+function truncateForContext(s: string, maxLen: number): string {
+  const t = s.trim();
+  if (t.length <= maxLen) return t;
+  return t.slice(0, maxLen);
+}
+
 function buildPrompt(
   lang: ZiyodaLang,
   firstName: string,
   contextChunks: string[],
-  question: string
+  question: string,
+  previousExchange?: { user: string; bot: string }
 ): string {
-  const contextText =
+  let contextText =
     contextChunks.length > 0
-      ? contextChunks.join('\n\n---\n\n')
+      ? contextChunks.slice(0, MAX_CHUNKS).join('\n\n')
       : '';
+  if (contextText.length > MAX_CONTEXT_CHARS) {
+    contextText = contextText.slice(0, MAX_CONTEXT_CHARS);
+  }
   const langLabel = lang === 'uz' ? 'uz' : 'ru';
   const fallback = lang === 'uz' ? FALLBACK_UZ : FALLBACK_RU;
 
-  const systemPart = `You are Ziyoda — official ZiyoMed assistant.
-Rules:
-- Answer ONLY from the context below. No assumptions or external knowledge.
-- If the answer is not in the context, reply exactly: ${fallback}
-- Greet the user by first name. Be polite, professional, concise.
-- Reply in language: ${langLabel} (Russian or Uzbek as specified).
+  const recentContext = previousExchange
+    ? `\nPrev: User: ${truncateForContext(previousExchange.user, MAX_CONTEXT_MSG_LEN)}\nBot: ${truncateForContext(previousExchange.bot, MAX_CONTEXT_MSG_LEN)}\n`
+    : '';
 
-User first name: ${firstName}
-Language: ${langLabel}
+  const systemPart = `Ziyoda, ZiyoMed assistant. Answer ONLY from <chunks>. If not in context reply exactly: ${fallback}. Reply in ${langLabel}. Short, no greeting unless user said hello.${recentContext ? ` Use prev: e.g. nurse=hamshira rules, doctor=shifokor rules.` : ''}
 
-Context from ZiyoMed materials:
 <chunks>
-${contextText || '(no relevant fragments)'}
+${contextText || '(none)'}
 </chunks>
 
-Question:
-${question}`;
+Q: ${question}`;
 
   return systemPart;
 }
 
 export async function askZiyoda(
   question: string,
-  user: { firstName?: string }
+  user: { firstName?: string; previousUserMessage?: string; previousBotMessage?: string }
 ): Promise<string> {
   const trimmed = question.trim();
   if (!trimmed) {
@@ -73,13 +82,18 @@ export async function askZiyoda(
 
   const lang = detectLang(trimmed);
   const firstName = (user.firstName ?? 'User').trim() || 'User';
-  const questionHash = crypto.createHash('sha256').update(trimmed).digest('hex');
+  const hasContext = Boolean(user.previousUserMessage?.trim() && user.previousBotMessage?.trim());
+  const questionHash = crypto.createHash('sha256')
+    .update(trimmed + (hasContext ? `|${user.previousUserMessage}|${user.previousBotMessage}` : ''))
+    .digest('hex');
 
   try {
-    const cached = await prisma.botAnswerCache.findUnique({
-      where: { questionHash },
-    });
-    if (cached) return cached.answer;
+    if (!hasContext) {
+      const cached = await prisma.botAnswerCache.findUnique({
+        where: { questionHash },
+      });
+      if (cached) return cached.answer;
+    }
 
     const queryEmbedding = await getEmbedding(trimmed);
 
@@ -94,18 +108,26 @@ export async function askZiyoda(
         content: e.content,
         embedding: e.embedding,
       })),
-      4
+      MAX_CHUNKS
     );
     const contextChunks = top.map((e) => e.content);
 
-    const prompt = buildPrompt(lang, firstName, contextChunks, trimmed);
+    const previousExchange = hasContext && user.previousUserMessage && user.previousBotMessage
+      ? {
+          user: truncateForContext(user.previousUserMessage, MAX_CONTEXT_MSG_LEN),
+          bot: truncateForContext(user.previousBotMessage, MAX_CONTEXT_MSG_LEN),
+        }
+      : undefined;
+    const prompt = buildPrompt(lang, firstName, contextChunks, trimmed, previousExchange);
     const answer = await generateForZiyoda(prompt);
 
-    await prisma.botAnswerCache.upsert({
-      where: { questionHash },
-      create: { questionHash, answer },
-      update: { answer },
-    });
+    if (!hasContext) {
+      await prisma.botAnswerCache.upsert({
+        where: { questionHash },
+        create: { questionHash, answer },
+        update: { answer },
+      });
+    }
 
     return answer;
   } catch (err) {
