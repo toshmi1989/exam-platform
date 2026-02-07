@@ -25,6 +25,7 @@ export default function AttemptResultPage() {
   const [ziyodaCache, setZiyodaCache] = useState<Record<string, string>>({});
   const [ziyodaLoadingId, setZiyodaLoadingId] = useState<string | null>(null);
   const [ziyodaErrorForId, setZiyodaErrorForId] = useState<string | null>(null);
+  const [ziyodaAvatarError, setZiyodaAvatarError] = useState(false);
 
   function localizeReason(reasonCode?: string) {
     if (!reasonCode) return null;
@@ -350,11 +351,18 @@ export default function AttemptResultPage() {
                     )}
                     {(ziyodaCache[review.questions[reviewIndex].id] !== undefined || ziyodaLoadingId === review.questions[reviewIndex].id) && (
                       <div className="mt-3 flex gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                        <img
-                          src="/ziyoda-avatar.png"
-                          alt="Зиёда"
-                          className="h-12 w-12 shrink-0 rounded-full object-cover"
-                        />
+                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-[#2AABEE] flex items-center justify-center text-white font-semibold text-lg">
+                          {ziyodaAvatarError ? (
+                            <span aria-hidden="true">З</span>
+                          ) : (
+                            <img
+                              src="/ziyoda-avatar.png"
+                              alt="Зиёда"
+                              className="h-full w-full object-cover"
+                              onError={() => setZiyodaAvatarError(true)}
+                            />
+                          )}
+                        </div>
                         <div className="min-w-0 flex-1 text-sm text-slate-700 prose prose-slate max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0">
                           {ziyodaCache[review.questions[reviewIndex].id] ? (
                             <ReactMarkdown>{ziyodaCache[review.questions[reviewIndex].id]}</ReactMarkdown>

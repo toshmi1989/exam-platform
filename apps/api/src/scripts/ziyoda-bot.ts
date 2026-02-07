@@ -92,17 +92,13 @@ function getPlatformButtonLabel(lang: 'ru' | 'uz'): string {
   return lang === 'uz' ? 'ZiyoMed ni ochish' : 'Открыть ZiyoMed';
 }
 
-/** Инлайн-кнопки главного меню (Открыть MedTest → бот start, Как пользоваться, Мой профиль, Купить подписку). */
+/** Инлайн-кнопки главного меню (Открыть MedTest, Как пользоваться, Мой профиль). */
 function getMainMenuKeyboard(lang: 'ru' | 'uz'): TelegramInlineKeyboard {
   const openLabel = lang === 'uz' ? '🚀 MedTest ni ochish' : '🚀 Открыть MedTest';
   const helpLabel = lang === 'uz' ? "📘 Qanday foydalanish" : '📘 Как пользоваться';
   const profileLabel = lang === 'uz' ? "👤 Mening profilim" : '👤 Мой профиль';
-  const buyLabel = lang === 'uz' ? "Obuna sotib olish" : 'Купить подписку';
   const rows: TelegramInlineButton[][] = [];
   rows.push([{ text: openLabel, url: BOT_START_URL }]);
-  if (PLATFORM_URL) {
-    rows.push([{ text: buyLabel, url: `${PLATFORM_URL}/cabinet` }]);
-  }
   rows.push([{ text: helpLabel, callback_data: 'help' }]);
   rows.push([{ text: profileLabel, callback_data: 'profile' }]);
   return { inline_keyboard: rows };
@@ -204,9 +200,11 @@ async function askZiyoda(
 ): Promise<AskZiyodaResult> {
   const body: Record<string, unknown> = {
     telegramId: String(telegramId),
-    firstName: firstName ?? 'User',
     message: message.trim(),
   };
+  if (firstName && String(firstName).trim() && String(firstName).trim().toLowerCase() !== 'user') {
+    body.firstName = String(firstName).trim();
+  }
   if (previousUserMessage?.trim()) body.previousUserMessage = truncateContext(previousUserMessage);
   if (previousBotMessage?.trim()) body.previousBotMessage = truncateContext(previousBotMessage);
   const res = await fetch(`${BOT_API_URL}/bot/ask`, {

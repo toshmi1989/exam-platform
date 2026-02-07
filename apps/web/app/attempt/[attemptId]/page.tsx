@@ -34,6 +34,7 @@ export default function AttemptPage() {
   const [ziyodaCache, setZiyodaCache] = useState<Record<string, string>>({});
   const [ziyodaLoadingId, setZiyodaLoadingId] = useState<string | null>(null);
   const [ziyodaError, setZiyodaError] = useState<string | null>(null);
+  const [ziyodaAvatarError, setZiyodaAvatarError] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [examDirection, setExamDirection] = useState<string>('');
   const [userName, setUserName] = useState<string>('');
@@ -517,11 +518,18 @@ export default function AttemptPage() {
                   )}
                   {(ziyodaCache[currentQuestion.id] !== undefined || ziyodaLoadingId === currentQuestion.id) && (
                     <div className="mt-3 flex gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <img
-                        src="/ziyoda-avatar.png"
-                        alt="Зиёда"
-                        className="h-12 w-12 shrink-0 rounded-full object-cover"
-                      />
+                      <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-[#2AABEE] flex items-center justify-center text-white font-semibold text-lg">
+                        {ziyodaAvatarError ? (
+                          <span aria-hidden="true">З</span>
+                        ) : (
+                          <img
+                            src="/ziyoda-avatar.png"
+                            alt="Зиёда"
+                            className="h-full w-full object-cover"
+                            onError={() => setZiyodaAvatarError(true)}
+                          />
+                        )}
+                      </div>
                       <div className="min-w-0 flex-1 text-sm text-slate-700 prose prose-slate max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0">
                         {ziyodaCache[currentQuestion.id] ? (
                           <ReactMarkdown>{ziyodaCache[currentQuestion.id]}</ReactMarkdown>

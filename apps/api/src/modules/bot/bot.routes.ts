@@ -18,12 +18,8 @@ function buildLimitInlineButtons(lang: 'ru' | 'uz'): { text: string; url?: strin
   const openLabel = lang === 'uz' ? '🚀 MedTest ni ochish' : '🚀 Открыть MedTest';
   const helpLabel = lang === 'uz' ? "📘 Qanday foydalanish" : '📘 Как пользоваться';
   const profileLabel = lang === 'uz' ? "👤 Mening profilim" : '👤 Мой профиль';
-  const buyLabel = lang === 'uz' ? "Obuna sotib olish" : 'Купить подписку';
   const rows: { text: string; url?: string; callback_data?: string }[][] = [];
   rows.push([{ text: openLabel, url: BOT_START_URL }]);
-  if (PLATFORM_URL) {
-    rows.push([{ text: buyLabel, url: `${PLATFORM_URL}/cabinet` }]);
-  }
   rows.push([{ text: helpLabel, callback_data: 'help' }]);
   rows.push([{ text: profileLabel, callback_data: 'profile' }]);
   return rows;
@@ -32,8 +28,15 @@ function buildLimitInlineButtons(lang: 'ru' | 'uz'): { text: string; url?: strin
 router.post('/ask', async (req: Request, res: Response): Promise<void> => {
   const telegramId =
     typeof req.body?.telegramId === 'string' ? req.body.telegramId.trim() : '';
-  const firstName =
+  let firstName =
     typeof req.body?.firstName === 'string' ? req.body.firstName.trim() : undefined;
+  if (!firstName && telegramId) {
+    const user = await prisma.user.findUnique({
+      where: { telegramId },
+      select: { firstName: true },
+    });
+    if (user?.firstName?.trim()) firstName = user.firstName.trim();
+  }
   const message =
     typeof req.body?.message === 'string' ? req.body.message.trim() : '';
   const previousUserMessage =
@@ -61,7 +64,7 @@ router.post('/ask', async (req: Request, res: Response): Promise<void> => {
 
     await recordBotAiRequest(telegramId);
     const answer = await askZiyoda(message, {
-      firstName: firstName ?? (telegramId ? undefined : 'User'),
+      firstName: firstName || undefined,
       previousUserMessage,
       previousBotMessage,
     });
