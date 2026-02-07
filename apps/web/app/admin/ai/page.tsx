@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AnimatedPage from '../../../components/AnimatedPage';
 import BottomNav from '../../../components/BottomNav';
@@ -120,7 +120,7 @@ function streamOralPrewarmFetch(
     });
 }
 
-export default function AdminAIPage() {
+function AdminAIPageContent() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
   const [language, setLanguage] = useState<Language>(readSettings().language);
@@ -493,5 +493,36 @@ export default function AdminAIPage() {
       </AnimatedPage>
       <BottomNav />
     </>
+  );
+}
+
+function AdminAIPageFallback() {
+  return (
+    <>
+      <AnimatedPage>
+        <main className="flex min-h-screen flex-col gap-6 pb-28 pt-[3.75rem]">
+          <AdminGuard>
+            <PageHeader title="AI" subtitle="…" />
+            <AdminNav />
+            <div className="flex gap-2">
+              <div className="h-10 w-20 rounded-lg animate-pulse bg-slate-200" />
+              <div className="h-10 w-20 rounded-lg animate-pulse bg-slate-200" />
+            </div>
+            <Card>
+              <p className="text-sm text-slate-500">Загрузка…</p>
+            </Card>
+          </AdminGuard>
+        </main>
+      </AnimatedPage>
+      <BottomNav />
+    </>
+  );
+}
+
+export default function AdminAIPage() {
+  return (
+    <Suspense fallback={<AdminAIPageFallback />}>
+      <AdminAIPageContent />
+    </Suspense>
   );
 }
