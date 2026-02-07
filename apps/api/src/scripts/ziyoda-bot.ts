@@ -57,8 +57,10 @@ async function sendMessage(chatId: number, text: string): Promise<void> {
     body: JSON.stringify({ chat_id: chatId, text }),
   });
   if (!res.ok) {
-    const err = await res.text();
-    console.error('[sendMessage]', res.status, err);
+    const errText = await res.text();
+    // 403 "blocked by the user" — нормально, пользователь заблокировал бота; не засоряем логи
+    if (res.status === 403 && errText.includes('blocked by the user')) return;
+    console.error('[sendMessage]', res.status, errText);
   }
 }
 
