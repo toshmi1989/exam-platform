@@ -9,7 +9,7 @@ import AdminGuard from '../components/AdminGuard';
 import AdminNav from '../components/AdminNav';
 import Button from '../../../components/Button';
 import { readSettings, Language } from '../../../lib/uiSettings';
-import { apiFetch } from '../../../lib/api/client';
+import { readTelegramUser } from '../../../lib/telegramUser';
 
 export default function AdminAccessSettingsPage() {
   const [language, setLanguage] = useState<Language>(readSettings().language);
@@ -23,6 +23,8 @@ export default function AdminAccessSettingsPage() {
   const [oneTimePrice, setOneTimePrice] = useState('15000');
   const [oneTimeAnswers, setOneTimeAnswers] = useState('no');
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     const update = () => setLanguage(readSettings().language);
@@ -123,49 +125,72 @@ export default function AdminAccessSettingsPage() {
   }, [language]);
 
   async function loadSettings() {
-    const { response, data } = await apiFetch('/admin/settings/access');
-    if (!response.ok) return;
-    const payload = data as {
-      settings?: {
-        subscriptionPrice: number;
-        subscriptionDurationDays: number;
-        allowFreeAttempts: boolean;
-        freeDailyLimit: number;
-        freeOralDailyLimit?: number;
-        showAnswersWithoutSubscription: boolean;
-        oneTimePrice: number;
-        showAnswersForOneTime: boolean;
-      };
-    } | null;
-    if (!payload?.settings) return;
-    setPrice(String(payload.settings.subscriptionPrice));
-    setDuration(String(payload.settings.subscriptionDurationDays));
-    setFreeAttempts(payload.settings.allowFreeAttempts ? 'yes' : 'no');
-    setDailyLimit(String(payload.settings.freeDailyLimit));
-    setOralDailyLimit(String(payload.settings.freeOralDailyLimit ?? 5));
-    setBotAiDailyLimit(String((payload.settings as { botAiDailyLimitFree?: number }).botAiDailyLimitFree ?? 3));
-    setShowAnswers(payload.settings.showAnswersWithoutSubscription ? 'yes' : 'no');
-    setOneTimePrice(String(payload.settings.oneTimePrice));
-    setOneTimeAnswers(payload.settings.showAnswersForOneTime ? 'yes' : 'no');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const user = readTelegramUser();
+    if (user?.telegramId) headers['x-telegram-id'] = user.telegramId;
+    try {
+      const res = await fetch('/api/admin/settings/access', { method: 'GET', headers });
+      const data = (await res.json().catch(() => null)) as {
+        settings?: {
+          subscriptionPrice: number;
+          subscriptionDurationDays: number;
+          allowFreeAttempts: boolean;
+          freeDailyLimit: number;
+          freeOralDailyLimit?: number;
+          showAnswersWithoutSubscription: boolean;
+          oneTimePrice: number;
+          showAnswersForOneTime: boolean;
+        };
+      } | null;
+      setLoadError(null);
+      if (!res.ok) return;
+      if (!data?.settings) return;
+      setPrice(String(data.settings.subscriptionPrice));
+      setDuration(String(data.settings.subscriptionDurationDays));
+      setFreeAttempts(data.settings.allowFreeAttempts ? 'yes' : 'no');
+      setDailyLimit(String(data.settings.freeDailyLimit));
+      setOralDailyLimit(String(data.settings.freeOralDailyLimit ?? 5));
+      setBotAiDailyLimit(String((data.settings as { botAiDailyLimitFree?: number }).botAiDailyLimitFree ?? 3));
+      setShowAnswers(data.settings.showAnswersWithoutSubscription ? 'yes' : 'no');
+      setOneTimePrice(String(data.settings.oneTimePrice));
+      setOneTimeAnswers(data.settings.showAnswersForOneTime ? 'yes' : 'no');
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : 'Не удалось загрузить настройки.');
+    }
   }
 
   async function handleSave() {
+    setSaveError(null);
     setIsSaving(true);
-    await apiFetch('/admin/settings/access', {
-      method: 'POST',
-      json: {
-        subscriptionPrice: Number(price),
-        subscriptionDurationDays: Number(duration),
-        allowFreeAttempts: freeAttempts === 'yes',
-        freeDailyLimit: Number(dailyLimit),
-        freeOralDailyLimit: Number(oralDailyLimit),
-        botAiDailyLimitFree: Number(botAiDailyLimit),
-        showAnswersWithoutSubscription: showAnswers === 'yes',
-        oneTimePrice: Number(oneTimePrice),
-        showAnswersForOneTime: oneTimeAnswers === 'yes',
-      },
-    });
-    setIsSaving(false);
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const user = readTelegramUser();
+    if (user?.telegramId) headers['x-telegram-id'] = user.telegramId;
+    try {
+      const res = await fetch('/api/admin/settings/access', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          subscriptionPrice: Number(price),
+          subscriptionDurationDays: Number(duration),
+          allowFreeAttempts: freeAttempts === 'yes',
+          freeDailyLimit: Number(dailyLimit),
+          freeOralDailyLimit: Number(oralDailyLimit),
+          botAiDailyLimitFree: Number(botAiDailyLimit),
+          showAnswersWithoutSubscription: showAnswers === 'yes',
+          oneTimePrice: Number(oneTimePrice),
+          showAnswersForOneTime: oneTimeAnswers === 'yes',
+        }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setSaveError(data?.error ?? 'Не удалось сохранить.');
+        return;
+      }
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Нет связи с сервером.');
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
@@ -175,6 +200,10 @@ export default function AdminAccessSettingsPage() {
           <AdminGuard>
             <PageHeader title={copy.title} subtitle={copy.subtitle} />
             <AdminNav />
+
+            {loadError && (
+              <p className="text-sm text-rose-600">{loadError}</p>
+            )}
 
             <Card title={copy.subscription}>
               <p className="mb-3 text-xs text-slate-500">{copy.subscriptionHint}</p>
@@ -304,8 +333,11 @@ export default function AdminAccessSettingsPage() {
               </div>
             </Card>
 
+            {saveError && (
+              <p className="text-sm text-rose-600">{saveError}</p>
+            )}
             <Button size="lg" onClick={handleSave} disabled={isSaving}>
-              {copy.save}
+              {isSaving ? '…' : copy.save}
             </Button>
           </AdminGuard>
         </main>
