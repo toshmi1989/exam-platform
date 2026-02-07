@@ -49,11 +49,12 @@ router.post('/ask', async (req: Request, res: Response): Promise<void> => {
     if (!limitResult.allowed) {
       const lang = /[\u04E6\u0493\u049B\u04B3\u04B7\u04E9]/.test(message) ? 'uz' : 'ru';
       const answer = lang === 'uz' ? LIMIT_MESSAGE_UZ : LIMIT_MESSAGE_RU;
-      return res.json({
+      res.json({
         answer,
         limitReached: true,
         inlineButtons: buildLimitInlineButtons(lang),
       });
+      return;
     }
 
     await recordBotAiRequest(telegramId);
