@@ -97,7 +97,7 @@ postgresql://exam_user:ваш_надёжный_пароль@localhost:5432/exam
 
 ```bash
 cd /home/app   # или ваш каталог
-git clone https://github.com/ВАШ_РЕПО/exam-platform.git
+git clone https://github.com/toshmi1989/exam-platform.git
 cd exam-platform
 ```
 
