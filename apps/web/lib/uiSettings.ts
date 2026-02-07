@@ -19,7 +19,7 @@ export interface UiSettings {
 }
 
 export const defaultSettings: UiSettings = {
-  language: 'Русский',
+  language: 'Узбекский',
   theme: 'Светлый',
   fontSize: 'Средний',
   fontWeight: 'Обычный',

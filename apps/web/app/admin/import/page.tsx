@@ -40,6 +40,7 @@ export default function AdminImportPage() {
   const [oralFileName, setOralFileName] = useState('');
   const [oralFileBase64, setOralFileBase64] = useState<string | null>(null);
   const [oralProfession, setOralProfession] = useState<'DOCTOR' | 'NURSE' | ''>('');
+  const [oralImportMode, setOralImportMode] = useState<'overwrite' | 'add'>('overwrite');
   const [oralPreview, setOralPreview] = useState<OralDirectionPreview[]>([]);
   const [oralPreviewLoading, setOralPreviewLoading] = useState(false);
   const [oralImportLoading, setOralImportLoading] = useState(false);
@@ -250,7 +251,7 @@ export default function AdminImportPage() {
     try {
       const { response, data } = await apiFetch('/admin/import/execute-oral', {
         method: 'POST',
-        json: { profession: oralProfession, fileBase64: oralFileBase64 },
+        json: { profession: oralProfession, fileBase64: oralFileBase64, mode: oralImportMode },
         timeoutMs: 300_000,
       });
       if (!response.ok) {
@@ -433,6 +434,35 @@ export default function AdminImportPage() {
                   {!oralProfession ? (
                     <p className="text-xs text-slate-500">{copy.selectProfession}</p>
                   ) : null}
+                  <div>
+                    <p className="mb-2 text-sm font-medium text-slate-700">{copy.importModeLabel}</p>
+                    <div className="flex flex-col gap-2">
+                      <label className="flex cursor-pointer items-start gap-2">
+                        <input
+                          type="radio"
+                          name="oralImportMode"
+                          checked={oralImportMode === 'overwrite'}
+                          onChange={() => setOralImportMode('overwrite')}
+                          className="mt-1"
+                        />
+                        <span className="text-sm">
+                          <strong>{copy.modeOverwrite}</strong> — {copy.modeOverwriteHint}
+                        </span>
+                      </label>
+                      <label className="flex cursor-pointer items-start gap-2">
+                        <input
+                          type="radio"
+                          name="oralImportMode"
+                          checked={oralImportMode === 'add'}
+                          onChange={() => setOralImportMode('add')}
+                          className="mt-1"
+                        />
+                        <span className="text-sm">
+                          <strong>{copy.modeAdd}</strong> — {copy.modeAddHint}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
                   <input
                     type="file"
                     accept=".xlsx"

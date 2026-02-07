@@ -19,18 +19,24 @@ function getSystemPrompt(lang: ZiyodaLang): string {
     lang === 'uz'
       ? "Asosiy tibbiy atamalarni Markdown formatida Wikipedia havolalari bilan yozing, masalan: [atama](https://uz.wikipedia.org/wiki/Atama). Bir nechta muhim atamalarni havola qiling."
       : "Ключевые медицинские термины оформляйте в Markdown как ссылки на Wikipedia, например: [термин](https://ru.wikipedia.org/wiki/Термин). Сделайте ссылками несколько важных терминов.";
+  const emojiTableRule =
+    lang === 'uz'
+      ? "Javobni tushunarli qilish uchun emodzilardan foydalaning: 📌 asosiy fikr, 📋 ro'yxat, ⚠️ muhim, 💡 maslahat, ✅ xulosa. Taqqoslash yoki ro'yxat (belgilar, bosqichlar va h.k.) kerak bo'lsa — Markdown jadval ishlating (| ustun | ustun |). Agar foydali bo'lsa, diagramma yoki sxema uchun rasmlarga havola qo'shing: ![tavsif](https://...). Barcha matn o'zbek tilida."
+      : "Используйте эмодзи для наглядности: 📌 главное, 📋 список, ⚠️ важно, 💡 совет, ✅ вывод. При необходимости сравнения или перечня (симптомы, стадии и т.д.) — используйте Markdown-таблицу (| столбец | столбец |). При необходимости добавьте ссылку на изображение (схема, диаграмма): ![описание](https://...). Весь текст на русском языке.";
   if (lang === 'uz') {
     return `Siz "Ziyoda" tibbiy og'zaki savollar yordamchisisiz. Savol matni beriladi. Javobingiz qisqa, tushunarli va strukturali bo'lsin (Markdown).
-1) Qisqa javob yoki asosiy fikr
-2) Batafsil tushuntirish
+1) 📌 Qisqa javob yoki asosiy fikr
+2) Batafsil tushuntirish (bulleted/numbered list, bo'lishi mumkin)
+3) Kerak bo'lsa jadval yoki ro'yxat
 ${linkRule}
-Barcha matn o'zbek tilida.`;
+${emojiTableRule}`;
   }
   return `Вы — помощник "Зиёда" по устным медицинским вопросам. Дан только текст вопроса. Ваш ответ должен быть кратким, понятным и структурированным (Markdown).
-1) Краткий ответ или основная мысль
-2) Подробное объяснение
+1) 📌 Краткий ответ или основная мысль
+2) Подробное объяснение (списки, при необходимости)
+3) При необходимости — таблица или структурированный перечень
 ${linkRule}
-Весь текст на русском языке.`;
+${emojiTableRule}`;
 }
 
 export interface OralAnswerGeneratorInput {
@@ -54,7 +60,7 @@ export async function generateOralAnswer(input: OralAnswerGeneratorInput): Promi
         { role: 'user', content: `${label}: ${question}` },
       ],
       temperature: 0.5,
-      max_tokens: 800,
+      max_tokens: 1200,
     });
 
     const raw = completion.choices[0]?.message?.content?.trim();

@@ -130,6 +130,7 @@ export default function OralExamPage() {
         close: 'Close',
         finish: 'Finish',
         openInRussian: 'Open in Russian',
+        answerHeader: 'Ziyoda answers',
       };
     }
     if (language === 'Узбекский') {
@@ -144,6 +145,7 @@ export default function OralExamPage() {
         close: 'Yopish',
         finish: 'Tugatish',
         openInRussian: "Ruscha ochish",
+        answerHeader: 'Ziyoda javob beradi',
       };
     }
     return {
@@ -157,6 +159,7 @@ export default function OralExamPage() {
       close: 'Закрыть',
       finish: 'Завершить',
       openInRussian: 'Открыть на русском',
+      answerHeader: 'Зиёда отвечает',
     };
   }, [language]);
 
@@ -209,29 +212,80 @@ export default function OralExamPage() {
               <p className="mt-2 text-sm text-rose-600">{answerError}</p>
             )}
             {answerCache[current.id] && (
-              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-sm prose prose-slate max-w-none prose-img:rounded-lg prose-table:text-sm">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    a: ({ href, children }) => (
-                      <SafeLink href={href} onLinkClick={(url) => setIframeUrl(url)}>
-                        {children}
-                      </SafeLink>
-                    ),
-                    img: ({ src, alt }) => {
-                      const srcStr = typeof src === 'string' ? src : undefined;
-                      if (!srcStr) return null;
-                      return (
-                        <a href={srcStr} target="_blank" rel="noopener noreferrer" className="block">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={srcStr} alt={alt ?? ''} className="max-h-64 rounded-lg object-contain" />
-                        </a>
-                      );
-                    },
-                  }}
-                >
-                  {answerCache[current.id]}
-                </ReactMarkdown>
+              <div className="mt-4 overflow-hidden rounded-xl border-2 border-[#2AABEE]/20 bg-gradient-to-b from-slate-50 to-white shadow-sm">
+                <div className="border-b border-slate-200 bg-[#2AABEE]/10 px-4 py-2.5">
+                  <p className="text-sm font-semibold text-slate-800">
+                    🤖 {copy.answerHeader}
+                  </p>
+                </div>
+                <div className="p-4 text-sm prose prose-slate max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-blockquote:border-[#2AABEE] prose-blockquote:bg-slate-50/80 prose-blockquote:py-1 prose-blockquote:rounded-r prose-img:rounded-lg prose-img:shadow-md">
+                  <div className="overflow-x-auto">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        h2: ({ children }) => (
+                          <h2 className="mt-4 mb-2 text-base font-semibold text-slate-800 border-l-4 border-[#2AABEE] pl-3 first:mt-0">
+                            {children}
+                          </h2>
+                        ),
+                        h3: ({ children }) => (
+                          <h3 className="mt-3 mb-1 text-sm font-semibold text-slate-700">
+                            {children}
+                          </h3>
+                        ),
+                        a: ({ href, children }) => (
+                          <SafeLink href={href} onLinkClick={(url) => setIframeUrl(url)}>
+                            {children}
+                          </SafeLink>
+                        ),
+                        img: ({ src, alt }) => {
+                          const srcStr = typeof src === 'string' ? src : undefined;
+                          if (!srcStr) return null;
+                          return (
+                            <a href={srcStr} target="_blank" rel="noopener noreferrer" className="block my-3">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={srcStr} alt={alt ?? ''} className="max-h-64 w-auto rounded-lg object-contain shadow-md border border-slate-200" />
+                            </a>
+                          );
+                        },
+                        table: ({ children }) => (
+                          <div className="my-4 overflow-x-auto rounded-lg border border-slate-200">
+                            <table className="min-w-full text-sm border-collapse">
+                              {children}
+                            </table>
+                          </div>
+                        ),
+                        thead: ({ children }) => (
+                          <thead className="bg-[#2AABEE]/15 text-slate-800 font-semibold">
+                            {children}
+                          </thead>
+                        ),
+                        tbody: ({ children }) => (
+                          <tbody className="[&>tr:nth-child(even)]:bg-slate-50/80">
+                            {children}
+                          </tbody>
+                        ),
+                        tr: ({ children }) => (
+                          <tr className="border-b border-slate-100 last:border-0">
+                            {children}
+                          </tr>
+                        ),
+                        th: ({ children }) => (
+                          <th className="px-3 py-2 text-left">
+                            {children}
+                          </th>
+                        ),
+                        td: ({ children }) => (
+                          <td className="px-3 py-2">
+                            {children}
+                          </td>
+                        ),
+                      }}
+                    >
+                      {answerCache[current.id]}
+                    </ReactMarkdown>
+                  </div>
+                </div>
               </div>
             )}
           </Card>

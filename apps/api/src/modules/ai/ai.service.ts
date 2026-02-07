@@ -369,8 +369,10 @@ export interface OralPrewarmProgress {
 }
 
 export async function* prewarmOral(
-  examId?: string
+  examId?: string,
+  options?: { mode?: 'missing' | 'all' }
 ): AsyncGenerator<OralPrewarmProgress, void, unknown> {
+  const regenerateAll = options?.mode === 'all';
   const where = examId ? { examId, type: 'ORAL' as const } : { type: 'ORAL' as const };
   const questions = await prisma.question.findMany({
     where,
@@ -388,7 +390,8 @@ export async function* prewarmOral(
     const existing = await prisma.oralAnswer.findUnique({
       where: { questionId: question.id },
     });
-    if (existing?.answerHtml?.trim()) {
+    const hasAnswer = !!existing?.answerHtml?.trim();
+    if (!regenerateAll && hasAnswer) {
       skipped += 1;
     } else {
       try {

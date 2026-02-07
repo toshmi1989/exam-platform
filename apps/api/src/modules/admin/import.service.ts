@@ -275,11 +275,13 @@ export async function previewOralQuestionBank(params: {
 export async function importOralQuestionBank(params: {
   profession: Profession;
   fileBase64: string;
+  mode?: ImportMode;
 }) {
   const buffer = decodeBase64(params.fileBase64);
   const workbook = XLSX.read(buffer, { type: 'buffer' });
   const sheetNames = workbook.SheetNames;
   const categoryNames = getOralCategoryNames(params.profession);
+  const mode = params.mode ?? 'overwrite';
 
   // Ensure categories exist
   for (const name of categoryNames) {
@@ -310,6 +312,17 @@ export async function importOralQuestionBank(params: {
         where: { name: categoryName },
       });
       if (!category) continue;
+
+      const existingExam = await prisma.exam.findUnique({
+        where: {
+          title_categoryId: { title: sheetName, categoryId: category.id },
+        },
+      });
+
+      if (mode === 'add' && existingExam) {
+        await yieldEventLoop();
+        continue;
+      }
 
       const exam = await prisma.exam.upsert({
         where: {

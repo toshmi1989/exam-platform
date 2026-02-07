@@ -635,6 +635,7 @@ router.post('/import/execute-oral', async (req, res) => {
   req.setTimeout(300000);
   const profession = String(req.body?.profession ?? '').toUpperCase();
   const fileBase64 = String(req.body?.fileBase64 ?? '');
+  const mode = req.body?.mode === 'add' ? 'add' : 'overwrite';
   if (!profession || !fileBase64) {
     return res.status(400).json({ ok: false });
   }
@@ -645,6 +646,7 @@ router.post('/import/execute-oral', async (req, res) => {
     const result = await importOralQuestionBank({
       profession: profession as 'DOCTOR' | 'NURSE',
       fileBase64,
+      mode,
     });
     res.json({ ok: true, result });
   } catch (err) {
@@ -700,6 +702,7 @@ router.get('/ai/oral/stats', async (_req, res) => {
 
 router.post('/ai/oral/prewarm/stream', async (req, res) => {
   const examId = typeof req.body?.examId === 'string' ? req.body.examId.trim() : undefined;
+  const mode = req.body?.mode === 'all' ? 'all' as const : 'missing' as const;
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -708,7 +711,7 @@ router.post('/ai/oral/prewarm/stream', async (req, res) => {
   res.flushHeaders?.();
 
   try {
-    for await (const progress of prewarmOral(examId)) {
+    for await (const progress of prewarmOral(examId, { mode })) {
       res.write(`data: ${JSON.stringify(progress)}\n\n`);
       if (typeof (res as unknown as { flush?: () => void }).flush === 'function') {
         (res as unknown as { flush: () => void }).flush();
