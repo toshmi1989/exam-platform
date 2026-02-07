@@ -17,17 +17,17 @@ export async function getEntitlementsForExam(
   const todayEnd = new Date(todayStart);
   todayEnd.setDate(todayEnd.getDate() + 1);
 
+  // Дневной лимит тратится при запуске попытки (startAttempt), а не при завершении.
+  // Считаем все запуски за сегодня: и «Сдать тест» (EXAM), и «Готовиться к тесту» (PRACTICE).
+  // Без этого в режиме практики можно было бы многократно нажимать «начать заново» и не тратить лимит.
   const dailyCount = await prisma.examAttempt.count({
     where: {
       userId,
-      // Free daily limit should be consumed on actual attempt start (launch),
-      // not merely on attempt record creation.
       startedAt: {
         not: null,
         gte: todayStart,
         lt: todayEnd,
       },
-      mode: 'EXAM',
     },
   });
 
