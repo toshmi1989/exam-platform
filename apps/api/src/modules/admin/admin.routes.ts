@@ -635,19 +635,25 @@ router.get('/settings/access', async (_req, res) => {
 });
 
 router.post('/settings/access', async (req, res) => {
-  const body = req.body ?? {};
-  const settings = await updateAccessSettings({
-    subscriptionPrice: Number(body.subscriptionPrice ?? 0),
-    subscriptionDurationDays: Number(body.subscriptionDurationDays ?? 0),
-    allowFreeAttempts: Boolean(body.allowFreeAttempts),
-    freeDailyLimit: Number(body.freeDailyLimit ?? 0),
-    freeOralDailyLimit: Number(body.freeOralDailyLimit ?? 5),
-    botAiDailyLimitFree: Number(body.botAiDailyLimitFree ?? 3),
-    showAnswersWithoutSubscription: Boolean(body.showAnswersWithoutSubscription),
-    oneTimePrice: Number(body.oneTimePrice ?? 0),
-    showAnswersForOneTime: Boolean(body.showAnswersForOneTime),
-  });
-  res.json({ ok: true, settings });
+  try {
+    const body = req.body ?? {};
+    const settings = await updateAccessSettings({
+      subscriptionPrice: Number(body.subscriptionPrice ?? 0),
+      subscriptionDurationDays: Number(body.subscriptionDurationDays ?? 0),
+      allowFreeAttempts: Boolean(body.allowFreeAttempts),
+      freeDailyLimit: Number(body.freeDailyLimit ?? 0),
+      freeOralDailyLimit: Number(body.freeOralDailyLimit ?? 5),
+      botAiDailyLimitFree: Number(body.botAiDailyLimitFree ?? 3),
+      showAnswersWithoutSubscription: Boolean(body.showAnswersWithoutSubscription),
+      oneTimePrice: Number(body.oneTimePrice ?? 0),
+      showAnswersForOneTime: Boolean(body.showAnswersForOneTime),
+    });
+    res.json({ ok: true, settings });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[admin/settings/access POST]', err);
+    res.status(500).json({ ok: false, reasonCode: 'INTERNAL_ERROR', error: msg });
+  }
 });
 
 router.post('/import/preview', async (req, res) => {
