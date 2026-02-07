@@ -40,6 +40,8 @@ if (!TELEGRAM_BOT_TOKEN) {
 }
 
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
+/** URL аватарки Зиёды для приветствия по /start (должен быть доступен по HTTPS для Telegram). */
+const ZIYODA_AVATAR_URL = PLATFORM_URL ? `${PLATFORM_URL}/ziyoda-avatar.png` : '';
 let offset = 0;
 
 const GREETING_WORDS = [
@@ -149,6 +151,22 @@ async function sendMessage(chatId: number, text: string, replyMarkup?: ReplyMark
     const errText = await res.text();
     if (res.status === 403 && errText.includes('blocked by the user')) return;
     console.error('[sendMessage]', res.status, errText);
+  }
+}
+
+/** Отправка фото с подписью (для приветствия по /start). */
+async function sendPhoto(chatId: number, photoUrl: string, caption: string): Promise<void> {
+  const url = `${TELEGRAM_API}/sendPhoto`;
+  const body = { chat_id: chatId, photo: photoUrl, caption };
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    if (res.status === 403 && errText.includes('blocked by the user')) return;
+    console.error('[sendPhoto]', res.status, errText);
   }
 }
 
@@ -295,10 +313,16 @@ async function run(): Promise<void> {
 
           if (text === '/menu') {
             answer = lang === 'uz' ? 'Quyidagi tugmalardan foydalaning:' : 'Воспользуйтесь кнопками ниже:';
-            replyMarkup = getMainMenuKeyboard(lang);
+            replyMarkup = undefined;
           } else if (isGreetingOrStart(text)) {
-            answer = getWelcomeMessage(firstName ?? 'User', lang);
-            replyMarkup = getMainMenuKeyboard(lang);
+            const welcomeText = getWelcomeMessage(firstName ?? 'User', lang);
+            const cap = welcomeText.length > 1024 ? welcomeText.slice(0, 1021) + '...' : welcomeText;
+            if (ZIYODA_AVATAR_URL) {
+              await sendPhoto(chatId, ZIYODA_AVATAR_URL, cap);
+            } else {
+              await sendMessage(chatId, welcomeText);
+            }
+            continue;
           } else if (isStartTestIntent(text)) {
             answer = getStartTestMessage(lang);
             replyMarkup = { inline_keyboard: [[{ text: getPlatformButtonLabel(lang), url: BOT_START_URL }]] };

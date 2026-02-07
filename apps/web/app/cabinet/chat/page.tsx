@@ -31,6 +31,7 @@ export default function ChatPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
+  const [ziyodaAvatarError, setZiyodaAvatarError] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -214,14 +215,32 @@ export default function ChatPage() {
                 {messages.map((message) => (
                   <div
                     key={message.id}
-                    className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm ${
-                      message.author === 'user'
-                        ? 'ml-auto bg-[#2AABEE] text-white'
-                        : 'bg-slate-100 text-slate-700'
-                    }`}
+                    className={`flex gap-2 ${message.author === 'user' ? 'flex-row-reverse' : ''}`}
                   >
-                    {message.text}
-                    {message.imageData ? (
+                    {message.author !== 'user' ? (
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-200">
+                        {ziyodaAvatarError ? (
+                          <span className="text-sm font-semibold text-sky-600">З</span>
+                        ) : (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src="/ziyoda-avatar.png"
+                            alt=""
+                            className="h-full w-full object-cover"
+                            onError={() => setZiyodaAvatarError(true)}
+                          />
+                        )}
+                      </div>
+                    ) : null}
+                    <div
+                      className={`max-w-[85%] rounded-2xl px-4 py-2 text-sm ${
+                        message.author === 'user'
+                          ? 'bg-[#2AABEE] text-white'
+                          : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {message.text}
+                      {message.imageData ? (
                       <button
                         type="button"
                         onClick={() => setLightboxImage(message.imageData ?? null)}
@@ -236,6 +255,7 @@ export default function ChatPage() {
                         />
                       </button>
                     ) : null}
+                    </div>
                   </div>
                 ))}
               </div>

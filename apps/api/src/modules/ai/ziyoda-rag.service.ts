@@ -55,7 +55,7 @@ function truncateForContext(s: string, maxLen: number): string {
 function buildPrompt(
   prompts: Record<string, string>,
   lang: ZiyodaLang,
-  firstName: string,
+  _firstName: string,
   contextChunks: string[],
   question: string,
   previousExchange?: { user: string; bot: string }
@@ -72,15 +72,11 @@ function buildPrompt(
   }
   const langLabel = lang === 'uz' ? 'uz' : 'ru';
   const fallback = lang === 'uz' ? (prompts.fallback_uz ?? DEFAULT_PROMPTS.fallback_uz) : (prompts.fallback_ru ?? DEFAULT_PROMPTS.fallback_ru);
-  const useName = firstName.trim() && firstName.trim().toLowerCase() !== 'user';
-  const nameGreeting = useName
-    ? (lang === 'uz' ? `${firstName.trim()}, qarang: ` : `${firstName.trim()}, смотрите: `)
-    : '';
   const systemRaw = prompts.system_instruction ?? DEFAULT_PROMPTS.system_instruction;
   const systemPart = systemRaw
     .replace(/\{lang\}/g, langLabel)
     .replace(/\{fallback\}/g, fallback)
-    .replace(/\{name_greeting\}/g, nameGreeting);
+    .replace(/\{name_greeting\}/g, '');
 
   const recentContext = previousExchange
     ? `\nPrev: User: ${truncateForContext(previousExchange.user, maxContextMsgLen)}\nBot: ${truncateForContext(previousExchange.bot, maxContextMsgLen)}\n`
