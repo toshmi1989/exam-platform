@@ -107,7 +107,14 @@ export default function EntryPage() {
             role: data?.role,
             isAdmin: data?.isAdmin,
           });
-          window.location.href = '/cabinet';
+          const target = '/cabinet';
+          const url = (typeof window !== 'undefined' && window.location.origin) ? `${window.location.origin}${target}` : target;
+          if (typeof window !== 'undefined' && window.opener) {
+            window.opener.location.href = url;
+            window.close();
+          } else {
+            window.location.href = url;
+          }
         } catch {
           setErrorMessage(copyRef.current?.errorNetwork ?? 'Network error.');
           setAuthStatus('error');

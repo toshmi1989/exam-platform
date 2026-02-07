@@ -125,9 +125,14 @@ export default function TelegramAuthPage() {
             role: data?.role,
             isAdmin: data?.isAdmin,
           });
-          // Жёсткий переход: виджет может вызывать callback в контексте, где router не срабатывает
-          const base = typeof window !== 'undefined' ? window.location.origin : '';
-          window.location.href = base ? `${base}/cabinet` : '/cabinet';
+          const target = '/cabinet';
+          const url = (typeof window !== 'undefined' && window.location.origin) ? `${window.location.origin}${target}` : target;
+          if (typeof window !== 'undefined' && window.opener) {
+            window.opener.location.href = url;
+            window.close();
+          } else {
+            window.location.href = url;
+          }
         } catch {
           setErrorMessage(copyRef.current?.errorNetwork ?? 'Network error.');
           setAuthStatus('error');
