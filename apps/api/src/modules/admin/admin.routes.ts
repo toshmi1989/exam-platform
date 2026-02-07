@@ -25,6 +25,7 @@ import {
   previewQuestionBank,
   importQuestionBank,
 } from './import.service';
+import { prewarm, getAiStats } from '../ai/ai.service';
 
 const router = Router();
 
@@ -596,6 +597,41 @@ router.post('/import/execute', async (req, res) => {
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ ok: false, error: errMsg });
+  }
+});
+
+router.get('/ai/stats', async (_req, res) => {
+  try {
+    const stats = await getAiStats();
+    res.json(stats);
+  } catch (err) {
+    console.error('[admin/ai/stats]', err);
+    res.status(500).json({ totalQuestions: 0, withExplanation: 0, missing: 0 });
+  }
+});
+
+router.post('/ai/prewarm/stream', async (req, res) => {
+  const examId = typeof req.body?.examId === 'string' ? req.body.examId.trim() : undefined;
+  const lang = req.body?.lang === 'uz' ? 'uz' : req.body?.lang === 'ru' ? 'ru' : undefined;
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders?.();
+
+  try {
+    for await (const progress of prewarm(examId, lang)) {
+      res.write(`data: ${JSON.stringify(progress)}\n\n`);
+      if (typeof (res as unknown as { flush?: () => void }).flush === 'function') {
+        (res as unknown as { flush: () => void }).flush();
+      }
+    }
+  } catch (err) {
+    console.error('[admin/ai/prewarm/stream]', err);
+    res.write(`data: ${JSON.stringify({ error: 'Prewarm failed' })}\n\n`);
+  } finally {
+    res.end();
   }
 });
 

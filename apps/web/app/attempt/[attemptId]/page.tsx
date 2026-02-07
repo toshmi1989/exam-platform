@@ -8,9 +8,10 @@ import ErrorState from '../../../components/ErrorState';
 import PageHeader from '../../../components/PageHeader';
 import Timer from '../../../components/Timer';
 import AnimatedPage from '../../../components/AnimatedPage';
-import { getQuestions, saveAnswer, submitAttempt } from '../../../lib/api';
+import { getQuestions, saveAnswer, submitAttempt, explainQuestion } from '../../../lib/api';
 import type { ExamQuestion, ApiError } from '../../../lib/types';
 import { motion, AnimatePresence } from 'framer-motion';
+import ReactMarkdown from 'react-markdown';
 import { readSettings, Language } from '../../../lib/uiSettings';
 import { triggerHapticFeedback } from '../../../lib/telegram';
 
@@ -28,6 +29,9 @@ export default function AttemptPage() {
   const [warning, setWarning] = useState<string | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(60 * 60);
   const [shakingQuestionId, setShakingQuestionId] = useState<string | null>(null);
+  const [ziyodaCache, setZiyodaCache] = useState<Record<string, string>>({});
+  const [ziyodaLoadingId, setZiyodaLoadingId] = useState<string | null>(null);
+  const [ziyodaError, setZiyodaError] = useState<string | null>(null);
 
   function localizeReason(reasonCode?: string) {
     if (!reasonCode) return null;
@@ -102,6 +106,9 @@ export default function AttemptPage() {
         answerAll: 'Please answer all questions first.',
         prev: 'Previous',
         next: 'Next',
+        ziyodaAsk: 'Ask Ziyoda',
+        ziyodaThinking: 'Ziyoda is thinking…',
+        ziyodaError: 'Could not load explanation.',
       };
     }
     if (language === 'Узбекский') {
@@ -120,6 +127,9 @@ export default function AttemptPage() {
         answerAll: 'Avval barcha savollarga javob bering.',
         prev: 'Oldingi',
         next: 'Keyingi',
+        ziyodaAsk: "Ziyodadan so'rang",
+        ziyodaThinking: "Ziyoda o'ylayapti…",
+        ziyodaError: 'Tushuntirish yuklanmadi.',
       };
     }
     return {
@@ -134,11 +144,30 @@ export default function AttemptPage() {
       submit: 'Завершить тест',
       finishTest: 'Завершить тест',
       timer: 'Время',
-      answerAll: 'Сначала ответьте на все вопросы.',
-      prev: 'Предыдущий',
-      next: 'Следующий',
+answerAll: 'Сначала ответьте на все вопросы.',
+        prev: 'Предыдущий',
+        next: 'Следующий',
+        ziyodaAsk: 'Спросить Зиёду',
+        ziyodaThinking: 'Зиёда думает…',
+        ziyodaError: 'Не удалось загрузить объяснение.',
     };
   }, [language]);
+
+  const ziyodaLang = language === 'Узбекский' ? 'uz' : 'ru';
+
+  async function handleZiyodaClick(questionId: string) {
+    if (ziyodaCache[questionId] || ziyodaLoadingId) return;
+    setZiyodaLoadingId(questionId);
+    setZiyodaError(null);
+    try {
+      const { content } = await explainQuestion(questionId, ziyodaLang);
+      setZiyodaCache((prev) => ({ ...prev, [questionId]: content }));
+    } catch {
+      setZiyodaError(copy.ziyodaError);
+    } finally {
+      setZiyodaLoadingId(null);
+    }
+  }
 
   useEffect(() => {
     const update = () => setLanguage(readSettings().language);
@@ -318,6 +347,7 @@ export default function AttemptPage() {
                     type="button"
                     onClick={() => {
                       setWarning(null);
+                      setZiyodaError(null);
                       setCurrentIndex(index);
                     }}
                     className={`shrink-0 min-w-[2.5rem] rounded-lg border px-3 py-2 text-xs font-semibold transition ${
@@ -406,6 +436,29 @@ export default function AttemptPage() {
                   />
                 )}
 
+                <div className="mt-4">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="md"
+                    disabled={ziyodaLoadingId === currentQuestion.id}
+                    onClick={() => handleZiyodaClick(currentQuestion.id)}
+                  >
+                    🧠 {copy.ziyodaAsk}
+                  </Button>
+                  {ziyodaLoadingId === currentQuestion.id && (
+                    <p className="mt-2 text-sm text-slate-500">{copy.ziyodaThinking}</p>
+                  )}
+                  {ziyodaError && ziyodaLoadingId !== currentQuestion.id && (
+                    <p className="mt-2 text-sm text-rose-600">{ziyodaError}</p>
+                  )}
+                  {ziyodaCache[currentQuestion.id] && (
+                    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 prose prose-slate max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0">
+                      <ReactMarkdown>{ziyodaCache[currentQuestion.id]}</ReactMarkdown>
+                    </div>
+                  )}
+                </div>
+
                 {mode === 'practice' ? (
                   <div className="mt-4 flex items-center justify-between gap-4">
                     <Button
@@ -414,6 +467,7 @@ export default function AttemptPage() {
                       disabled={currentIndex === 0}
                       onClick={() => {
                         setWarning(null);
+                        setZiyodaError(null);
                         setCurrentIndex((i) => Math.max(0, i - 1));
                       }}
                     >
@@ -425,6 +479,7 @@ export default function AttemptPage() {
                       disabled={currentIndex >= totalQuestions - 1}
                       onClick={() => {
                         setWarning(null);
+                        setZiyodaError(null);
                         setCurrentIndex((i) =>
                           Math.min(totalQuestions - 1, i + 1)
                         );

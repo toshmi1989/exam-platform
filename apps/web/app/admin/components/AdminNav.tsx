@@ -42,6 +42,7 @@ export default function AdminNav() {
         { href: '/admin/exams', label: 'Exams' },
         { href: '/admin/access-settings', label: 'Access' },
         { href: '/admin/import', label: 'Import' },
+        { href: '/admin/ai', label: 'AI' },
         { href: '/admin/analytics', label: 'Analytics' },
       ];
     }
@@ -55,6 +56,7 @@ export default function AdminNav() {
         { href: '/admin/exams', label: 'Imtihonlar' },
         { href: '/admin/access-settings', label: 'Kirish' },
         { href: '/admin/import', label: 'Import' },
+        { href: '/admin/ai', label: 'AI' },
         { href: '/admin/analytics', label: 'Analitika' },
       ];
     }
@@ -67,6 +69,7 @@ export default function AdminNav() {
       { href: '/admin/exams', label: 'Экзамены' },
       { href: '/admin/access-settings', label: 'Доступ' },
       { href: '/admin/import', label: 'Импорт' },
+      { href: '/admin/ai', label: 'AI' },
       { href: '/admin/analytics', label: 'Аналитика' },
     ];
   }, [language]);

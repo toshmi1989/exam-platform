@@ -8,6 +8,8 @@ import {
   ExamReview,
 } from './types';
 import { apiFetch } from './api/client';
+import { API_BASE_URL } from './api/config';
+import { readTelegramUser } from './telegramUser';
 
 function extractAttemptId(data: unknown): string {
   // TODO: adjust to actual API response shape.
@@ -300,6 +302,122 @@ export async function getPaymentStatus(invoiceId: string): Promise<PaymentStatus
     amountTiyin: payload?.amountTiyin,
     subscriptionEndsAt: payload?.subscriptionEndsAt,
   };
+}
+
+export async function explainQuestion(
+  questionId: string,
+  lang: 'ru' | 'uz'
+): Promise<{ content: string }> {
+  const { response, data } = await apiFetch('/ai/explain', {
+    method: 'POST',
+    json: { questionId, lang },
+  });
+  if (!response.ok) {
+    throw data as ApiError;
+  }
+  const payload = data as { content?: string } | null;
+  if (typeof payload?.content !== 'string') {
+    throw new Error('Invalid explain response');
+  }
+  return { content: payload.content };
+}
+
+export interface AdminAiStats {
+  totalQuestions: number;
+  withExplanation: number;
+  missing: number;
+}
+
+export async function getAdminAiStats(): Promise<AdminAiStats> {
+  const { response, data } = await apiFetch('/admin/ai/stats');
+  if (!response.ok) {
+    throw data as ApiError;
+  }
+  const payload = data as AdminAiStats | null;
+  return (
+    payload ?? {
+      totalQuestions: 0,
+      withExplanation: 0,
+      missing: 0,
+    }
+  );
+}
+
+export interface PrewarmProgress {
+  total: number;
+  processed: number;
+  generated: number;
+  skipped: number;
+  errors: number;
+  currentQuestionId: string | null;
+  done?: boolean;
+  error?: string;
+}
+
+/**
+ * POST /admin/ai/prewarm/stream and stream progress via SSE.
+ * Calls onProgress for each event. Resolves when stream ends; rejects on fetch/parse error.
+ */
+export async function streamPrewarm(
+  params: { examId?: string; lang?: 'ru' | 'uz' },
+  onProgress: (p: PrewarmProgress) => void
+): Promise<void> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (typeof window !== 'undefined') {
+    const user = readTelegramUser();
+    if (user?.telegramId) headers['x-telegram-id'] = user.telegramId;
+  }
+
+  const res = await fetch(`${API_BASE_URL}/admin/ai/prewarm/stream`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw (err as ApiError) ?? new Error('Prewarm failed');
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  const dec = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += dec.decode(value, { stream: true });
+      const lines = buffer.split('\n\n');
+      buffer = lines.pop() ?? '';
+      for (const block of lines) {
+        const m = block.match(/^data:\s*(.+)$/m);
+        if (m) {
+          try {
+            const p = JSON.parse(m[1]) as PrewarmProgress;
+            onProgress(p);
+          } catch {
+            // skip malformed
+          }
+        }
+      }
+    }
+    if (buffer) {
+      const m = buffer.match(/^data:\s*(.+)$/m);
+      if (m) {
+        try {
+          const p = JSON.parse(m[1]) as PrewarmProgress;
+          onProgress(p);
+        } catch {
+          // skip
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 export type { ApiError };

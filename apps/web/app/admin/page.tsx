@@ -4,14 +4,17 @@ import AnimatedPage from '../../components/AnimatedPage';
 import BottomNav from '../../components/BottomNav';
 import Card from '../../components/Card';
 import PageHeader from '../../components/PageHeader';
+import Button from '../../components/Button';
 import AdminGuard from './components/AdminGuard';
 import AdminNav from './components/AdminNav';
+import ZiyodaPrewarmModal from './components/ZiyodaPrewarmModal';
 import { readSettings, Language } from '../../lib/uiSettings';
 import { getAdminStats } from '../../lib/api';
 import { useEffect, useMemo, useState } from 'react';
 
 export default function AdminDashboardPage() {
   const [language, setLanguage] = useState<Language>(readSettings().language);
+  const [showZiyodaModal, setShowZiyodaModal] = useState(false);
   const [stats, setStats] = useState<{
     totalUsers: number;
     activeSubscriptions: number;
@@ -40,16 +43,18 @@ export default function AdminDashboardPage() {
         subs: 'Active subscriptions',
         attempts: 'Attempts today',
         conversion: 'Conversion',
+        ziyodaPrewarm: 'Pre-generate Ziyoda',
       };
     }
     if (language === 'Узбекский') {
       return {
         title: 'Admin panel',
-        subtitle: 'Platforma faolligi bo‘yicha umumiy ko‘rinish.',
+        subtitle: "Platforma faolligi bo'yicha umumiy ko'rinish.",
         users: 'Foydalanuvchilar',
         subs: 'Faol obunalar',
         attempts: 'Bugungi urinishlar',
         conversion: 'Konversiya',
+        ziyodaPrewarm: "Ziyodani oldindan yaratish",
       };
     }
     return {
@@ -59,6 +64,7 @@ export default function AdminDashboardPage() {
       subs: 'Активные подписки',
       attempts: 'Попытки за день',
       conversion: 'Конверсия',
+      ziyodaPrewarm: 'Предварительно сгенерировать Зиёду',
     };
   }, [language]);
 
@@ -95,8 +101,22 @@ export default function AdminDashboardPage() {
                   {stats != null ? `${stats.conversion}%` : '—'}
                 </p>
               </Card>
+              <Card className="sm:col-span-2">
+                <p className="text-sm text-slate-500">Ziyoda</p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="mt-2"
+                  onClick={() => setShowZiyodaModal(true)}
+                >
+                  🤖 {copy.ziyodaPrewarm}
+                </Button>
+              </Card>
             </div>
           </AdminGuard>
+          {showZiyodaModal && (
+            <ZiyodaPrewarmModal onClose={() => setShowZiyodaModal(false)} />
+          )}
         </main>
       </AnimatedPage>
       <BottomNav />
