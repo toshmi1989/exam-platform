@@ -273,6 +273,43 @@ router.get('/users', async (req, res) => {
   });
 });
 
+/** Последние 10 направлений (тест/устный), по которым пользователь открывал экзамен. */
+router.get('/users/:telegramId/recent-directions', async (req, res) => {
+  const telegramId = String(req.params.telegramId ?? '').trim();
+  if (!telegramId) {
+    return res.status(400).json({ ok: false, error: 'telegramId required' });
+  }
+  const user = await prisma.user.findUnique({ where: { telegramId }, select: { id: true } });
+  if (!user) {
+    return res.json({ items: [] });
+  }
+  const attempts = await prisma.examAttempt.findMany({
+    where: { userId: user.id },
+    orderBy: { startedAt: 'desc' },
+    take: 10,
+    select: { examId: true, startedAt: true, createdAt: true },
+  });
+  if (attempts.length === 0) {
+    return res.json({ items: [] });
+  }
+  const examIds = [...new Set(attempts.map((a) => a.examId))];
+  const exams = await prisma.exam.findMany({
+    where: { id: { in: examIds } },
+    select: { id: true, direction: true, type: true },
+  });
+  const examMap = new Map(exams.map((e) => [e.id, e]));
+  res.json({
+    items: attempts.map((a) => {
+      const exam = examMap.get(a.examId);
+      return {
+        direction: exam?.direction ?? '—',
+        examType: exam?.type ?? 'TEST',
+        attemptedAt: a.startedAt?.toISOString() ?? a.createdAt.toISOString(),
+      };
+    }),
+  });
+});
+
 router.post('/users/:telegramId/subscription/grant', async (req, res) => {
   const telegramId = String(req.params.telegramId ?? '').trim();
   if (!telegramId) {

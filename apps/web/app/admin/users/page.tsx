@@ -24,6 +24,7 @@ export default function AdminUsersPage() {
   const [query, setQuery] = useState('');
   const [users, setUsers] = useState<UserItem[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserItem | null>(null);
+  const [recentDirections, setRecentDirections] = useState<{ direction: string; examType: string; attemptedAt: string }[]>([]);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -39,6 +40,20 @@ export default function AdminUsersPage() {
     }, 200);
     return () => clearTimeout(timeout);
   }, [query]);
+
+  useEffect(() => {
+    if (!selectedUser?.telegramId) {
+      setRecentDirections([]);
+      return;
+    }
+    apiFetch(`/admin/users/${encodeURIComponent(selectedUser.telegramId)}/recent-directions`)
+      .then(({ response, data }) => {
+        if (!response.ok) return;
+        const payload = data as { items?: { direction: string; examType: string; attemptedAt: string }[] };
+        setRecentDirections(payload?.items ?? []);
+      })
+      .catch(() => setRecentDirections([]));
+  }, [selectedUser?.telegramId]);
 
   const copy = useMemo(() => {
     if (language === 'Английский') {
@@ -56,6 +71,8 @@ export default function AdminUsersPage() {
         deleteFromDb: 'Delete from database',
         back: 'Back',
         actionFailed: 'Action failed. Please try again.',
+        recentDirections: 'Last 10 directions (test/oral)',
+        noRecent: 'No attempts yet.',
       };
     }
     if (language === 'Узбекский') {
@@ -73,6 +90,8 @@ export default function AdminUsersPage() {
         deleteFromDb: 'Bazadan o‘chirish',
         back: 'Orqaga',
         actionFailed: 'Amal bajarilmadi. Qayta urinib ko‘ring.',
+        recentDirections: "So'nggi 10 yo'nalish (test/og'zaki)",
+        noRecent: "Hali urinishlar yo'q.",
       };
     }
     return {
@@ -89,6 +108,8 @@ export default function AdminUsersPage() {
       deleteFromDb: 'Удалить из базы',
       back: 'Назад',
       actionFailed: 'Не удалось выполнить действие.',
+      recentDirections: 'Последние 10 направлений (тест/устный)',
+      noRecent: 'Попыток пока нет.',
     };
   }, [language]);
 
@@ -208,6 +229,30 @@ export default function AdminUsersPage() {
                       {selectedUser.subscriptionActive ? copy.subActive : copy.noSub}
                     </p>
                   </div>
+                  {recentDirections.length > 0 ? (
+                    <div className="border-t border-slate-200 pt-3">
+                      <p className="mb-2 text-xs font-medium text-slate-500">
+                        {copy.recentDirections}
+                      </p>
+                      <ul className="space-y-1 text-sm text-slate-600">
+                        {recentDirections.map((item, i) => (
+                          <li key={i}>
+                            {item.direction}
+                            <span className="ml-1 text-slate-400">
+                              {item.examType === 'ORAL' ? 'устный' : 'тест'}
+                            </span>
+                            <span className="ml-1 text-xs text-slate-400">
+                              {new Date(item.attemptedAt).toLocaleDateString()}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <p className="border-t border-slate-200 pt-3 text-xs text-slate-500">
+                      {copy.recentDirections}: {copy.noRecent}
+                    </p>
+                  )}
                   <div className="flex flex-col gap-2">
                     <Button
                       size="md"
