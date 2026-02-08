@@ -15,9 +15,10 @@ const openai = new OpenAI({
 });
 
 function getSystemPrompt(lang: ZiyodaLang): string {
+  // Для узбекского: uz.wikipedia.org часто пустой — ссылки ведём на ru.wikipedia.org с русским термином в URL; текст ссылки в ответе остаётся на узбекском.
   const linkRule =
     lang === 'uz'
-      ? "Asosiy tibbiy atamalarni Markdown formatida Wikipedia havolalari bilan yozing, masalan: [atama](https://uz.wikipedia.org/wiki/Atama). Bir nechta muhim atamalarni havola qiling."
+      ? "Asosiy tibbiy atamalarni Markdown havolalari bilan yozing. O'zbekcha Wikipedia ko'p atamalar uchun bo'sh — shuning uchun havolalar har doim RUSCHA Wikipedia ga bo'lsin: https://ru.wikipedia.org/wiki/... URL da atamani RUSCHA yozing (masalan: [Spondiloz](https://ru.wikipedia.org/wiki/Спондилёз)). Javob matnida atama o'zbekcha qolsin, faqat URL ruscha bo'lsin. Bir nechta muhim atamalarni shunday havola qiling."
       : "Ключевые медицинские термины оформляйте в Markdown как ссылки на Wikipedia, например: [термин](https://ru.wikipedia.org/wiki/Термин). Сделайте ссылками несколько важных терминов.";
   const emojiTableRule =
     lang === 'uz'
