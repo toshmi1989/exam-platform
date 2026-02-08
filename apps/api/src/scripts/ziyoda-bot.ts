@@ -77,7 +77,7 @@ function getWelcomeMessage(firstName: string, lang: 'ru' | 'uz'): string {
       `Salom, ${name}!\n\n` +
         `👋 Men ZiyoMed rasmiy yordamchisi — Ziyoda.\n\n` +
         `📌 Sizga qanday yordam bera olaman?\n` +
-        `Savolingizni yozing yoki quyidagi tugmalardan foydalaning.`,
+        `Savolingizni yozing.`,
       'uz'
     );
   }
@@ -85,7 +85,7 @@ function getWelcomeMessage(firstName: string, lang: 'ru' | 'uz'): string {
     `Здравствуйте, ${name}!\n\n` +
       `👋 Я Зиёда — официальный помощник ZiyoMed.\n\n` +
       `📌 Чем могу помочь?\n` +
-      `Напишите ваш вопрос или воспользуйтесь кнопками ниже.`,
+      `Напишите ваш вопрос.`,
     'ru'
   );
 }
@@ -127,33 +127,25 @@ function getMainMenuKeyboard(lang: 'ru' | 'uz'): TelegramInlineKeyboard {
   return { inline_keyboard: rows };
 }
 
-const HELP_TEXT_RU = `👩‍⚕️ Отвечает ЗиёдаИИ
+/** Темы инструкции: заголовок RU, UZ и URL Telegraph. Заполните реальные ссылки после публикации статей на telegra.ph */
+const HELP_TOPICS: { ru: string; uz: string; url: string }[] = [
+  { ru: '📌 Как начать', uz: "📌 Qanday boshlash", url: 'https://telegra.ph/ZiyoMed-Kak-nachat-01' },
+  { ru: '🔐 Регистрация и вход', uz: "🔐 Ro'yxatdan o'tish va kirish", url: 'https://telegra.ph/ZiyoMed-Registraciya-02' },
+  { ru: '📝 Тестовый экзамен', uz: '📝 Test imtihoni', url: 'https://telegra.ph/ZiyoMed-Test-03' },
+  { ru: '🎤 Устный экзамен', uz: "🎤 Og'zaki imtihon", url: 'https://telegra.ph/ZiyoMed-Ustnyj-04' },
+  { ru: '💳 Подписка и оплата', uz: "💳 Obuna va to'lov", url: 'https://telegra.ph/ZiyoMed-Podpiska-05' },
+  { ru: '📜 Сертификат', uz: '📜 Sertifikat', url: 'https://telegra.ph/ZiyoMed-Sertifikat-06' },
+  { ru: '👤 Профиль и настройки', uz: "👤 Profil va sozlamalar", url: 'https://telegra.ph/ZiyoMed-Profil-07' },
+];
 
-📘 Как пользоваться ZiyoMed
+function getHelpTopicsKeyboard(lang: 'ru' | 'uz'): { inline_keyboard: { text: string; url: string }[][] } {
+  const rows = HELP_TOPICS.map((t) => [{ text: lang === 'uz' ? t.uz : t.ru, url: t.url }]);
+  return { inline_keyboard: rows };
+}
 
-🧠 Кратко
-• Нажмите «Открыть MedTest» → выберите экзамен (врачи/медсёстры) и режим (тест или устный) → «Начать».
-• Оплата и подписка — в личном кабинете после входа через Telegram.
-• Устный экзамен: ограниченное число вопросов в день без подписки; с подпиской — без лимитов.
+const HELP_INTRO_RU = '👩‍⚕️ Отвечает ЗиёдаИИ\n\n📘 Как пользоваться ZiyoMed\n\nВыберите тему — откроется инструкция с фото:';
+const HELP_INTRO_UZ = "👩‍⚕️ ЗиёдаИИ жавоб беради\n\n📘 ZiyoMed dan qanday foydalanish\n\nMavzuni tanlang — fotosuratlar bilan qo'llanma ochiladi:";
 
-🟦 Детали
-• Тест: Экзамен → профессия → тест → режим → язык → направление → Начать тест.
-• Устный: Экзамен → профессия → устный → порядок вопросов → язык → направление → Начать устный.
-• Подписка даёт доступ к правильным ответам и пояснениям Зиёды.`;
-
-const HELP_TEXT_UZ = `👩‍⚕️ ЗиёдаИИ жавоб беради
-
-📘 ZiyoMed dan qanday foydalanish
-
-🧠 Qisqacha
-• «MedTest ni ochish» tugmasini bosing → imtihon (shifokorlar/hamshiralar) va rejimni (test yoki og‘zaki) tanlang → «Boshlash».
-• To‘lov va obuna — Telegram orqali kirgach, shaxsiy kabinetda.
-• Og‘zaki imtihon: obunasiz kuniga cheklangan savol; obuna bilan — cheklovsiz.
-
-🟦 Batafsil
-• Test: Imtihon → kasb → test → rejim → til → yo‘nalish → Testni boshlash.
-• Og‘zaki: Imtihon → kasb → og‘zaki → savollar tartibi → til → yo‘nalish → Og‘zaki boshlash.
-• Obuna to‘g‘ri javoblar va Ziyoda tushuntirishlarini ko‘rish imkonini beradi.`;
 
 type TelegramInlineButton = { text: string; url?: string; callback_data?: string };
 type TelegramInlineKeyboard = { inline_keyboard: TelegramInlineButton[][] };
@@ -312,20 +304,39 @@ async function run(): Promise<void> {
           try {
             await answerCallbackQuery(cq.id);
             if (data === 'help') {
-              const helpText = lang === 'uz' ? HELP_TEXT_UZ : HELP_TEXT_RU;
-              await sendMessage(chatId, helpText);
-            } else if (data === 'profile') {
+              const helpIntro = lang === 'uz' ? HELP_INTRO_UZ : HELP_INTRO_RU;
+              await sendMessage(chatId, helpIntro, getHelpTopicsKeyboard(lang));
+            } else             if (data === 'profile') {
               const pr = await fetch(`${BOT_API_URL}/bot/profile?telegramId=${encodeURIComponent(telegramId)}`);
-              const profile = (await pr.json()) as { ok?: boolean; telegramId?: string; hasSubscription?: boolean; subscriptionEndsAt?: string | null; cabinetUrl?: string | null };
+              const profile = (await pr.json()) as {
+                ok?: boolean;
+                telegramId?: string;
+                hasSubscription?: boolean;
+                subscriptionEndsAt?: string | null;
+                lastPaymentAt?: string | null;
+                lastPaymentAmountTiyin?: number | null;
+                lastPaymentKind?: string | null;
+              };
               if (profile?.ok) {
                 const endAt = profile.subscriptionEndsAt ? new Date(profile.subscriptionEndsAt).toLocaleDateString() : '—';
-                const msgRu = `👤 Профиль\n\nTelegram ID: ${profile.telegramId ?? telegramId}\nПодписка: ${profile.hasSubscription ? 'активна' : 'нет'}\nДействует до: ${endAt}`;
-                const msgUz = `👤 Profil\n\nTelegram ID: ${profile.telegramId ?? telegramId}\nObuna: ${profile.hasSubscription ? 'faol' : 'yo\'q'}\nAmal qiladi: ${endAt}`;
+                const lastPay =
+                  profile.lastPaymentAt ?
+                    new Date(profile.lastPaymentAt).toLocaleDateString() + (profile.lastPaymentAmountTiyin != null ? ` (${(profile.lastPaymentAmountTiyin / 100).toFixed(0)} сум)` : '')
+                  : '—';
+                const msgRu =
+                  `👤 Профиль\n\n` +
+                  `Telegram ID: ${profile.telegramId ?? telegramId}\n` +
+                  `Подписка: ${profile.hasSubscription ? 'активна' : 'нет'}\n` +
+                  `Действует до: ${endAt}\n` +
+                  `Последняя оплата: ${lastPay}`;
+                const msgUz =
+                  `👤 Profil\n\n` +
+                  `Telegram ID: ${profile.telegramId ?? telegramId}\n` +
+                  `Obuna: ${profile.hasSubscription ? 'faol' : "yo'q"}\n` +
+                  `Amal qiladi: ${endAt}\n` +
+                  `So'nggi to'lov: ${lastPay}`;
                 const msg = lang === 'uz' ? msgUz : msgRu;
-                const kb: ReplyMarkup | undefined = profile.cabinetUrl
-                  ? { inline_keyboard: [[{ text: lang === 'uz' ? 'Kabinetni ochish' : 'Открыть кабинет', url: profile.cabinetUrl }]] }
-                  : undefined;
-                await sendMessage(chatId, msg, kb);
+                await sendMessage(chatId, msg);
               } else {
                 await sendMessage(chatId, lang === 'uz' ? 'Profil yuklanmadi.' : 'Не удалось загрузить профиль.');
               }
@@ -362,9 +373,9 @@ async function run(): Promise<void> {
             const welcomeText = getWelcomeMessage(firstName ?? 'User', lang);
             const cap = welcomeText.length > 1024 ? welcomeText.slice(0, 1021) + '...' : welcomeText;
             if (ZIYODA_AVATAR_URL) {
-              await sendPhoto(chatId, ZIYODA_AVATAR_URL, cap, getMainMenuKeyboard(lang));
+              await sendPhoto(chatId, ZIYODA_AVATAR_URL, cap);
             } else {
-              await sendMessage(chatId, welcomeText, getMainMenuKeyboard(lang));
+              await sendMessage(chatId, welcomeText);
             }
             continue;
           } else if (isStartTestIntent(text)) {

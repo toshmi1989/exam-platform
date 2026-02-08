@@ -88,7 +88,7 @@ router.post('/ask', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
-/** Для кнопки «Мой профиль»: возвращает данные пользователя по telegramId (вызов от бота). */
+/** Для кнопки «Мой профиль»: возвращает данные пользователя по telegramId (вызов от бота). Без кнопки «Открыть кабинет». */
 router.get('/profile', async (req: Request, res: Response): Promise<void> => {
   const telegramId =
     typeof req.query?.telegramId === 'string' ? req.query.telegramId.trim() : '';
@@ -98,22 +98,28 @@ router.get('/profile', async (req: Request, res: Response): Promise<void> => {
   }
   try {
     const userId = `tg-${telegramId}`;
-    const [user, sub] = await Promise.all([
+    const [user, sub, lastPayment] = await Promise.all([
       prisma.user.findUnique({ where: { telegramId }, select: { id: true, firstName: true } }),
       prisma.userSubscription.findFirst({
         where: { userId, endsAt: { gte: new Date() } },
         orderBy: { endsAt: 'desc' },
         select: { endsAt: true },
       }),
+      prisma.paymentInvoice.findFirst({
+        where: { userId, status: 'paid', paidAt: { not: null } },
+        orderBy: { paidAt: 'desc' },
+        select: { paidAt: true, amountTiyin: true, kind: true },
+      }),
     ]);
-    const cabinetUrl = PLATFORM_URL ? `${PLATFORM_URL}/cabinet` : '';
     res.json({
       ok: true,
       telegramId,
       firstName: user?.firstName ?? null,
       hasSubscription: Boolean(sub),
       subscriptionEndsAt: sub?.endsAt?.toISOString() ?? null,
-      cabinetUrl: cabinetUrl || null,
+      lastPaymentAt: lastPayment?.paidAt?.toISOString() ?? null,
+      lastPaymentAmountTiyin: lastPayment?.amountTiyin ?? null,
+      lastPaymentKind: lastPayment?.kind ?? null,
     });
   } catch (err) {
     console.error('[bot/profile]', err);
