@@ -11,6 +11,7 @@ import Button from '../../../components/Button';
 import Card from '../../../components/Card';
 import PageHeader from '../../../components/PageHeader';
 import { readSettings, Language } from '../../../lib/uiSettings';
+import { openPaymentLink } from '../../../lib/telegram';
 import { getProfile, createPayment, getPaymentStatus } from '../../../lib/api';
 
 export const dynamic = 'force-dynamic';
@@ -249,8 +250,11 @@ function PayOneTimeClient() {
       } catch {
         // ignore if sessionStorage unavailable
       }
-      console.log('[pay-one-time] Redirecting to:', checkout_url);
-      window.location.href = checkout_url;
+      console.log('[pay-one-time] Opening payment URL (external browser in Telegram to avoid Android ERR_UNKNOWN_URL_SCHEME):', checkout_url);
+      openPaymentLink(checkout_url);
+      router.push(
+        `/cabinet/pay-one-time/return?invoiceId=${encodeURIComponent(invoiceId)}&examId=${encodeURIComponent(examId)}&mode=${mode}`
+      );
     } catch (e) {
       console.error('[pay-one-time] handlePay error:', e);
       const errorMessage = e instanceof Error ? e.message : copy.errorPay;

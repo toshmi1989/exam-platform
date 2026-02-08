@@ -46,3 +46,19 @@ export function triggerHapticFeedback(style: 'light' | 'medium' | 'heavy' | 'rig
     }
   }
 }
+
+/**
+ * Открывает URL оплаты. В Telegram Mini App (особенно на Android) ссылка открывается во
+ * внешнем браузере через openLink(), чтобы редирект на кастомные схемы (payme://, click://
+ * и т.п.) обрабатывался системой, а не WebView (иначе возникает net::ERR_UNKNOWN_URL_SCHEME).
+ * Вне Telegram — обычный переход по ссылке.
+ */
+export function openPaymentLink(url: string): void {
+  if (typeof window === 'undefined') return;
+  const tg = (window as { Telegram?: { WebApp?: { openLink?: (url: string) => void } } }).Telegram;
+  if (tg?.WebApp?.openLink) {
+    tg.WebApp.openLink(url);
+  } else {
+    window.location.href = url;
+  }
+}

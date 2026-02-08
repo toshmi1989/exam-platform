@@ -6,7 +6,7 @@
 
 ## Обновление проекта
 
-Выполняйте из каталога проекта (например `/home/app/exam-platform`):
+На сервере используется **npm** (не pnpm). Выполняйте из каталога проекта (например `/opt/exam/exam-platform` или `/home/app/exam-platform`):
 
 ```bash
 cd /home/app/exam-platform

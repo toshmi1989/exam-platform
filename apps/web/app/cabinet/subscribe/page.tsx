@@ -8,6 +8,7 @@ import BottomNav from '../../../components/BottomNav';
 import Card from '../../../components/Card';
 import PageHeader from '../../../components/PageHeader';
 import { readSettings, Language } from '../../../lib/uiSettings';
+import { openPaymentLink } from '../../../lib/telegram';
 import { createPayment, getPaymentStatus } from '../../../lib/api';
 import { APP_BASE_URL } from '../../../lib/api/config';
 
@@ -129,7 +130,10 @@ export default function SubscribePage() {
         }
       }
       if (checkout_url) {
-        window.location.href = checkout_url;
+        openPaymentLink(checkout_url);
+        if (invoiceId) {
+          router.push(`/cabinet/subscribe/return?invoiceId=${encodeURIComponent(invoiceId)}`);
+        }
       } else {
         setError(copy.errorPay);
         setPaying(false);
