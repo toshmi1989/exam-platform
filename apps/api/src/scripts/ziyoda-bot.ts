@@ -393,8 +393,10 @@ async function run(): Promise<void> {
             );
             const lang = result.lang ?? langFromText;
             answer = wrapWithHeader(result.answer, lang);
+            const raw = result.answer.trim();
             const isNoInfoFallback =
-              /в базе зиёды нет|ziyoda bazasida bu haqda ma['ʼ]lumot yo['ʻ]q/i.test(result.answer.trim());
+              /в базе зиёды нет/i.test(raw) ||
+              /ziyoda bazasida .* ma['ʼʻ]lumot yo['ʼʻ]q/i.test(raw);
             if (result.limitReached || result.noAnswerFound || isNoInfoFallback) {
               replyMarkup =
                 result.inlineButtons?.length ?
