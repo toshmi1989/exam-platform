@@ -9,6 +9,7 @@ import Card from '../../../../components/Card';
 import PageHeader from '../../../../components/PageHeader';
 import { getPaymentStatus, createAttempt, startAttempt } from '../../../../lib/api';
 import { readSettings, type Language } from '../../../../lib/uiSettings';
+import { isTelegramWebApp, getOpenInTelegramAppUrl } from '../../../../lib/telegram';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,6 +33,12 @@ function PayOneTimeReturnClient() {
     (searchParams.get('mode') === 'practice' ? 'practice' : 'exam')
   );
   const [restored, setRestored] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const inTelegram = mounted && isTelegramWebApp();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const [status, setStatus] = useState<'polling' | 'paid' | 'starting' | 'done' | 'error'>('polling');
   const [message, setMessage] = useState<string>('');
@@ -73,11 +80,14 @@ function PayOneTimeReturnClient() {
         checkFailed: 'Could not verify payment. Check your connection and try again.',
         retryCheck: 'Check again',
         choosePaymentAgain: 'Choose payment method again',
-        goToMyExams: 'Go to "My exams"',
-        cancel: 'Cancel',
-      };
-    }
-    if (language === 'Узбекский') {
+      goToMyExams: 'Go to "My exams"',
+      cancel: 'Cancel',
+      openInTelegramTitle: 'Payment received',
+      openInTelegramMessage: 'Payment successful. Open ZiyoMed in Telegram to start your test.',
+      openInTelegramButton: 'Open in Telegram',
+    };
+  }
+  if (language === 'Узбекский') {
       return {
         title: "To'lovdan keyin qaytish",
         waiting: "To'lov tasdiqlanishi kutilmoqda…",
@@ -98,6 +108,9 @@ function PayOneTimeReturnClient() {
         choosePaymentAgain: "To'lov usulini qayta tanlang",
         goToMyExams: "«Mening imtihonlarim»ga o'tish",
         cancel: 'Bekor qilish',
+        openInTelegramTitle: "To'lov qabul qilindi",
+        openInTelegramMessage: "To'lov muvaffaqiyatli. Testni boshlash uchun ZiyoMed ni Telegramda oching.",
+        openInTelegramButton: "Telegramda ochish",
       };
     }
     return {
@@ -120,6 +133,9 @@ function PayOneTimeReturnClient() {
       choosePaymentAgain: 'Выбрать способ оплаты заново',
       goToMyExams: 'Перейти в «Мои экзамены»',
       cancel: 'Отменить',
+      openInTelegramTitle: 'Оплата получена',
+      openInTelegramMessage: 'Оплата прошла успешно. Откройте ZiyoMed в Telegram, чтобы начать тест.',
+      openInTelegramButton: 'Открыть в Telegram',
     };
   }, [language]);
 
@@ -128,7 +144,7 @@ function PayOneTimeReturnClient() {
 
   // Восстановить invoiceId/examId/mode из sessionStorage, если в URL нет (редирект шлюза мог обрезать query)
   useEffect(() => {
-    if (restored) return;
+    if (!inTelegram || restored) return;
     const hasFromUrl = invoiceId && examId;
     if (hasFromUrl) {
       setRestored(true);
@@ -146,10 +162,10 @@ function PayOneTimeReturnClient() {
       // ignore
     }
     setRestored(true);
-  }, [invoiceId, examId, restored]);
+  }, [invoiceId, examId, restored, inTelegram]);
 
   useEffect(() => {
-    if (!restored) return;
+    if (!inTelegram || !restored) return;
     if (!invoiceId || !examId) {
       setStatus('error');
       setMessage(copyRef.current.errorNoInvoice);
@@ -209,7 +225,7 @@ function PayOneTimeReturnClient() {
     return () => {
       cancelled = true;
     };
-  }, [restored, invoiceId, examId, mode, router]);
+  }, [inTelegram, restored, invoiceId, examId, mode, router]);
 
   async function handleStartClick() {
     setStatus('starting');
@@ -276,6 +292,28 @@ function PayOneTimeReturnClient() {
       // ignore
     }
     router.replace('/cabinet');
+  }
+
+  if (mounted && !inTelegram) {
+    const c = copy as { openInTelegramTitle?: string; openInTelegramMessage?: string; openInTelegramButton?: string };
+    return (
+      <AnimatedPage>
+        <main className="flex flex-col gap-6 pb-28 pt-[3.75rem]">
+          <PageHeader title={c.openInTelegramTitle ?? 'Оплата получена'} subtitle="" />
+          <Card className="flex flex-col items-center gap-6 py-8">
+            <p className="text-center text-slate-700">
+              {c.openInTelegramMessage ?? 'Оплата прошла успешно. Откройте ZiyoMed в Telegram, чтобы начать тест.'}
+            </p>
+            <a
+              href={getOpenInTelegramAppUrl()}
+              className="inline-flex w-full max-w-xs justify-center rounded-xl bg-[#2AABEE] px-5 py-4 text-base font-semibold text-white hover:bg-[#229ED9]"
+            >
+              {c.openInTelegramButton ?? 'Открыть в Telegram'}
+            </a>
+          </Card>
+        </main>
+      </AnimatedPage>
+    );
   }
 
   return (

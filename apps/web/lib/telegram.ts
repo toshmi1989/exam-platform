@@ -1,3 +1,14 @@
+/** Имя бота для ссылки «Открыть в Telegram» (return после оплаты в браузере). */
+export const TELEGRAM_BOT_USERNAME =
+  typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME
+    ? process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME
+    : 'ziyomedbot';
+
+/** Ссылка на бота с /start: открывает Telegram и запускает Mini App (если бот настроен на открытие Web App по start). */
+export function getOpenInTelegramAppUrl(): string {
+  return `https://t.me/${TELEGRAM_BOT_USERNAME}/start`;
+}
+
 export function isTelegramWebApp(): boolean {
   if (typeof window === 'undefined') return false;
   const tg = (window as { Telegram?: { WebApp?: { initData?: string } } })

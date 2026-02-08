@@ -8,6 +8,7 @@ import Card from '../../../../components/Card';
 import PageHeader from '../../../../components/PageHeader';
 import { getPaymentStatus, type PaymentStatusResult } from '../../../../lib/api';
 import { readSettings, type Language } from '../../../../lib/uiSettings';
+import { isTelegramWebApp, getOpenInTelegramAppUrl } from '../../../../lib/telegram';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,11 +33,17 @@ function SubscribeReturnClient() {
   const router = useRouter();
   const invoiceId = searchParams.get('invoiceId') ?? '';
   const [language, setLanguage] = useState<Language>(() => readSettings().language);
+  const [mounted, setMounted] = useState(false);
+  const inTelegram = mounted && isTelegramWebApp();
 
   const [status, setStatus] = useState<'polling' | 'paid' | 'error'>('polling');
   const [message, setMessage] = useState<string>('');
   const [paidDetails, setPaidDetails] = useState<PaymentStatusResult | null>(null);
   const pollCount = useRef(0);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
@@ -69,6 +76,9 @@ function SubscribeReturnClient() {
         toCabinet: 'To cabinet',
         timeout: 'Confirmation timed out. Check your subscription or try again.',
         cancel: 'Cancel',
+        openInTelegramTitle: 'Payment received',
+        openInTelegramMessage: 'Subscription activated. Open ZiyoMed in Telegram to continue.',
+        openInTelegramButton: 'Open in Telegram',
       };
     }
     if (language === 'Узбекский') {
@@ -86,6 +96,9 @@ function SubscribeReturnClient() {
         toCabinet: "Kabinetga",
         timeout: "Tasdiqlash muddati tugadi. Obunani tekshiring yoki qayta urinib ko'ring.",
         cancel: 'Bekor qilish',
+        openInTelegramTitle: "To'lov qabul qilindi",
+        openInTelegramMessage: "Obuna faollashtirildi. Davom etish uchun ZiyoMed ni Telegramda oching.",
+        openInTelegramButton: "Telegramda ochish",
       };
     }
     return {
@@ -102,6 +115,9 @@ function SubscribeReturnClient() {
       toCabinet: 'В кабинет',
       timeout: 'Ожидание подтверждения истекло. Проверьте подписку или попробуйте снова.',
       cancel: 'Отменить',
+      openInTelegramTitle: 'Оплата получена',
+      openInTelegramMessage: 'Подписка активирована. Откройте ZiyoMed в Telegram, чтобы продолжить.',
+      openInTelegramButton: 'Открыть в Telegram',
     };
   }, [language]);
 
@@ -109,9 +125,12 @@ function SubscribeReturnClient() {
   copyRef.current = copy;
 
   useEffect(() => {
-    if (!invoiceId) {
-      setStatus('error');
-      setMessage(copyRef.current.errorNoInvoice);
+    if (!inTelegram || !invoiceId) {
+      if (!inTelegram && invoiceId) return; // opened in browser — no poll
+      if (!invoiceId) {
+        setStatus('error');
+        setMessage(copyRef.current.errorNoInvoice);
+      }
       return;
     }
 
@@ -150,7 +169,7 @@ function SubscribeReturnClient() {
     return () => {
       cancelled = true;
     };
-  }, [invoiceId]);
+  }, [invoiceId, inTelegram]);
 
   function handleCancelPayment() {
     try {
@@ -159,6 +178,27 @@ function SubscribeReturnClient() {
       // ignore
     }
     router.replace('/cabinet');
+  }
+
+  if (mounted && !inTelegram) {
+    return (
+      <AnimatedPage>
+        <main className="flex flex-col gap-6 pb-28 pt-[3.75rem]">
+          <PageHeader title={(copy as { openInTelegramTitle?: string }).openInTelegramTitle ?? 'Оплата получена'} subtitle="" />
+          <Card className="flex flex-col items-center gap-6 py-8">
+            <p className="text-center text-slate-700">
+              {(copy as { openInTelegramMessage?: string }).openInTelegramMessage ?? 'Подписка активирована. Откройте ZiyoMed в Telegram, чтобы продолжить.'}
+            </p>
+            <a
+              href={getOpenInTelegramAppUrl()}
+              className="inline-flex w-full max-w-xs justify-center rounded-xl bg-[#2AABEE] px-5 py-4 text-base font-semibold text-white hover:bg-[#229ED9]"
+            >
+              {(copy as { openInTelegramButton?: string }).openInTelegramButton ?? 'Открыть в Telegram'}
+            </a>
+          </Card>
+        </main>
+      </AnimatedPage>
+    );
   }
 
   return (
