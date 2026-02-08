@@ -69,17 +69,22 @@ router.post('/ask', async (req: Request, res: Response): Promise<void> => {
       previousUserMessage,
       previousBotMessage,
     });
-    if (result.noAnswerFound) {
-      if (message.trim().length > 0 && message.length <= 2000) {
+    function logUnanswered(): void {
+      const msg = message.trim();
+      if (msg.length > 0 && msg.length <= 2000) {
         prisma.botUnansweredQuestion
           .create({
             data: {
-              questionText: message.trim(),
+              questionText: msg,
               telegramId: telegramId || undefined,
             },
           })
           .catch((err) => console.error('[bot/ask] log unanswered', err));
       }
+    }
+
+    if (result.noAnswerFound) {
+      logUnanswered();
       res.json({
         answer: result.answer,
         noAnswerFound: true,
@@ -87,6 +92,17 @@ router.post('/ask', async (req: Request, res: Response): Promise<void> => {
         inlineButtons: buildLimitInlineButtons(lang),
       });
       return;
+    }
+    const raw = result.answer.trim();
+    const isNoAnswerResponse =
+      /в базе зиёды нет|нет этой информации/i.test(raw) ||
+      /ziyoda bazasida .* ma['ʼʻ]lumot yo['ʼʻ]q/i.test(raw) ||
+      /зиёда временно недоступна|ziyoda vaqtincha mavjud emas/i.test(raw) ||
+      /база знаний\s*(ziyomed)?\s*пока пуста|ziyomed bilim bazasi.*bo['ʼʻ]sh/i.test(raw) ||
+      /попробуйте позже|keyinroq urunib ko['ʼʻ]ring/i.test(raw) ||
+      /обратитесь к администратору|administratorga murojaat/i.test(raw);
+    if (isNoAnswerResponse) {
+      logUnanswered();
     }
     res.json({ answer: result.answer, lang });
   } catch (err) {
