@@ -399,6 +399,7 @@ router.get('/exams', async (req, res) => {
       id: exam.id,
       title: exam.title,
       direction: exam.direction,
+      directionGroupId: exam.directionGroupId ?? undefined,
       category: exam.category?.name ?? '',
       profession: exam.profession,
       language: exam.language,
@@ -406,6 +407,33 @@ router.get('/exams', async (req, res) => {
       questionCount: exam._count?.questions ?? 0,
     })),
   });
+});
+
+/** Удалить направление целиком: по directionGroupId (пара из импорта — оба языка) или по profession+type+direction. */
+router.delete('/exams/by-direction', async (req, res) => {
+  const directionGroupId = String(req.body?.directionGroupId ?? req.query?.directionGroupId ?? '').trim();
+  if (directionGroupId) {
+    const result = await prisma.exam.deleteMany({
+      where: { directionGroupId },
+    });
+    return res.json({ ok: true, deleted: result.count });
+  }
+  const profession = String(req.body?.profession ?? req.query?.profession ?? '').trim().toUpperCase();
+  const type = String(req.body?.type ?? req.query?.type ?? '').trim().toUpperCase();
+  const direction = String(req.body?.direction ?? req.query?.direction ?? '').trim();
+  if (!profession || !type || !direction) {
+    return res.status(400).json({ ok: false, reasonCode: 'MISSING_PARAMS' });
+  }
+  if (profession !== 'DOCTOR' && profession !== 'NURSE') {
+    return res.status(400).json({ ok: false, reasonCode: 'INVALID_PROFESSION' });
+  }
+  if (type !== 'TEST' && type !== 'ORAL') {
+    return res.status(400).json({ ok: false, reasonCode: 'INVALID_TYPE' });
+  }
+  const result = await prisma.exam.deleteMany({
+    where: { profession: profession as 'DOCTOR' | 'NURSE', type: type as 'TEST' | 'ORAL', direction },
+  });
+  return res.json({ ok: true, deleted: result.count });
 });
 
 router.get('/exams/:examId', async (req, res) => {
@@ -431,6 +459,7 @@ router.get('/exams/:examId', async (req, res) => {
       id: exam.id,
       title: exam.title,
       direction: exam.direction,
+      directionGroupId: exam.directionGroupId ?? undefined,
       category: exam.category?.name ?? '',
       profession: exam.profession,
       language: exam.language,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import AnimatedPage from '../../../components/AnimatedPage';
 import BottomNav from '../../../components/BottomNav';
 import Card from '../../../components/Card';
@@ -15,6 +15,7 @@ type ExamSummary = {
   id: string;
   title: string;
   direction: string;
+  directionGroupId?: string;
   category: string;
   profession: string;
   language: string;
@@ -32,6 +33,7 @@ type ExamDetail = {
   id: string;
   title: string;
   direction: string;
+  directionGroupId?: string;
   category: string;
   profession: string;
   language: string;
@@ -48,6 +50,20 @@ export default function AdminExamsPage() {
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const update = () => setLanguage(readSettings().language);
@@ -67,6 +83,10 @@ export default function AdminExamsPage() {
         correct: 'Correct',
         loading: 'Loading...',
         saveError: 'Unable to save changes.',
+        deleteDirection: 'Delete direction (both languages)',
+        deleteDirectionConfirm: 'Delete direction "{name}" (RU and UZ)? All questions will be removed.',
+        deleteDone: 'Direction deleted.',
+        deleteError: 'Could not delete.',
       };
     }
     if (language === 'Узбекский') {
@@ -80,18 +100,26 @@ export default function AdminExamsPage() {
         correct: 'To‘g‘ri',
         loading: 'Yuklanmoqda...',
         saveError: 'Saqlab bo‘lmadi.',
+        deleteDirection: "Yo'nalishni o'chirish (ikki til)",
+        deleteDirectionConfirm: '«{name}» yo‘nalishini (RU va UZ) o‘chirish? Savollar o‘chiriladi.',
+        deleteDone: "Yo'nalish o'chirildi.",
+        deleteError: "O'chirib bo'lmadi.",
       };
     }
     return {
       title: 'Экзамены',
       subtitle: 'Управление категориями и экзаменами.',
       selectExam: 'Выберите экзамен',
-      search: 'Поиск по названию или направлению',
+        search: 'Поиск по названию или направлению',
       questions: 'Вопросы',
       save: 'Сохранить',
       correct: 'Правильный',
       loading: 'Загружаем...',
       saveError: 'Не удалось сохранить.',
+      deleteDirection: 'Удалить направление (оба языка)',
+      deleteDirectionConfirm: 'Удалить направление «{name}» (RU и UZ)? Вопросы будут удалены.',
+      deleteDone: 'Направление удалено.',
+      deleteError: 'Не удалось удалить.',
     };
   }, [language]);
 
@@ -184,6 +212,41 @@ export default function AdminExamsPage() {
     }
   }
 
+  async function deleteDirection() {
+    if (!selectedExam) return;
+    const message = copy.deleteDirectionConfirm.replace('{name}', selectedExam.direction);
+    if (!window.confirm(message)) return;
+    setDeleting(true);
+    setErrorMessage(null);
+    setDeleteSuccess(null);
+    try {
+      const params = new URLSearchParams();
+      if (selectedExam.directionGroupId) {
+        params.set('directionGroupId', selectedExam.directionGroupId);
+      } else {
+        params.set('profession', selectedExam.profession);
+        params.set('type', selectedExam.type);
+        params.set('direction', selectedExam.direction);
+      }
+      const { response } = await apiFetch(`/admin/exams/by-direction?${params}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        setErrorMessage(copy.deleteError);
+        return;
+      }
+      setDeleteSuccess(copy.deleteDone);
+      setSelectedExam(null);
+      setSelectedExamId('');
+      setShowSuggestions(false);
+      void loadExams();
+    } catch {
+      setErrorMessage(copy.deleteError);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <>
       <AnimatedPage>
@@ -192,12 +255,38 @@ export default function AdminExamsPage() {
             <PageHeader title={copy.title} subtitle={copy.subtitle} />
             <AdminNav />
 
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={copy.search}
-              className="rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#2AABEE]"
-            />
+            <div ref={searchContainerRef} className="relative">
+              <input
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setShowSuggestions(true);
+                }}
+                onFocus={() => setShowSuggestions(true)}
+                placeholder={copy.search}
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#2AABEE]"
+                autoComplete="off"
+              />
+              {showSuggestions && exams.length > 0 && (
+                <ul className="absolute left-0 right-0 top-full z-10 mt-1 max-h-60 overflow-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                  {exams.map((exam) => (
+                    <li key={exam.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          openExam(exam.id);
+                          setQuery(exam.title);
+                          setShowSuggestions(false);
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100"
+                      >
+                        {exam.title} · {exam.category} · {exam.direction} · {exam.language} · {exam.questionCount}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
 
             <select
               value={selectedExamId}
@@ -219,6 +308,11 @@ export default function AdminExamsPage() {
               ))}
             </select>
 
+            {deleteSuccess ? (
+              <Card>
+                <p className="text-sm text-emerald-600">{deleteSuccess}</p>
+              </Card>
+            ) : null}
             {errorMessage ? (
               <Card>
                 <p className="text-sm text-rose-500">{errorMessage}</p>
@@ -233,6 +327,16 @@ export default function AdminExamsPage() {
 
             {selectedExam ? (
               <Card title={`${selectedExam.title} · ${copy.questions}`}>
+                <div className="mb-4 flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    onClick={() => deleteDirection()}
+                    disabled={deleting}
+                  >
+                    {copy.deleteDirection}
+                  </Button>
+                </div>
                 <div className="flex flex-col gap-4">
                   {selectedExam.questions.map((question, index) => (
                     <div key={question.id} className="rounded-xl border border-slate-200 p-4">

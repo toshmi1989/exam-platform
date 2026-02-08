@@ -117,6 +117,7 @@ export async function importQuestionBank(params: {
       continue;
     }
 
+    const directionGroupId = `${category.id}_${Math.floor(i / 2)}`;
     const exam = await prisma.exam.upsert({
       where: { title_categoryId: { title: sheetName, categoryId: category.id } },
       update: {
@@ -124,6 +125,7 @@ export async function importQuestionBank(params: {
         profession: params.profession,
         language,
         direction: sheetName,
+        directionGroupId,
       },
       create: {
         title: sheetName,
@@ -132,6 +134,7 @@ export async function importQuestionBank(params: {
         language,
         direction: sheetName,
         categoryId: category.id,
+        directionGroupId,
       },
     });
 
@@ -328,6 +331,7 @@ export async function importOralQuestionBank(params: {
         continue;
       }
 
+      const directionGroupId = `${category.id}_${Math.floor(sheetIndex / 2)}`;
       const exam = await prisma.exam.upsert({
         where: {
           title_categoryId: { title: sheetName, categoryId: category.id },
@@ -337,6 +341,7 @@ export async function importOralQuestionBank(params: {
           profession: params.profession,
           language,
           direction: sheetName,
+          directionGroupId,
         },
         create: {
           title: sheetName,
@@ -345,6 +350,7 @@ export async function importOralQuestionBank(params: {
           language,
           direction: sheetName,
           categoryId: category.id,
+          directionGroupId,
         },
       });
 
