@@ -331,16 +331,16 @@ async function run(): Promise<void> {
                   : '—';
                 const msgRu =
                   `👤 Профиль\n\n` +
-                  `Telegram ID: ${profile.telegramId ?? telegramId}\n` +
-                  `Подписка: ${profile.hasSubscription ? 'активна' : 'нет'}\n` +
-                  `Действует до: ${endAt}\n` +
-                  `Последняя оплата: ${lastPay}`;
+                  `🆔 Telegram ID: ${profile.telegramId ?? telegramId}\n` +
+                  `📋 Подписка: ${profile.hasSubscription ? '✅ активна' : '❌ нет'}\n` +
+                  `📅 Действует до: ${endAt}\n` +
+                  `💳 Последняя оплата: ${lastPay}`;
                 const msgUz =
                   `👤 Profil\n\n` +
-                  `Telegram ID: ${profile.telegramId ?? telegramId}\n` +
-                  `Obuna: ${profile.hasSubscription ? 'faol' : "yo'q"}\n` +
-                  `Amal qiladi: ${endAt}\n` +
-                  `So'nggi to'lov: ${lastPay}`;
+                  `🆔 Telegram ID: ${profile.telegramId ?? telegramId}\n` +
+                  `📋 Obuna: ${profile.hasSubscription ? '✅ faol' : "❌ yo'q"}\n` +
+                  `📅 Amal qiladi: ${endAt}\n` +
+                  `💳 So'nggi to'lov: ${lastPay}`;
                 const msg = lang === 'uz' ? msgUz : msgRu;
                 await sendMessage(chatId, msg);
               } else {
@@ -408,6 +408,8 @@ async function run(): Promise<void> {
                 result.inlineButtons?.length ?
                   { inline_keyboard: result.inlineButtons }
                 : getMainMenuKeyboard(lang);
+              const menuHint = lang === 'uz' ? '\n\nYoki quyidagi menyulardan birini tanlang.' : '\n\nИли выберите один из пунктов меню ниже.';
+              answer += menuHint;
             }
             conversationContext.set(telegramId, {
               lastUserMessage: text,
