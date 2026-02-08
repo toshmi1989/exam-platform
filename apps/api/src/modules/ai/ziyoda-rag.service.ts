@@ -91,10 +91,16 @@ ${contextText || '(none)'}
 Q: ${question}`;
 }
 
+export interface AskZiyodaResult {
+  answer: string;
+  /** true, когда ответ — фиксированный текст (пустая база, нет релевантных чанков, ошибка API); бот показывает меню с инлайн-кнопками. */
+  noAnswerFound?: boolean;
+}
+
 export async function askZiyoda(
   question: string,
   user: { firstName?: string; previousUserMessage?: string; previousBotMessage?: string }
-): Promise<string> {
+): Promise<AskZiyodaResult> {
   const trimmed = question.trim();
   const prompts = await getZiyodaPrompts();
   const fallbackRu = prompts.fallback_ru ?? DEFAULT_PROMPTS.fallback_ru;
@@ -104,8 +110,12 @@ export async function askZiyoda(
   const emptyKbRu = prompts.empty_kb_ru ?? DEFAULT_PROMPTS.empty_kb_ru;
   const emptyKbUz = prompts.empty_kb_uz ?? DEFAULT_PROMPTS.empty_kb_uz;
 
+  const ret = (answer: string, noAnswerFound?: boolean): AskZiyodaResult =>
+    noAnswerFound ? { answer, noAnswerFound: true } : { answer };
+
   if (!trimmed) {
-    return detectLang(question) === 'uz' ? fallbackUz : fallbackRu;
+    const lang = detectLang(question);
+    return ret(lang === 'uz' ? fallbackUz : fallbackRu, true);
   }
 
   const lang = detectLang(trimmed);
@@ -120,7 +130,7 @@ export async function askZiyoda(
       const cached = await prisma.botAnswerCache.findUnique({
         where: { questionHash },
       });
-      if (cached) return cached.answer;
+      if (cached) return ret(cached.answer);
     }
 
     const queryEmbedding = await getEmbedding(trimmed);
@@ -131,7 +141,7 @@ export async function askZiyoda(
 
     if (entries.length === 0) {
       console.warn('[ziyoda-rag] База знаний пуста (KnowledgeBaseEntry = 0). Загрузите материалы в админке → AI → Зиёда AI.');
-      return lang === 'uz' ? emptyKbUz : emptyKbRu;
+      return ret(lang === 'uz' ? emptyKbUz : emptyKbRu, true);
     }
 
     const maxChunks = getIntPrompt(prompts, 'max_chunks', DEFAULT_MAX_CHUNKS);
@@ -149,8 +159,14 @@ export async function askZiyoda(
         ? aboveThreshold.map((x) => x.entry.content)
         : withScores.slice(0, fallbackChunkCount).map((x) => x.entry.content);
 
+    if (aboveThreshold.length === 0) {
+      console.warn('[ziyoda-rag] Нет релевантных чанков. Запрос:', trimmed.slice(0, 80));
+      return ret(lang === 'uz' ? fallbackUz : fallbackRu, true);
+    }
+
     if (contextChunks.length === 0) {
-      console.warn('[ziyoda-rag] Нет подходящих чанков (возможно, эмбеддинги другой размерности или модель изменилась). Запрос:', trimmed.slice(0, 80));
+      console.warn('[ziyoda-rag] Нет подходящих чанков (эмбеддинги?). Запрос:', trimmed.slice(0, 80));
+      return ret(lang === 'uz' ? fallbackUz : fallbackRu, true);
     }
 
     const maxContextMsgLen = getIntPrompt(prompts, 'max_context_msg_len', DEFAULT_MAX_CONTEXT_MSG_LEN);
@@ -171,13 +187,13 @@ export async function askZiyoda(
       });
     }
 
-    return answer;
+    return ret(answer);
   } catch (err) {
     const isLangUz = lang === 'uz';
     console.error('[ziyoda-rag] Ошибка:', err);
     if (err instanceof Error && (err.message.includes('OPENAI') || err.message.includes('API') || err.message.includes('не настроен'))) {
-      return isLangUz ? unavailableUz : unavailableRu;
+      return ret(isLangUz ? unavailableUz : unavailableRu, true);
     }
-    return isLangUz ? fallbackUz : fallbackRu;
+    return ret(isLangUz ? fallbackUz : fallbackRu, true);
   }
 }

@@ -63,12 +63,21 @@ router.post('/ask', async (req: Request, res: Response): Promise<void> => {
     }
 
     await recordBotAiRequest(telegramId);
-    const answer = await askZiyoda(message, {
+    const lang = /[\u04E6\u0493\u049B\u04B3\u04B7\u04E9]/.test(message) ? 'uz' : 'ru';
+    const result = await askZiyoda(message, {
       firstName: firstName || undefined,
       previousUserMessage,
       previousBotMessage,
     });
-    res.json({ answer });
+    if (result.noAnswerFound) {
+      res.json({
+        answer: result.answer,
+        noAnswerFound: true,
+        inlineButtons: buildLimitInlineButtons(lang),
+      });
+      return;
+    }
+    res.json({ answer: result.answer });
   } catch (err) {
     console.error('[bot/ask]', err);
     res.status(500).json({
