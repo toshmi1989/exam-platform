@@ -393,7 +393,9 @@ async function run(): Promise<void> {
             );
             const lang = result.lang ?? langFromText;
             answer = wrapWithHeader(result.answer, lang);
-            if (result.limitReached || result.noAnswerFound) {
+            const isNoInfoFallback =
+              /в базе зиёды нет|ziyoda bazasida bu haqda ma['ʼ]lumot yo['ʻ]q/i.test(result.answer.trim());
+            if (result.limitReached || result.noAnswerFound || isNoInfoFallback) {
               replyMarkup =
                 result.inlineButtons?.length ?
                   { inline_keyboard: result.inlineButtons }
