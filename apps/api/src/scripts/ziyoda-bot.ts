@@ -127,15 +127,16 @@ function getMainMenuKeyboard(lang: 'ru' | 'uz'): TelegramInlineKeyboard {
   return { inline_keyboard: rows };
 }
 
-/** Темы инструкции: заголовок RU, UZ и URL Telegraph. Заполните реальные ссылки после публикации статей на telegra.ph */
+/** Темы инструкции: заголовок RU, UZ и URL Telegraph. Пока одна ссылка на общее руководство. */
+const TELEGRAPH_MANUAL_URL = 'https://telegra.ph/Qollanma-02-08-2';
 const HELP_TOPICS: { ru: string; uz: string; url: string }[] = [
-  { ru: '📌 Как начать', uz: "📌 Qanday boshlash", url: 'https://telegra.ph/ZiyoMed-Kak-nachat-01' },
-  { ru: '🔐 Регистрация и вход', uz: "🔐 Ro'yxatdan o'tish va kirish", url: 'https://telegra.ph/ZiyoMed-Registraciya-02' },
-  { ru: '📝 Тестовый экзамен', uz: '📝 Test imtihoni', url: 'https://telegra.ph/ZiyoMed-Test-03' },
-  { ru: '🎤 Устный экзамен', uz: "🎤 Og'zaki imtihon", url: 'https://telegra.ph/ZiyoMed-Ustnyj-04' },
-  { ru: '💳 Подписка и оплата', uz: "💳 Obuna va to'lov", url: 'https://telegra.ph/ZiyoMed-Podpiska-05' },
-  { ru: '📜 Сертификат', uz: '📜 Sertifikat', url: 'https://telegra.ph/ZiyoMed-Sertifikat-06' },
-  { ru: '👤 Профиль и настройки', uz: "👤 Profil va sozlamalar", url: 'https://telegra.ph/ZiyoMed-Profil-07' },
+  { ru: '📌 Как начать', uz: "📌 Qanday boshlash", url: TELEGRAPH_MANUAL_URL },
+  { ru: '🔐 Регистрация и вход', uz: "🔐 Ro'yxatdan o'tish va kirish", url: TELEGRAPH_MANUAL_URL },
+  { ru: '📝 Тестовый экзамен', uz: '📝 Test imtihoni', url: TELEGRAPH_MANUAL_URL },
+  { ru: '🎤 Устный экзамен', uz: "🎤 Og'zaki imtihon", url: TELEGRAPH_MANUAL_URL },
+  { ru: '💳 Подписка и оплата', uz: "💳 Obuna va to'lov", url: TELEGRAPH_MANUAL_URL },
+  { ru: '📜 Сертификат', uz: '📜 Sertifikat', url: TELEGRAPH_MANUAL_URL },
+  { ru: '👤 Профиль и настройки', uz: "👤 Profil va sozlamalar", url: TELEGRAPH_MANUAL_URL },
 ];
 
 function getHelpTopicsKeyboard(lang: 'ru' | 'uz'): { inline_keyboard: { text: string; url: string }[][] } {

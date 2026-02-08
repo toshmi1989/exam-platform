@@ -26,8 +26,13 @@ function buildLimitInlineButtons(lang: 'ru' | 'uz'): { text: string; url?: strin
 }
 
 router.post('/ask', async (req: Request, res: Response): Promise<void> => {
+  const rawTelegramId = req.body?.telegramId;
   const telegramId =
-    typeof req.body?.telegramId === 'string' ? req.body.telegramId.trim() : '';
+    typeof rawTelegramId === 'string'
+      ? rawTelegramId.trim()
+      : typeof rawTelegramId === 'number' && Number.isFinite(rawTelegramId)
+        ? String(rawTelegramId)
+        : '';
   let firstName =
     typeof req.body?.firstName === 'string' ? req.body.firstName.trim() : undefined;
   if (!firstName && telegramId) {
@@ -69,22 +74,24 @@ router.post('/ask', async (req: Request, res: Response): Promise<void> => {
       previousUserMessage,
       previousBotMessage,
     });
-    function logUnanswered(): void {
+
+    async function logUnanswered(): Promise<void> {
       const msg = message.trim();
-      if (msg.length > 0 && msg.length <= 2000) {
-        prisma.botUnansweredQuestion
-          .create({
-            data: {
-              questionText: msg,
-              telegramId: telegramId || undefined,
-            },
-          })
-          .catch((err) => console.error('[bot/ask] log unanswered', err));
+      if (msg.length === 0 || msg.length > 2000) return;
+      try {
+        await prisma.botUnansweredQuestion.create({
+          data: {
+            questionText: msg,
+            telegramId: telegramId ? String(telegramId).trim() || undefined : undefined,
+          },
+        });
+      } catch (err) {
+        console.error('[bot/ask] log unanswered failed', err);
       }
     }
 
     if (result.noAnswerFound) {
-      logUnanswered();
+      await logUnanswered();
       res.json({
         answer: result.answer,
         noAnswerFound: true,
@@ -95,14 +102,15 @@ router.post('/ask', async (req: Request, res: Response): Promise<void> => {
     }
     const raw = result.answer.trim();
     const isNoAnswerResponse =
-      /в базе зиёды нет|нет этой информации/i.test(raw) ||
-      /ziyoda bazasida .* ma['ʼʻ]lumot yo['ʼʻ]q/i.test(raw) ||
+      /в базе зиёды нет|нет этой информации|можешь уточнить вопрос/i.test(raw) ||
+      /ziyoda bazasida .* ma['ʼʻ\u0027]lumot yo['ʼʻ\u0027]q/i.test(raw) ||
+      /savolni aniqlashtiring/i.test(raw) ||
       /зиёда временно недоступна|ziyoda vaqtincha mavjud emas/i.test(raw) ||
-      /база знаний\s*(ziyomed)?\s*пока пуста|ziyomed bilim bazasi.*bo['ʼʻ]sh/i.test(raw) ||
-      /попробуйте позже|keyinroq urunib ko['ʼʻ]ring/i.test(raw) ||
+      /база знаний\s*(ziyomed)?\s*пока пуста|ziyomed bilim bazasi.*bo['ʼʻ\u0027]sh/i.test(raw) ||
+      /попробуйте позже|keyinroq urunib ko['ʼʻ\u0027]ring/i.test(raw) ||
       /обратитесь к администратору|administratorga murojaat/i.test(raw);
     if (isNoAnswerResponse) {
-      logUnanswered();
+      await logUnanswered();
     }
     res.json({ answer: result.answer, lang });
   } catch (err) {
