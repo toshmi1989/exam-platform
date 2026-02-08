@@ -318,10 +318,16 @@ async function run(): Promise<void> {
                 lastPaymentKind?: string | null;
               };
               if (profile?.ok) {
-                const endAt = profile.subscriptionEndsAt ? new Date(profile.subscriptionEndsAt).toLocaleDateString() : '—';
+                const fmt = (s: string) => {
+                  const d = new Date(s);
+                  const day = d.getDate().toString().padStart(2, '0');
+                  const month = (d.getMonth() + 1).toString().padStart(2, '0');
+                  return `${day}-${month}-${d.getFullYear()}`;
+                };
+                const endAt = profile.subscriptionEndsAt ? fmt(profile.subscriptionEndsAt) : '—';
                 const lastPay =
                   profile.lastPaymentAt ?
-                    new Date(profile.lastPaymentAt).toLocaleDateString() + (profile.lastPaymentAmountTiyin != null ? ` (${(profile.lastPaymentAmountTiyin / 100).toFixed(0)} сум)` : '')
+                    fmt(profile.lastPaymentAt) + (profile.lastPaymentAmountTiyin != null ? ` (${(profile.lastPaymentAmountTiyin / 100).toFixed(0)} сум)` : '')
                   : '—';
                 const msgRu =
                   `👤 Профиль\n\n` +
