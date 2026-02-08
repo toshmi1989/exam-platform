@@ -30,20 +30,29 @@ function getFloatPrompt(prompts: Record<string, string>, key: string, def: numbe
 
 export type ZiyodaLang = 'ru' | 'uz';
 
-/** Узбекская кириллица: ӯ ғ қ ҳ ҷ ў (в русском нет). Если есть — считаем язык узбекским. */
+/** Узбекская кириллица: ӯ ғ қ ҳ ҷ ў (в русском нет). Если есть — однозначно узбекский. */
 const UZBEK_CYRILLIC = /[\u04E6\u0493\u049B\u04B3\u04B7\u04E9]/; // ӯ ғ қ ҳ ҷ ў
+/** Кириллица (русская и узбекская). */
+const CYRILLIC = /[\u0400-\u04FF]/;
 
 export function detectLang(text: string): ZiyodaLang {
   const trimmed = text.trim();
   if (!trimmed) return 'ru';
   if (UZBEK_CYRILLIC.test(trimmed)) return 'uz';
-  let cyrillic = 0;
-  let latin = 0;
-  for (const ch of trimmed) {
-    if (/[\u0400-\u04FF]/.test(ch)) cyrillic++;
-    else if (/[a-zA-Z]/.test(ch)) latin++;
+  const hasCyrillic = CYRILLIC.test(trimmed);
+  const hasLatin = /[a-zA-Z]/.test(trimmed);
+  if (hasCyrillic && !hasLatin) return 'ru';
+  if (hasCyrillic && hasLatin) {
+    let cyrillic = 0;
+    let latin = 0;
+    for (const ch of trimmed) {
+      if (CYRILLIC.test(ch)) cyrillic++;
+      else if (/[a-zA-Z]/.test(ch)) latin++;
+    }
+    return cyrillic >= latin ? 'ru' : 'uz';
   }
-  return cyrillic >= latin ? 'ru' : 'uz';
+  // Только латиница (узбекская латиница или др.) — в контексте бота считаем узбекским
+  return 'uz';
 }
 
 function truncateForContext(s: string, maxLen: number): string {
@@ -73,7 +82,11 @@ function buildPrompt(
   const langLabel = lang === 'uz' ? 'uz' : 'ru';
   const fallback = lang === 'uz' ? (prompts.fallback_uz ?? DEFAULT_PROMPTS.fallback_uz) : (prompts.fallback_ru ?? DEFAULT_PROMPTS.fallback_ru);
   const systemRaw = prompts.system_instruction ?? DEFAULT_PROMPTS.system_instruction;
-  const systemPart = systemRaw
+  const langStrict =
+    lang === 'uz'
+      ? ' СТРОГО: вопрос на узбекском — отвечай ТОЛЬКО на узбекском (латиница или кириллица). Русский не используй.'
+      : '';
+  const systemPart = (systemRaw + langStrict)
     .replace(/\{lang\}/g, langLabel)
     .replace(/\{fallback\}/g, fallback)
     .replace(/\{name_greeting\}/g, '');
@@ -82,13 +95,14 @@ function buildPrompt(
     ? `\nPrev: User: ${truncateForContext(previousExchange.user, maxContextMsgLen)}\nBot: ${truncateForContext(previousExchange.bot, maxContextMsgLen)}\n`
     : '';
 
+  const langHint = lang === 'uz' ? '\n[Reply ONLY in Uzbek. Do not use Russian.]' : '';
   return `${systemPart}${recentContext}
 
 <chunks>
 ${contextText || '(none)'}
 </chunks>
 
-Q: ${question}`;
+Q: ${question}${langHint}`;
 }
 
 export interface AskZiyodaResult {

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../db/prisma';
-import { askZiyoda } from '../ai/ziyoda-rag.service';
+import { askZiyoda, detectLang } from '../ai/ziyoda-rag.service';
 import { checkBotAiLimit, recordBotAiRequest } from './bot-ai-limit.service';
 
 const router = Router();
@@ -50,20 +50,20 @@ router.post('/ask', async (req: Request, res: Response): Promise<void> => {
   }
 
   try {
+    const lang = detectLang(message);
     const limitResult = await checkBotAiLimit(telegramId);
     if (!limitResult.allowed) {
-      const lang = /[\u04E6\u0493\u049B\u04B3\u04B7\u04E9]/.test(message) ? 'uz' : 'ru';
       const answer = lang === 'uz' ? LIMIT_MESSAGE_UZ : LIMIT_MESSAGE_RU;
       res.json({
         answer,
         limitReached: true,
+        lang,
         inlineButtons: buildLimitInlineButtons(lang),
       });
       return;
     }
 
     await recordBotAiRequest(telegramId);
-    const lang = /[\u04E6\u0493\u049B\u04B3\u04B7\u04E9]/.test(message) ? 'uz' : 'ru';
     const result = await askZiyoda(message, {
       firstName: firstName || undefined,
       previousUserMessage,
@@ -73,11 +73,12 @@ router.post('/ask', async (req: Request, res: Response): Promise<void> => {
       res.json({
         answer: result.answer,
         noAnswerFound: true,
+        lang,
         inlineButtons: buildLimitInlineButtons(lang),
       });
       return;
     }
-    res.json({ answer: result.answer });
+    res.json({ answer: result.answer, lang });
   } catch (err) {
     console.error('[bot/ask]', err);
     res.status(500).json({

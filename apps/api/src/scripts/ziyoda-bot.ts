@@ -62,8 +62,8 @@ function isGreetingOrStart(text: string): boolean {
 }
 
 /** Шапка для каждого сообщения от ИИ: на русском или узбекском. */
-const HEADER_RU = '🤖 Отвечает ЗиёдаИИ';
-const HEADER_UZ = '🤖 ЗиёдаИИ жавоб беради';
+const HEADER_RU = '👩‍⚕️ Отвечает ЗиёдаИИ';
+const HEADER_UZ = '👩‍⚕️ ЗиёдаИИ жавоб беради';
 
 function wrapWithHeader(text: string, lang: 'ru' | 'uz'): string {
   const header = lang === 'uz' ? HEADER_UZ : HEADER_RU;
@@ -127,7 +127,7 @@ function getMainMenuKeyboard(lang: 'ru' | 'uz'): TelegramInlineKeyboard {
   return { inline_keyboard: rows };
 }
 
-const HELP_TEXT_RU = `🤖 Отвечает ЗиёдаИИ
+const HELP_TEXT_RU = `👩‍⚕️ Отвечает ЗиёдаИИ
 
 📘 Как пользоваться ZiyoMed
 
@@ -141,7 +141,7 @@ const HELP_TEXT_RU = `🤖 Отвечает ЗиёдаИИ
 • Устный: Экзамен → профессия → устный → порядок вопросов → язык → направление → Начать устный.
 • Подписка даёт доступ к правильным ответам и пояснениям Зиёды.`;
 
-const HELP_TEXT_UZ = `🤖 ЗиёдаИИ жавоб беради
+const HELP_TEXT_UZ = `👩‍⚕️ ЗиёдаИИ жавоб беради
 
 📘 ZiyoMed dan qanday foydalanish
 
@@ -233,6 +233,8 @@ type AskZiyodaResult = {
   answer: string;
   limitReached?: boolean;
   noAnswerFound?: boolean;
+  /** Язык ответа (ru/uz), для шапки сообщения. */
+  lang?: 'ru' | 'uz';
   inlineButtons?: { text: string; url?: string; callback_data?: string }[][];
 };
 
@@ -261,17 +263,26 @@ async function askZiyoda(
     const err = await res.json().catch(() => ({})) as { error?: string };
     throw new Error(err?.error ?? `API ${res.status}`);
   }
-  const data = (await res.json()) as { answer?: string; limitReached?: boolean; noAnswerFound?: boolean; inlineButtons?: { text: string; url?: string; callback_data?: string }[][] };
+  const data = (await res.json()) as { answer?: string; limitReached?: boolean; noAnswerFound?: boolean; lang?: 'ru' | 'uz'; inlineButtons?: { text: string; url?: string; callback_data?: string }[][] };
   return {
     answer: data.answer ?? '',
     limitReached: data.limitReached,
     noAnswerFound: data.noAnswerFound,
+    lang: data.lang,
     inlineButtons: data.inlineButtons,
   };
 }
 
 function isUzbekCyrillic(text: string): boolean {
   return /[\u04E6\u0493\u049B\u04B3\u04B7\u04E9]/.test(text);
+}
+
+/** Определение языка для шапки/кнопок: латиница без кириллицы = узбекский, узбекская кириллица = узбекский, иначе русский. */
+function detectLangForBot(text: string): 'ru' | 'uz' {
+  if (text === '/start') return 'uz';
+  if (isUzbekCyrillic(text)) return 'uz';
+  if (!/[\u0400-\u04FF]/.test(text) && /[a-zA-Z]/.test(text)) return 'uz';
+  return 'ru';
 }
 
 async function run(): Promise<void> {
@@ -333,20 +344,21 @@ async function run(): Promise<void> {
         const firstName = from?.first_name;
         const text = msg.text.trim();
         if (!text) continue;
-        // По команде /start по умолчанию отвечаем на узбекском; иначе по тексту.
-        const lang = text === '/start' ? 'uz' : (isUzbekCyrillic(text) ? 'uz' : 'ru');
+        const langFromText = detectLangForBot(text);
 
         try {
           let answer: string;
           let replyMarkup: ReplyMarkup | undefined;
 
           if (text === '/menu') {
+            const lang = langFromText;
             answer = wrapWithHeader(
               lang === 'uz' ? '📋 Quyidagi tugmalardan foydalaning:' : '📋 Воспользуйтесь кнопками ниже:',
               lang
             );
             replyMarkup = getMainMenuKeyboard(lang);
           } else if (isGreetingOrStart(text)) {
+            const lang = langFromText;
             const welcomeText = getWelcomeMessage(firstName ?? 'User', lang);
             const cap = welcomeText.length > 1024 ? welcomeText.slice(0, 1021) + '...' : welcomeText;
             if (ZIYODA_AVATAR_URL) {
@@ -356,6 +368,7 @@ async function run(): Promise<void> {
             }
             continue;
           } else if (isStartTestIntent(text)) {
+            const lang = langFromText;
             answer = wrapWithHeader(getStartTestMessage(lang), lang);
             replyMarkup = { inline_keyboard: [[{ text: getPlatformButtonLabel(lang), url: BOT_START_URL }]] };
           } else {
@@ -367,6 +380,7 @@ async function run(): Promise<void> {
               ctx?.lastUserMessage,
               ctx?.lastBotMessage
             );
+            const lang = result.lang ?? langFromText;
             answer = wrapWithHeader(result.answer, lang);
             if ((result.limitReached || result.noAnswerFound) && result.inlineButtons?.length) {
               replyMarkup = { inline_keyboard: result.inlineButtons };
