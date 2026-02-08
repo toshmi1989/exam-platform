@@ -22,6 +22,12 @@ function computeHash(questionText: string, options: { id: string; label: string 
   return createHash('sha256').update(payload, 'utf8').digest('hex');
 }
 
+/** Хэш текста вопроса для переиспользования устного ответа внутри направления (между категориями). */
+function computeOralPromptHash(prompt: string): string {
+  const normalized = (prompt ?? '').trim();
+  return createHash('sha256').update(normalized, 'utf8').digest('hex');
+}
+
 /** Обращение по имени (если есть) — разные варианты при каждой выдаче */
 const GREETINGS_RU = [
   (n: string) => `${n}, вот объяснение:\n\n`,
@@ -273,14 +279,14 @@ export async function getAiStats(): Promise<AiStats> {
   return { totalQuestions, withExplanation, missing, byExam };
 }
 
-/** Get oral answer from DB or generate via AI and save. Language from question's exam. */
+/** Get oral answer: reuse by (direction, language, promptHash) inside direction, else generate once and save. */
 export async function getOrCreateOralAnswer(
   questionId: string
 ): Promise<GetOrCreateResult | GetOrCreateError> {
   const question = await prisma.question.findUnique({
     where: { id: questionId },
     include: {
-      exam: { select: { language: true } },
+      exam: { select: { direction: true, language: true } },
       oralAnswer: true,
     },
   });
@@ -293,12 +299,30 @@ export async function getOrCreateOralAnswer(
     return { success: false, reasonCode: 'NOT_ORAL', message: 'Вопрос не устный.' };
   }
 
-  const existing = question.oralAnswer?.answerHtml?.trim();
-  if (existing) {
-    return { success: true, content: existing };
+  const existingPerQuestion = question.oralAnswer?.answerHtml?.trim();
+  if (existingPerQuestion) {
+    return { success: true, content: existingPerQuestion };
   }
 
+  const direction = (question.exam.direction ?? '').trim();
+  const languageKey = question.exam.language === 'UZ' ? 'UZ' : 'RU';
+  const promptHash = computeOralPromptHash(question.prompt);
   const lang: AiLang = question.exam.language === 'UZ' ? 'uz' : 'ru';
+
+  const byDirection = await prisma.directionOralAnswer.findUnique({
+    where: {
+      direction_language_promptHash: { direction, language: languageKey, promptHash },
+    },
+  });
+  if (byDirection?.answerHtml?.trim()) {
+    const content = byDirection.answerHtml.trim();
+    await prisma.oralAnswer.upsert({
+      where: { questionId },
+      create: { questionId, answerHtml: content },
+      update: { answerHtml: content },
+    });
+    return { success: true, content };
+  }
 
   try {
     const content = await generateOralAnswer({
@@ -306,6 +330,13 @@ export async function getOrCreateOralAnswer(
       question: question.prompt,
     });
 
+    await prisma.directionOralAnswer.upsert({
+      where: {
+        direction_language_promptHash: { direction, language: languageKey, promptHash },
+      },
+      create: { direction, language: languageKey, promptHash, answerHtml: content },
+      update: { answerHtml: content },
+    });
     await prisma.oralAnswer.upsert({
       where: { questionId },
       create: { questionId, answerHtml: content },
@@ -319,23 +350,42 @@ export async function getOrCreateOralAnswer(
   }
 }
 
-/** Stream oral answer: from cache (one chunk) or from AI (chunks then save). */
+/** Stream oral answer: reuse by (direction, language, promptHash) or generate once and save. */
 export async function* getOrCreateOralAnswerStream(
   questionId: string
 ): AsyncGenerator<string, void, unknown> {
   const question = await prisma.question.findUnique({
     where: { id: questionId },
     include: {
-      exam: { select: { language: true } },
+      exam: { select: { direction: true, language: true } },
       oralAnswer: true,
     },
   });
 
   if (!question || question.type !== 'ORAL') return;
 
-  const existing = question.oralAnswer?.answerHtml?.trim();
-  if (existing) {
-    yield existing;
+  const existingPerQuestion = question.oralAnswer?.answerHtml?.trim();
+  if (existingPerQuestion) {
+    yield existingPerQuestion;
+    return;
+  }
+
+  const direction = (question.exam.direction ?? '').trim();
+  const languageKey = question.exam.language === 'UZ' ? 'UZ' : 'RU';
+  const promptHash = computeOralPromptHash(question.prompt);
+  const byDirection = await prisma.directionOralAnswer.findUnique({
+    where: {
+      direction_language_promptHash: { direction, language: languageKey, promptHash },
+    },
+  });
+  if (byDirection?.answerHtml?.trim()) {
+    const content = byDirection.answerHtml.trim();
+    await prisma.oralAnswer.upsert({
+      where: { questionId },
+      create: { questionId, answerHtml: content },
+      update: { answerHtml: content },
+    });
+    yield content;
     return;
   }
 
@@ -347,6 +397,13 @@ export async function* getOrCreateOralAnswerStream(
       yield chunk;
     }
     if (content) {
+      await prisma.directionOralAnswer.upsert({
+        where: {
+          direction_language_promptHash: { direction, language: languageKey, promptHash },
+        },
+        create: { direction, language: languageKey, promptHash, answerHtml: content },
+        update: { answerHtml: content },
+      });
       await prisma.oralAnswer.upsert({
         where: { questionId },
         create: { questionId, answerHtml: content },
@@ -472,6 +529,7 @@ export interface OralPrewarmProgress {
   done?: boolean;
 }
 
+/** Prewarm oral: один раз генерируем на уникальный (direction, language, prompt) и записываем ответ всем одинаковым вопросам внутри направления. */
 export async function* prewarmOral(
   examId?: string,
   options?: { mode?: 'missing' | 'all' }
@@ -480,9 +538,19 @@ export async function* prewarmOral(
   const where = examId ? { examId, type: 'ORAL' as const } : { type: 'ORAL' as const };
   const questions = await prisma.question.findMany({
     where,
-    include: { exam: { select: { language: true } } },
+    include: { exam: { select: { direction: true, language: true } } },
     orderBy: { order: 'asc' },
   });
+
+  type GroupKey = string;
+  const groupKey = (q: (typeof questions)[0]) =>
+    `${(q.exam.direction ?? '').trim()}\0${q.exam.language}\0${computeOralPromptHash(q.prompt)}`;
+  const groups = new Map<GroupKey, typeof questions>();
+  for (const q of questions) {
+    const key = groupKey(q);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(q);
+  }
 
   const total = questions.length;
   let processed = 0;
@@ -490,35 +558,69 @@ export async function* prewarmOral(
   let skipped = 0;
   let errors = 0;
 
-  for (const question of questions) {
-    const existing = await prisma.oralAnswer.findUnique({
-      where: { questionId: question.id },
+  for (const [, groupQuestions] of groups) {
+    const first = groupQuestions[0]!;
+    const direction = (first.exam.direction ?? '').trim();
+    const languageKey = first.exam.language === 'UZ' ? 'UZ' : 'RU';
+    const promptHash = computeOralPromptHash(first.prompt);
+    const lang: AiLang = first.exam.language === 'UZ' ? 'uz' : 'ru';
+
+    const existingDir = await prisma.directionOralAnswer.findUnique({
+      where: {
+        direction_language_promptHash: { direction, language: languageKey, promptHash },
+      },
     });
-    const hasAnswer = !!existing?.answerHtml?.trim();
+    const hasAnswer = !!existingDir?.answerHtml?.trim();
     if (!regenerateAll && hasAnswer) {
-      skipped += 1;
-    } else {
-      try {
-        const lang: AiLang = question.exam.language === 'UZ' ? 'uz' : 'ru';
-        const content = await generateOralAnswer({ lang, question: question.prompt });
+      const content = existingDir!.answerHtml.trim();
+      for (const q of groupQuestions) {
         await prisma.oralAnswer.upsert({
-          where: { questionId: question.id },
-          create: { questionId: question.id, answerHtml: content },
+          where: { questionId: q.id },
+          create: { questionId: q.id, answerHtml: content },
           update: { answerHtml: content },
         });
-        generated += 1;
-      } catch {
-        errors += 1;
       }
+      skipped += groupQuestions.length;
+      processed += groupQuestions.length;
+      yield {
+        total,
+        processed,
+        generated,
+        skipped,
+        errors,
+        currentQuestionId: first.id,
+      };
+      continue;
     }
-    processed += 1;
+
+    try {
+      const content = await generateOralAnswer({ lang, question: first.prompt });
+      await prisma.directionOralAnswer.upsert({
+        where: {
+          direction_language_promptHash: { direction, language: languageKey, promptHash },
+        },
+        create: { direction, language: languageKey, promptHash, answerHtml: content },
+        update: { answerHtml: content },
+      });
+      for (const q of groupQuestions) {
+        await prisma.oralAnswer.upsert({
+          where: { questionId: q.id },
+          create: { questionId: q.id, answerHtml: content },
+          update: { answerHtml: content },
+        });
+      }
+      generated += groupQuestions.length;
+    } catch {
+      errors += groupQuestions.length;
+    }
+    processed += groupQuestions.length;
     yield {
       total,
       processed,
       generated,
       skipped,
       errors,
-      currentQuestionId: question.id,
+      currentQuestionId: first.id,
     };
   }
 

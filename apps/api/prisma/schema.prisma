@@ -132,6 +132,19 @@ model OralAnswer {
   question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 }
 
+/** Один ответ на один и тот же текст вопроса внутри направления (между категориями). Экономит токены: одинаковые вопросы в 1-й и 3-й категории делят один сгенерированный ответ. */
+model DirectionOralAnswer {
+  id         String   @id @default(cuid())
+  direction  String
+  language   String   // RU | UZ
+  promptHash String
+  answerHtml String   @db.Text
+  createdAt  DateTime @default(now())
+
+  @@unique([direction, language, promptHash])
+  @@index([direction, language, promptHash])
+}
+
 model ImportBatch {
   id         String   @id @default(cuid())
   sourceFile String?
