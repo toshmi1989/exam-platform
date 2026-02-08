@@ -34,7 +34,7 @@ export default function RootLayout({
         />
         <UiSettingsBootstrap />
         <AgreementGuard>
-          <main className="relative mx-auto w-full max-w-3xl px-4 py-8 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-[calc(env(safe-area-inset-bottom)+4rem)]">
+          <main className="relative mx-auto w-full max-w-4xl px-3 py-8 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-[calc(env(safe-area-inset-bottom)+4rem)]">
             <div className="pointer-events-none absolute left-0 right-0 top-0 h-6 bg-gradient-to-b from-white/95 to-white/0 backdrop-blur-sm" />
             {children}
           </main>

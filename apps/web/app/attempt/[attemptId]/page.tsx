@@ -371,7 +371,7 @@ export default function AttemptPage() {
 
   return (
     <AnimatedPage>
-      <main className="flex min-h-screen flex-col px-4 py-6 pb-24">
+      <main className="flex min-h-screen flex-col px-2 py-6 pb-24 sm:px-3">
         {/* Header */}
         <div className="flex flex-col gap-4">
           <PageHeader
@@ -523,20 +523,23 @@ export default function AttemptPage() {
                     <p className="mt-2 text-sm text-rose-600">{ziyodaError}</p>
                   )}
                   {(ziyodaCache[currentQuestion.id] !== undefined || ziyodaLoadingId === currentQuestion.id) && (
-                    <div className="mt-3 flex gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-[#2AABEE] flex items-center justify-center text-white font-semibold text-lg">
-                        {ziyodaAvatarError ? (
-                          <span aria-hidden="true">З</span>
-                        ) : (
-                          <img
-                            src="/ziyoda-avatar.png"
-                            alt="Зиёда"
-                            className="h-full w-full object-cover"
-                            onError={() => setZiyodaAvatarError(true)}
-                          />
-                        )}
+                    <div className="mt-3 flex flex-col rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="mb-3 flex items-center gap-2">
+                        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full bg-[#2AABEE] flex items-center justify-center text-white font-semibold text-base">
+                          {ziyodaAvatarError ? (
+                            <span aria-hidden="true">З</span>
+                          ) : (
+                            <img
+                              src="/ziyoda-avatar.png"
+                              alt=""
+                              className="h-full w-full object-cover"
+                              onError={() => setZiyodaAvatarError(true)}
+                            />
+                          )}
+                        </div>
+                        <span className="text-sm font-medium text-slate-700">Зиёда объясняет</span>
                       </div>
-                      <div className="min-w-0 flex-1 text-sm text-slate-700 prose prose-slate max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0">
+                      <div className="w-full min-w-0 text-sm text-slate-700 prose prose-slate max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-strong:font-semibold prose-headings:mt-3 prose-headings:mb-1 prose-headings:font-medium">
                         {ziyodaCache[currentQuestion.id] ? (
                           <ReactMarkdown>{ziyodaCache[currentQuestion.id]}</ReactMarkdown>
                         ) : (
@@ -624,7 +627,7 @@ export default function AttemptPage() {
       </main>
 
       {/* Кнопка фиксирована над полосой блюра; при 0 вопросов — выход к выбору экзамена */}
-      <div className="fixed bottom-10 left-0 right-0 z-50 mx-auto max-w-3xl px-4">
+      <div className="fixed bottom-10 left-0 right-0 z-50 mx-auto max-w-4xl px-3">
         {totalQuestions === 0 ? (
           <Button href="/exam/select" size="lg" variant="secondary" className="w-full">
             {copy.exitToExams}
