@@ -754,6 +754,41 @@ export async function clearZiyodaBotCache(): Promise<{ cleared: number }> {
   return { cleared: payload?.cleared ?? 0 };
 }
 
+export type UnansweredQuestionItem = {
+  id: string;
+  questionText: string;
+  telegramId: string | null;
+  topic: string | null;
+  createdAt: string;
+};
+
+export async function getUnansweredQuestions(topic?: string): Promise<{
+  items: UnansweredQuestionItem[];
+  topics: string[];
+}> {
+  const url = topic ? `/admin/ai/unanswered-questions?topic=${encodeURIComponent(topic)}` : '/admin/ai/unanswered-questions';
+  const { response, data } = await apiFetch(url);
+  if (!response.ok) throw (data as ApiError) ?? { message: 'Failed to load' };
+  const payload = data as { items?: UnansweredQuestionItem[]; topics?: string[] } | null;
+  return {
+    items: payload?.items ?? [],
+    topics: payload?.topics ?? [],
+  };
+}
+
+export async function updateUnansweredQuestionTopic(id: string, topic: string | null): Promise<void> {
+  const { response, data } = await apiFetch(`/admin/ai/unanswered-questions/${id}`, {
+    method: 'PATCH',
+    json: { topic },
+  });
+  if (!response.ok) throw (data as ApiError) ?? new Error('Update failed');
+}
+
+export async function deleteUnansweredQuestion(id: string): Promise<void> {
+  const { response, data } = await apiFetch(`/admin/ai/unanswered-questions/${id}`, { method: 'DELETE' });
+  if (!response.ok) throw (data as ApiError) ?? new Error('Delete failed');
+}
+
 export async function getKnowledgeEntries(): Promise<KnowledgeEntryItem[]> {
   const { response, data } = await apiFetch('/admin/knowledge/entries');
   if (!response.ok) throw data as ApiError;

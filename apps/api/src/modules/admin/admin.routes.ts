@@ -901,6 +901,68 @@ router.post('/ai/clear-bot-cache', async (_req, res) => {
   }
 });
 
+/** Список неотвеченных вопросов (бот не нашёл ответ). Группировка по темам в UI. */
+router.get('/ai/unanswered-questions', async (req, res) => {
+  try {
+    const topic = typeof req.query?.topic === 'string' ? req.query.topic.trim() || undefined : undefined;
+    const items = await prisma.botUnansweredQuestion.findMany({
+      where: topic ? { topic } : undefined,
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    });
+    const topics = await prisma.botUnansweredQuestion.findMany({
+      where: { topic: { not: null } },
+      select: { topic: true },
+      distinct: ['topic'],
+    });
+    res.json({
+      items,
+      topics: topics.map((r) => r.topic).filter(Boolean) as string[],
+    });
+  } catch (err) {
+    console.error('[admin/ai/unanswered-questions]', err);
+    res.status(500).json({ items: [], topics: [] });
+  }
+});
+
+/** Назначить тему неотвеченному вопросу. */
+router.patch('/ai/unanswered-questions/:id', async (req, res) => {
+  try {
+    const id = typeof req.params?.id === 'string' ? req.params.id.trim() : '';
+    const topic = typeof req.body?.topic === 'string' ? req.body.topic.trim() || null : null;
+    if (!id) {
+      res.status(400).json({ ok: false, error: 'id required' });
+      return;
+    }
+    await prisma.botUnansweredQuestion.update({
+      where: { id },
+      data: { topic },
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[admin/ai/unanswered-questions PATCH]', err);
+    res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+/** Удалить запись (после добавления ответа в базу знаний). */
+router.delete('/ai/unanswered-questions/:id', async (req, res) => {
+  try {
+    const id = typeof req.params?.id === 'string' ? req.params.id.trim() : '';
+    if (!id) {
+      res.status(400).json({ ok: false, error: 'id required' });
+      return;
+    }
+    await prisma.botUnansweredQuestion.delete({ where: { id } });
+    res.json({ ok: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[admin/ai/unanswered-questions DELETE]', err);
+    res.status(500).json({ ok: false, error: msg });
+  }
+});
+
 router.get('/knowledge/stats', async (_req, res) => {
   try {
     const stats = await getKnowledgeStats();

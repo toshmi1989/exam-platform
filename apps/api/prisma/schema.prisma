@@ -279,6 +279,18 @@ model BotAnswerCache {
   createdAt    DateTime @default(now())
 }
 
+/** Вопросы, на которые бот не нашёл ответ (noAnswerFound). Для анализа и пополнения базы знаний по темам. */
+model BotUnansweredQuestion {
+  id           String   @id @default(cuid())
+  questionText String   @db.Text
+  telegramId   String?
+  topic        String?  // тема: Сертификат, Подписка, Вход, Устный экзамен, Другое...
+  createdAt    DateTime @default(now())
+
+  @@index([topic])
+  @@index([createdAt])
+}
+
 model ZiyodaPrompt {
   id    String @id @default(cuid())
   key   String @unique

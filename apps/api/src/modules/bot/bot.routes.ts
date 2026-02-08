@@ -70,6 +70,16 @@ router.post('/ask', async (req: Request, res: Response): Promise<void> => {
       previousBotMessage,
     });
     if (result.noAnswerFound) {
+      if (message.trim().length > 0 && message.length <= 2000) {
+        prisma.botUnansweredQuestion
+          .create({
+            data: {
+              questionText: message.trim(),
+              telegramId: telegramId || undefined,
+            },
+          })
+          .catch((err) => console.error('[bot/ask] log unanswered', err));
+      }
       res.json({
         answer: result.answer,
         noAnswerFound: true,

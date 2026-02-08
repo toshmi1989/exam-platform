@@ -22,6 +22,9 @@ import {
   uploadKnowledge,
   reindexKnowledgeStream,
   clearZiyodaBotCache,
+  getUnansweredQuestions,
+  updateUnansweredQuestionTopic,
+  deleteUnansweredQuestion,
   type AdminAiStats,
   type AdminOralStats,
   type PrewarmProgress,
@@ -30,6 +33,7 @@ import {
   type KnowledgeFileItem,
   type ReindexProgress,
   type ZiyodaPrompts,
+  type UnansweredQuestionItem,
 } from '../../../lib/api';
 import { API_BASE_URL } from '../../../lib/api/config';
 import { readTelegramUser } from '../../../lib/telegramUser';
@@ -216,6 +220,9 @@ function AdminAIPageContent() {
   const [promptsSaving, setPromptsSaving] = useState(false);
   const [promptsError, setPromptsError] = useState<string | null>(null);
   const [promptsSuccess, setPromptsSuccess] = useState<string | null>(null);
+  const [unansweredItems, setUnansweredItems] = useState<UnansweredQuestionItem[]>([]);
+  const [unansweredTopics, setUnansweredTopics] = useState<string[]>([]);
+  const [unansweredTopicFilter, setUnansweredTopicFilter] = useState<string>('');
 
   useEffect(() => {
     const update = () => setLanguage(readSettings().language);
@@ -258,6 +265,15 @@ function AdminAIPageContent() {
         .then((data) => setZiyodaPrompts({ ...DEFAULT_ZIYODA_PROMPTS, ...data }))
         .catch(() => setZiyodaPrompts({ ...DEFAULT_ZIYODA_PROMPTS }))
         .finally(() => setPromptsLoading(false));
+      getUnansweredQuestions()
+        .then(({ items, topics }) => {
+          setUnansweredItems(items);
+          setUnansweredTopics(topics);
+        })
+        .catch(() => {
+          setUnansweredItems([]);
+          setUnansweredTopics([]);
+        });
     }
   }, [tab, uploadSuccess, pasteSuccess, reindexProgress?.done]);
 
@@ -316,6 +332,12 @@ function AdminAIPageContent() {
         promptsNarrowHint: 'If the bot often says "not in materials": raise "Max chunks" and "Max context chars", lower "Min similarity" (e.g. 0.2), or run Reindex. Response style in system instruction.',
         clearCacheLabel: 'Clear Ziyoda answer cache',
         clearCacheDone: 'Cleared',
+        unansweredTitle: 'Unanswered questions',
+        unansweredHint: 'Questions the bot could not answer. Assign a topic, then add the answer to the knowledge base above.',
+        filterByTopic: 'By topic',
+        noTopic: '— no topic —',
+        setTopic: 'Topic',
+        removeAfterAdded: 'Remove after adding to base',
       };
     }
     if (language === 'Узбекский') {
@@ -372,6 +394,12 @@ function AdminAIPageContent() {
         promptsNarrowHint: "Bot tez-tez \"materialda yo\'q\" desa: Maks bloklar va kontekstni oshiring, Min o\'xshashlikni kamaytiring (0.2) yoki Qayta indekslashni ishlating.",
         clearCacheLabel: "Ziyoda javob keshini tozalash",
         clearCacheDone: "Tozalandi",
+        unansweredTitle: "Javob topilmagan savollar",
+        unansweredHint: "Bot javob topolmagan savollar. Mavzuga qo‘shing, keyin bazaga javob qo‘shing.",
+        filterByTopic: "Mavzu bo‘yicha",
+        noTopic: "— mavzu yo‘q —",
+        setTopic: "Mavzu",
+        removeAfterAdded: "Bazaga qo‘shilgach o‘chirish",
       };
     }
     return {
@@ -427,6 +455,12 @@ function AdminAIPageContent() {
       promptsNarrowHint: 'Если бот часто пишет «в материалах не указано»: увеличьте «Макс. чанков» и «Макс. символов контекста», уменьшите «Мин. релевантность» (например 0,2) или запустите «Переиндексация».',
       clearCacheLabel: 'Очистить кэш ответов Зиёды',
       clearCacheDone: 'Очищено',
+      unansweredTitle: 'Неотвеченные вопросы',
+      unansweredHint: 'Вопросы, на которые бот не нашёл ответ. Назначьте тему, затем добавьте ответ в базу знаний выше.',
+      filterByTopic: 'По теме',
+      noTopic: '— без темы —',
+      setTopic: 'Тема',
+      removeAfterAdded: 'Удалить после добавления в базу',
     };
   }, [language]);
 
@@ -811,6 +845,117 @@ function AdminAIPageContent() {
                   </div>
                   {pasteSuccess && <p className="mt-2 text-sm text-emerald-600">{pasteSuccess}</p>}
                   {pasteError && <p className="mt-2 text-sm text-rose-600">{pasteError}</p>}
+                </Card>
+                <Card>
+                  <p className="text-sm font-medium text-slate-700">{copy.unansweredTitle}</p>
+                  <p className="mt-1 text-xs text-slate-500">{copy.unansweredHint}</p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <label className="text-xs text-slate-500">{copy.filterByTopic}:</label>
+                    <select
+                      value={unansweredTopicFilter}
+                      onChange={(e) => {
+                        setUnansweredTopicFilter(e.target.value);
+                      }}
+                      className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-700"
+                    >
+                      <option value="">{copy.noTopic}</option>
+                      {unansweredTopics.map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {(() => {
+                    const filtered =
+                      unansweredTopicFilter === ''
+                        ? unansweredItems
+                        : unansweredItems.filter((i) => i.topic === unansweredTopicFilter);
+                    const grouped = new Map<string, UnansweredQuestionItem[]>();
+                    for (const item of filtered) {
+                      const key = item.topic ?? copy.noTopic;
+                      if (!grouped.has(key)) grouped.set(key, []);
+                      grouped.get(key)!.push(item);
+                    }
+                    const order = [copy.noTopic, ...unansweredTopics.filter((t) => unansweredTopicFilter === '' || t === unansweredTopicFilter)];
+                    if (filtered.length === 0) {
+                      return (
+                        <p className="mt-3 text-sm text-slate-500">
+                          {unansweredItems.length === 0
+                            ? 'Нет записей. Вопросы появятся, когда пользователи спросят то, на что бот не нашёл ответ.'
+                            : 'По выбранной теме записей нет.'}
+                        </p>
+                      );
+                    }
+                    return (
+                      <ul className="mt-3 space-y-4">
+                        {order.map((topicKey) => {
+                          const list = grouped.get(topicKey);
+                          if (!list?.length) return null;
+                          return (
+                            <li key={topicKey}>
+                              <p className="mb-1 text-xs font-medium text-slate-500">{topicKey}</p>
+                              <ul className="space-y-2">
+                                {list.map((item) => (
+                                  <li
+                                    key={item.id}
+                                    className="flex flex-col gap-1 rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2 text-sm"
+                                  >
+                                    <p className="text-slate-800">{item.questionText}</p>
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <span className="text-xs text-slate-500">
+                                        {new Date(item.createdAt).toLocaleString()}
+                                      </span>
+                                      <div className="flex items-center gap-2">
+                                        <select
+                                          value={item.topic ?? ''}
+                                          onChange={async (e) => {
+                                            const v = e.target.value;
+                                            try {
+                                              await updateUnansweredQuestionTopic(item.id, v || null);
+                                              const { items, topics } = await getUnansweredQuestions();
+                                              setUnansweredItems(items);
+                                              setUnansweredTopics(topics);
+                                            } catch {
+                                              // ignore
+                                            }
+                                          }}
+                                          className="rounded border border-slate-200 bg-white px-2 py-1 text-xs"
+                                        >
+                                          <option value="">{copy.noTopic}</option>
+                                          {['Сертификат', 'Подписка и оплата', 'Регистрация и вход', 'Устный экзамен', 'Тестовый экзамен', 'Профиль', 'Другое'].map((t) => (
+                                            <option key={t} value={t}>
+                                              {t}
+                                            </option>
+                                          ))}
+                                        </select>
+                                        <Button
+                                          type="button"
+                                          variant="secondary"
+                                          size="md"
+                                          onClick={async () => {
+                                            try {
+                                              await deleteUnansweredQuestion(item.id);
+                                              setUnansweredItems((prev) => prev.filter((x) => x.id !== item.id));
+                                              getUnansweredQuestions().then(({ topics }) => setUnansweredTopics(topics)).catch(() => {});
+                                            } catch {
+                                              // ignore
+                                            }
+                                          }}
+                                        >
+                                          {copy.removeAfterAdded}
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    );
+                  })()}
                 </Card>
                 <Card>
                   <p className="text-sm font-medium text-slate-700">{copy.knowledgeBase}</p>
