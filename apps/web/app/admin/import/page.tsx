@@ -29,11 +29,18 @@ export default function AdminImportPage() {
   const [profession, setProfession] = useState<'DOCTOR' | 'NURSE' | ''>('');
   const [importMode, setImportMode] = useState<'overwrite' | 'add'>('overwrite');
   const [preview, setPreview] = useState<
-    { name: string; language: string; questionCount: number }[]
+    {
+      name: string;
+      language: string;
+      questionCount: number;
+      validQuestionCount?: number;
+      errors?: { row: number; reason: string }[];
+    }[]
   >([]);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
   const [statusBar, setStatusBar] = useState<'idle' | 'preview' | 'import' | 'done'>('idle');
 
   // Oral import state
@@ -197,6 +204,7 @@ export default function AdminImportPage() {
     if (!fileBase64 || !profession) return;
     setImportLoading(true);
     setErrorMessage(null);
+    setImportWarnings([]);
     setStatusBar('import');
     try {
       const { response, data } = await apiFetch('/admin/import/execute', {
@@ -208,6 +216,10 @@ export default function AdminImportPage() {
         const errDetail = typeof (data as { error?: string })?.error === 'string' ? (data as { error: string }).error : '';
         setErrorMessage(errDetail ? `Import failed: ${errDetail}` : 'Import failed.');
         return;
+      }
+      const result = (data as { result?: { warnings?: string[] } })?.result;
+      if (Array.isArray(result?.warnings) && result.warnings.length > 0) {
+        setImportWarnings(result.warnings);
       }
       setStatusBar('done');
     } catch (e) {
@@ -385,6 +397,16 @@ export default function AdminImportPage() {
                     {statusBar === 'import' && copy.statusImport}
                     {statusBar === 'done' && copy.statusDone}
                   </div>
+                  {statusBar === 'done' && importWarnings.length > 0 ? (
+                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                      <p className="font-medium">Предупреждения при импорте:</p>
+                      <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs">
+                        {importWarnings.map((w, i) => (
+                          <li key={i}>{w}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </Card>
 
                 <Card title={copy.preview}>
@@ -394,17 +416,38 @@ export default function AdminImportPage() {
                     <p className="text-sm text-slate-600">{copy.noPreview}</p>
                   ) : (
                     <div className="flex flex-col gap-2 text-sm text-slate-700">
-                      {preview.map((item) => (
-                        <div
-                          key={`${item.name}-${item.language}`}
-                          className="flex items-center justify-between"
-                        >
-                          <span>{item.name}</span>
-                          <span className="text-xs text-slate-500">
-                            {item.language} · {item.questionCount}
-                          </span>
-                        </div>
-                      ))}
+                      {preview.map((item) => {
+                        const valid = item.validQuestionCount ?? item.questionCount;
+                        const noValid = valid === 0 && item.questionCount > 0;
+                        const hasErrors = (item.errors?.length ?? 0) > 0;
+                        return (
+                          <div
+                            key={`${item.name}-${item.language}`}
+                            className={`rounded-lg border px-3 py-2 ${noValid ? 'border-amber-200 bg-amber-50' : hasErrors ? 'border-amber-100 bg-amber-50/50' : 'border-transparent'}`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium">{item.name}</span>
+                              <span className={`text-xs ${noValid ? 'text-amber-700' : 'text-slate-500'}`}>
+                                {item.language} · {item.validQuestionCount !== undefined
+                                  ? `распознано ${item.validQuestionCount} из ${item.questionCount}`
+                                  : item.questionCount}
+                              </span>
+                            </div>
+                            {hasErrors && item.errors && (
+                              <ul className="mt-1.5 list-inside list-disc space-y-0.5 text-xs text-amber-800">
+                                {item.errors.map((e) => (
+                                  <li key={e.row}>
+                                    Строка {e.row}: {e.reason}
+                                  </li>
+                                ))}
+                                {(item.errors?.length ?? 0) === 25 && (
+                                  <li className="text-amber-600">… возможны ещё ошибки (показаны первые 25)</li>
+                                )}
+                              </ul>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </Card>

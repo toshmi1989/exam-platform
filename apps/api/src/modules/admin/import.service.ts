@@ -27,6 +27,59 @@ function yieldEventLoop(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
+export type TestRowError = { row: number; reason: string };
+
+type ValidTestRow = {
+  questionText: string;
+  options: string[];
+  correctIndex: number;
+};
+
+/** Валидация строк листа: возвращает пригодные для импорта строки и ошибки по номерам строк (1-based). */
+function validateTestRows(cleanedRows: unknown[][]): {
+  validRows: ValidTestRow[];
+  errors: TestRowError[];
+} {
+  const validRows: ValidTestRow[] = [];
+  const errors: TestRowError[] = [];
+  for (let idx = 0; idx < cleanedRows.length; idx += 1) {
+    const row = cleanedRows[idx] as unknown[];
+    const rowNum = idx + 1;
+    const questionText = normalizeText(row[0]);
+    const rawOptions = row.slice(1, row.length - 1);
+    const correctText = normalizeText(row[row.length - 1]);
+    const options = rawOptions.map((cell) => normalizeText(cell)).filter(Boolean);
+
+    if (!questionText) {
+      errors.push({ row: rowNum, reason: 'нет текста вопроса (пустой первый столбец)' });
+      continue;
+    }
+    if (options.length === 0) {
+      errors.push({ row: rowNum, reason: 'нет вариантов ответа (заполните столбцы между вопросом и правильным ответом)' });
+      continue;
+    }
+    if (!correctText) {
+      errors.push({ row: rowNum, reason: 'не указан правильный ответ (последний столбец пуст)' });
+      continue;
+    }
+    const correctIndex = options.findIndex((option) => option === correctText);
+    if (correctIndex === -1) {
+      errors.push({
+        row: rowNum,
+        reason: `правильный ответ «${correctText.slice(0, 30)}${correctText.length > 30 ? '…' : ''}» не совпадает ни с одним вариантом (должен быть точное совпадение)`,
+      });
+      continue;
+    }
+    validRows.push({ questionText, options, correctIndex });
+  }
+  return { validRows, errors };
+}
+
+function countValidTestQuestions(cleanedRows: unknown[][]): number {
+  const { validRows } = validateTestRows(cleanedRows);
+  return validRows.length;
+}
+
 export async function previewQuestionBank(params: {
   profession: Profession;
   fileBase64: string;
@@ -35,7 +88,14 @@ export async function previewQuestionBank(params: {
   const workbook = XLSX.read(buffer, { type: 'buffer' });
   const sheetNames = workbook.SheetNames;
 
-  const directions: { name: string; language: Language; questionCount: number }[] = [];
+  const MAX_PREVIEW_ERRORS = 25;
+  const directions: {
+    name: string;
+    language: Language;
+    questionCount: number;
+    validQuestionCount: number;
+    errors?: TestRowError[];
+  }[] = [];
   for (let index = 0; index < sheetNames.length; index += 1) {
     await yieldEventLoop();
     const name = sheetNames[index];
@@ -45,10 +105,13 @@ export async function previewQuestionBank(params: {
       defval: '',
     });
     const cleanedRows = rows.filter((row) => normalizeText(row[0]));
+    const { validRows, errors: rowErrors } = validateTestRows(cleanedRows);
     directions.push({
       name,
       language: resolveLanguage(index),
       questionCount: cleanedRows.length,
+      validQuestionCount: validRows.length,
+      errors: rowErrors.length > 0 ? rowErrors.slice(0, MAX_PREVIEW_ERRORS) : undefined,
     });
   }
 
@@ -92,6 +155,7 @@ export async function importQuestionBank(params: {
 
   let importedQuestions = 0;
   let skippedExams = 0;
+  const warnings: string[] = [];
 
   for (let i = 0; i < sheetNames.length; i += 1) {
     const sheetName = sheetNames[i];
@@ -106,6 +170,24 @@ export async function importQuestionBank(params: {
 
     const cleanedRows = rows.filter((row) => normalizeText(row[0]));
     if (!cleanedRows.length) continue;
+
+    const { validRows: validatedRows, errors: rowErrors } = validateTestRows(cleanedRows);
+    if (validatedRows.length === 0) {
+      if (rowErrors.length > 0) {
+        rowErrors.forEach((e) =>
+          warnings.push(`Лист «${sheetName}», строка ${e.row}: ${e.reason}`)
+        );
+      } else {
+        warnings.push(`Лист «${sheetName}» (${language}): нет строк с заполненным первым столбцом.`);
+      }
+      await yieldEventLoop();
+      continue;
+    }
+    if (rowErrors.length > 0) {
+      rowErrors.forEach((e) =>
+        warnings.push(`Лист «${sheetName}», строка ${e.row}: ${e.reason}`)
+      );
+    }
 
     const existingExam = await prisma.exam.findUnique({
       where: { title_categoryId: { title: sheetName, categoryId: category.id } },
@@ -143,33 +225,15 @@ export async function importQuestionBank(params: {
     }
 
     const BATCH_SIZE = 150;
-    for (let start = 0; start < cleanedRows.length; start += BATCH_SIZE) {
-      const batch = cleanedRows.slice(start, start + BATCH_SIZE);
-      const questionsData: { examId: string; type: 'TEST'; prompt: string; order: number }[] = [];
-      const optionsPerQuestion: { labels: string[]; correctIndex: number }[] = [];
-
-      for (let i = 0; i < batch.length; i += 1) {
-        const row = batch[i];
-        const rowIndex = start + i;
-        const questionText = normalizeText(row[0]);
-        const rawOptions = row.slice(1, row.length - 1);
-        const correctText = normalizeText(row[row.length - 1]);
-        const options = rawOptions
-          .map((cell) => normalizeText(cell))
-          .filter(Boolean);
-
-        if (!questionText || options.length === 0 || !correctText) continue;
-        const correctIndex = options.findIndex((option) => option === correctText);
-        if (correctIndex === -1) continue;
-
-        questionsData.push({
-          examId: exam.id,
-          type: 'TEST',
-          prompt: questionText,
-          order: rowIndex + 1,
-        });
-        optionsPerQuestion.push({ labels: options, correctIndex });
-      }
+    for (let start = 0; start < validatedRows.length; start += BATCH_SIZE) {
+      const batch = validatedRows.slice(start, start + BATCH_SIZE);
+      const questionsData = batch.map((r, i) => ({
+        examId: exam.id,
+        type: 'TEST' as const,
+        prompt: r.questionText,
+        order: start + i + 1,
+      }));
+      const optionsPerQuestion = batch.map((r) => ({ labels: r.options, correctIndex: r.correctIndex }));
 
       if (questionsData.length === 0) {
         await yieldEventLoop();
@@ -210,6 +274,7 @@ export async function importQuestionBank(params: {
     totalDirections: sheetNames.length,
     importedQuestions,
     skippedExams: mode === 'add' ? skippedExams : undefined,
+    warnings: warnings.length > 0 ? warnings : undefined,
   };
 }
 

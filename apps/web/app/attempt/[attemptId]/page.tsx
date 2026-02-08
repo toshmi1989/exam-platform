@@ -106,12 +106,14 @@ export default function AttemptPage() {
         questionLabel: 'Question',
         placeholder: 'Type your answer…',
         empty: 'Questions are not available yet.',
+        emptyHint: 'This direction may have no questions yet, or the first sheet was not recognized during import.',
         submit: 'Finish test',
         finishTest: 'Finish test',
         timer: 'Time',
         answerAll: 'Please answer all questions first.',
         answerAllExtended: 'To see your result and correct answers you need to answer all questions. If you want to leave and reset this attempt, use the button below.',
         resetAttempt: 'Leave test',
+        exitToExams: 'Exit to exam selection',
         prev: 'Previous',
         next: 'Next',
         ziyodaAsk: 'Ask Ziyoda',
@@ -130,12 +132,14 @@ export default function AttemptPage() {
         questionLabel: 'Savol',
         placeholder: 'Javobingizni yozing…',
         empty: 'Savollar hali mavjud emas.',
+        emptyHint: "Bu yo'nalishda hali savollar bo'lmasligi yoki importda birinchi varaq tanilmagan bo'lishi mumkin.",
         submit: 'Imtihonni yakunlash',
         finishTest: 'Imtihonni yakunlash',
         timer: 'Vaqt',
         answerAll: 'Avval barcha savollarga javob bering.',
         answerAllExtended: "Natija va to'g'ri javoblarni ko'rish uchun barcha savollarga javob bering. Agar imtihondan chiqmoqchi bo'lsangiz, quyidagi tugmani bosing.",
         resetAttempt: "Imtihondan chiqish",
+        exitToExams: "Imtihon tanlashga qaytish",
         prev: 'Oldingi',
         next: 'Keyingi',
         ziyodaAsk: "Ziyodadan so'rang",
@@ -153,12 +157,14 @@ export default function AttemptPage() {
       questionLabel: 'Вопрос',
       placeholder: 'Введите ответ…',
       empty: 'Вопросы пока недоступны.',
+      emptyHint: 'Возможно, в этом направлении ещё не загружены вопросы или при импорте не распознался формат первого листа.',
       submit: 'Завершить тест',
       finishTest: 'Завершить тест',
       timer: 'Время',
       answerAll: 'Сначала ответьте на все вопросы.',
       answerAllExtended: 'Для просмотра результата и правильных ответов нужно ответить на все вопросы. Или если хотите сбросить сессию — выйдите из режима теста (кнопка ниже).',
       resetAttempt: 'Сбросить',
+      exitToExams: 'Выйти к выбору экзамена',
       prev: 'Предыдущий',
         next: 'Следующий',
         ziyodaAsk: 'Спросить Зиёду',
@@ -578,6 +584,12 @@ export default function AttemptPage() {
               <p className="text-sm text-slate-600">
                 {copy.empty}
               </p>
+              <p className="mt-2 text-xs text-slate-500">
+                {copy.emptyHint}
+              </p>
+              <Button href="/exam/select" variant="secondary" size="md" className="mt-4">
+                {copy.exitToExams}
+              </Button>
             </Card>
           )}
         </AnimatePresence>
@@ -611,26 +623,32 @@ export default function AttemptPage() {
         ) : null}
       </main>
 
-      {/* Кнопка фиксирована над полосой блюра */}
+      {/* Кнопка фиксирована над полосой блюра; при 0 вопросов — выход к выбору экзамена */}
       <div className="fixed bottom-10 left-0 right-0 z-50 mx-auto max-w-3xl px-4">
-        <Button
-          size="lg"
-          className="w-full"
-          onClick={handlePrimaryAction}
-          disabled={!currentQuestion || isSubmitting}
-        >
-          {isSubmitting ? (
-            <span className="inline-flex items-center gap-2">
-              <span
-                className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
-                aria-hidden
-              />
-              {copy.submitting}
-            </span>
-          ) : (
-            copy.finishTest
-          )}
-        </Button>
+        {totalQuestions === 0 ? (
+          <Button href="/exam/select" size="lg" variant="secondary" className="w-full">
+            {copy.exitToExams}
+          </Button>
+        ) : (
+          <Button
+            size="lg"
+            className="w-full"
+            onClick={handlePrimaryAction}
+            disabled={!currentQuestion || isSubmitting}
+          >
+            {isSubmitting ? (
+              <span className="inline-flex items-center gap-2">
+                <span
+                  className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+                  aria-hidden
+                />
+                {copy.submitting}
+              </span>
+            ) : (
+              copy.finishTest
+            )}
+          </Button>
+        )}
       </div>
     </AnimatedPage>
   );
