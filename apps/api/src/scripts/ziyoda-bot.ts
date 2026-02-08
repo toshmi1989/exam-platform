@@ -393,8 +393,11 @@ async function run(): Promise<void> {
             );
             const lang = result.lang ?? langFromText;
             answer = wrapWithHeader(result.answer, lang);
-            if ((result.limitReached || result.noAnswerFound) && result.inlineButtons?.length) {
-              replyMarkup = { inline_keyboard: result.inlineButtons };
+            if (result.limitReached || result.noAnswerFound) {
+              replyMarkup =
+                result.inlineButtons?.length ?
+                  { inline_keyboard: result.inlineButtons }
+                : getMainMenuKeyboard(lang);
             }
             conversationContext.set(telegramId, {
               lastUserMessage: text,
