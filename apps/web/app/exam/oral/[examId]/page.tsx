@@ -9,6 +9,7 @@ import Card from '../../../../components/Card';
 import PageHeader from '../../../../components/PageHeader';
 import { readSettings, Language } from '../../../../lib/uiSettings';
 import { getOralQuestions, streamOralAnswer } from '../../../../lib/api';
+import { readTelegramUser } from '../../../../lib/telegramUser';
 import ReactMarkdown from 'react-markdown';
 import AiLoadingDots from '../../../../components/AiLoadingDots';
 import remarkGfm from 'remark-gfm';
@@ -69,6 +70,7 @@ export default function OralExamPage() {
   const [answerError, setAnswerError] = useState<string | null>(null);
   const [answerLimitReached, setAnswerLimitReached] = useState(false);
   const [iframeUrl, setIframeUrl] = useState<string | null>(null);
+  const [isGuest, setIsGuest] = useState(false);
 
   const orderedQuestions = useMemo(() => {
     if (orderMode === 'random' && questions.length > 0) {
@@ -79,6 +81,12 @@ export default function OralExamPage() {
 
   const current = orderedQuestions[index] ?? null;
   const total = orderedQuestions.length;
+
+  useEffect(() => {
+    const user = readTelegramUser();
+    const isGuestUser = !user?.telegramId || user.telegramId.startsWith('guest-');
+    setIsGuest(isGuestUser);
+  }, []);
 
   useEffect(() => {
     const update = () => setLanguage(readSettings().language);
@@ -278,9 +286,11 @@ export default function OralExamPage() {
               <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
                 <p className="font-semibold text-amber-800">{copy.dailyLimitTitle}</p>
                 <p className="mt-0.5 text-sm text-amber-800">{copy.dailyLimitHint}</p>
-                <Button href="/cabinet/subscribe" size="md" className="mt-3">
-                  {copy.buySubscriptionCta}
-                </Button>
+                {!isGuest && (
+                  <Button href="/cabinet/subscribe" size="md" className="mt-3">
+                    {copy.buySubscriptionCta}
+                  </Button>
+                )}
               </div>
             )}
             {(answerCache[current.id] !== undefined || loadingAnswerId === current.id) && (

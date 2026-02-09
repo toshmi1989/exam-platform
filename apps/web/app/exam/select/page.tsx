@@ -11,6 +11,7 @@ import PageHeader from '../../../components/PageHeader';
 import { readSettings, Language } from '../../../lib/uiSettings';
 import { apiFetch } from '../../../lib/api/client';
 import { createAttempt, startAttempt, getProfile } from '../../../lib/api';
+import { readTelegramUser } from '../../../lib/telegramUser';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,6 +65,7 @@ function ExamSelectClient() {
   const [oneTimePrice, setOneTimePrice] = useState<number | null>(null);
   const [subscriptionPrice, setSubscriptionPrice] = useState<number | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isGuest, setIsGuest] = useState<boolean>(false);
   const [isStarting, setIsStarting] = useState(false);
 
   const professionLabels = useMemo(
@@ -78,6 +80,11 @@ function ExamSelectClient() {
   }, []);
 
   useEffect(() => {
+    // Check if user is a guest
+    const user = readTelegramUser();
+    const isGuestUser = !user?.telegramId || user.telegramId.startsWith('guest-');
+    setIsGuest(isGuestUser);
+
     getProfile()
       .then((p) => {
         setOneTimePrice(p.oneTimePrice ?? null);
@@ -718,7 +725,7 @@ function ExamSelectClient() {
                       {copy.dailyLimitExhaustedHint}
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      {isAuthenticated && (
+                      {isAuthenticated && !isGuest && (
                         <>
                           <Button
                             href="/cabinet/subscribe"
@@ -745,10 +752,28 @@ function ExamSelectClient() {
                           </Button>
                         </>
                       )}
-                      {!isAuthenticated && (
-                        <Button href="/cabinet" size="md" className="w-full sm:w-auto">
-                          {copy.loginToPurchase}
-                        </Button>
+                      {(isGuest || (!isAuthenticated && !isGuest)) && (
+                        <>
+                          {isGuest ? (
+                            <Button
+                              href={
+                                direction
+                                  ? `/cabinet/pay-one-time?examId=${encodeURIComponent(direction.examId)}&mode=${mode ?? 'exam'}`
+                                  : '/cabinet/pay-one-time'
+                              }
+                              size="md"
+                              className="w-full sm:w-auto"
+                            >
+                              {oneTimePrice != null
+                                ? `${copy.oneTimeCtaFor} ${oneTimePrice.toLocaleString('ru-UZ')} сум`
+                                : copy.payCta}
+                            </Button>
+                          ) : (
+                            <Button href="/cabinet" size="md" className="w-full sm:w-auto">
+                              {copy.loginToPurchase}
+                            </Button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>

@@ -9,6 +9,7 @@ import PageHeader from '../../../../components/PageHeader';
 import { createAttempt, startAttempt } from '../../../../lib/api';
 import type { AttemptRef, ApiError } from '../../../../lib/types';
 import { readSettings, Language } from '../../../../lib/uiSettings';
+import { readTelegramUser } from '../../../../lib/telegramUser';
 
 export default function ExamStartPage() {
   const params = useParams<{ examId: string }>();
@@ -18,6 +19,7 @@ export default function ExamStartPage() {
   const [accessDenied, setAccessDenied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [language, setLanguage] = useState<Language>(readSettings().language);
+  const [isGuest, setIsGuest] = useState(false);
 
   const copy = useMemo(() => {
     if (language === 'Английский') {
@@ -78,6 +80,12 @@ export default function ExamStartPage() {
   }, []);
 
   useEffect(() => {
+    const user = readTelegramUser();
+    const isGuestUser = !user?.telegramId || user.telegramId.startsWith('guest-');
+    setIsGuest(isGuestUser);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function initAttempt() {
@@ -133,12 +141,14 @@ export default function ExamStartPage() {
             <p className="font-semibold text-amber-800">{copy.dailyLimitTitle}</p>
             <p className="text-sm text-slate-600">{copy.dailyLimitHint}</p>
             <div className="mt-2 flex flex-wrap gap-3">
-              <Button href="/cabinet/subscribe" size="lg">
-                {copy.buySubscriptionCta}
-              </Button>
+              {!isGuest && (
+                <Button href="/cabinet/subscribe" size="lg">
+                  {copy.buySubscriptionCta}
+                </Button>
+              )}
               <Button
                 href={`/cabinet/pay-one-time?examId=${encodeURIComponent(String(params.examId))}&mode=exam`}
-                variant="secondary"
+                variant={isGuest ? undefined : 'secondary'}
                 size="lg"
               >
                 {copy.oneTimeCta}
