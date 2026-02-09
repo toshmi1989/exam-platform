@@ -175,9 +175,14 @@ function SubscribeReturnClient() {
     }
   }, [mounted, invoiceId, inTelegram, checkedBrowser]);
 
-    if (!invoiceId) {
-      setStatus('error');
-      setMessage(copyRef.current.errorNoInvoice);
+  // Poll for payment status in Telegram
+  useEffect(() => {
+    if (!inTelegram || !invoiceId) {
+      if (!inTelegram && invoiceId) return; // opened in browser — already checked above
+      if (!invoiceId) {
+        setStatus('error');
+        setMessage(copyRef.current.errorNoInvoice);
+      }
       return;
     }
 
