@@ -9,15 +9,8 @@ CREATE UNIQUE INDEX "OneTimeAccess_guestSessionId_key" ON "OneTimeAccess"("guest
 -- CreateIndex
 CREATE INDEX "OneTimeAccess_guestSessionId_idx" ON "OneTimeAccess"("guestSessionId");
 
--- Drop existing unique constraint if it exists
-DO $$ 
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'OneTimeAccess_userId_examId_consumedAt_key'
-  ) THEN
-    ALTER TABLE "OneTimeAccess" DROP CONSTRAINT "OneTimeAccess_userId_examId_consumedAt_key";
-  END IF;
-END $$;
+-- Drop existing unique index if it exists (it's an index, not a constraint)
+DROP INDEX IF EXISTS "OneTimeAccess_userId_examId_consumedAt_key";
 
 -- Create unique partial indexes (PostgreSQL supports WHERE clause in unique indexes)
 CREATE UNIQUE INDEX "OneTimeAccess_userId_examId_consumedAt_key" ON "OneTimeAccess"("userId", "examId", "consumedAt") WHERE "userId" IS NOT NULL;
