@@ -9,7 +9,7 @@ import Card from '../../../../components/Card';
 import PageHeader from '../../../../components/PageHeader';
 import { getPaymentStatus, createAttempt, startAttempt } from '../../../../lib/api';
 import { readSettings, type Language } from '../../../../lib/uiSettings';
-import { isTelegramWebApp, getOpenInTelegramAppUrl } from '../../../../lib/telegram';
+import { isTelegramWebApp } from '../../../../lib/telegram';
 
 export const dynamic = 'force-dynamic';
 
@@ -144,7 +144,7 @@ function PayOneTimeReturnClient() {
 
   // Восстановить invoiceId/examId/mode из sessionStorage, если в URL нет (редирект шлюза мог обрезать query)
   useEffect(() => {
-    if (!inTelegram || restored) return;
+    if (restored) return;
     const hasFromUrl = invoiceId && examId;
     if (hasFromUrl) {
       setRestored(true);
@@ -162,10 +162,10 @@ function PayOneTimeReturnClient() {
       // ignore
     }
     setRestored(true);
-  }, [invoiceId, examId, restored, inTelegram]);
+  }, [invoiceId, examId, restored]);
 
   useEffect(() => {
-    if (!inTelegram || !restored) return;
+    if (!restored) return;
     if (!invoiceId || !examId) {
       setStatus('error');
       setMessage(copyRef.current.errorNoInvoice);
@@ -204,11 +204,26 @@ function PayOneTimeReturnClient() {
           const result = await getPaymentStatus(invoiceId);
           if (cancelled) return;
           if (result.status === 'paid') {
+            if (!result.belongsToUser) {
+              setStatus('error');
+              setMessage('Этот платёж не принадлежит вашему сеансу');
+              return;
+            }
+            if (result.alreadyConsumed) {
+              setStatus('error');
+              setMessage('Этот платёж уже был использован');
+              return;
+            }
             setReceiptUrl(result.receiptUrl ?? null);
             setStatus('paid');
             setMessage(copyRef.current.paidReceived);
             return;
+          } else if (result.status === 'failed' || result.status === 'expired') {
+            setStatus('error');
+            setMessage(copyRef.current.notConfirmed);
+            return;
           }
+          // status === 'created' - continue polling
         } catch {
           // ignore and retry
         }
@@ -259,9 +274,22 @@ function PayOneTimeReturnClient() {
       setMessage(copy.retryChecking);
       const result = await getPaymentStatus(invoiceId);
       if (result.status === 'paid') {
+        if (!result.belongsToUser) {
+          setStatus('error');
+          setMessage('Этот платёж не принадлежит вашему сеансу');
+          return;
+        }
+        if (result.alreadyConsumed) {
+          setStatus('error');
+          setMessage('Этот платёж уже был использован');
+          return;
+        }
         setReceiptUrl(result.receiptUrl ?? null);
         setStatus('paid');
         setMessage(copy.paidConfirmed);
+      } else if (result.status === 'created') {
+        setStatus('polling');
+        setMessage(copy.notConfirmed);
       } else {
         setStatus('error');
         setMessage(copy.notConfirmed);
@@ -294,27 +322,7 @@ function PayOneTimeReturnClient() {
     router.replace('/cabinet');
   }
 
-  if (mounted && !inTelegram) {
-    const c = copy as { openInTelegramTitle?: string; openInTelegramMessage?: string; openInTelegramButton?: string };
-    return (
-      <AnimatedPage>
-        <main className="flex flex-col gap-6 pb-28 pt-[3.75rem]">
-          <PageHeader title={c.openInTelegramTitle ?? 'Оплата получена'} subtitle="" />
-          <Card className="flex flex-col items-center gap-6 py-8">
-            <p className="text-center text-slate-700">
-              {c.openInTelegramMessage ?? 'Оплата прошла успешно. Откройте ZiyoMed в Telegram, чтобы начать тест.'}
-            </p>
-            <a
-              href={getOpenInTelegramAppUrl()}
-              className="inline-flex w-full max-w-xs justify-center rounded-xl bg-[#2AABEE] px-5 py-4 text-base font-semibold text-white hover:bg-[#229ED9]"
-            >
-              {c.openInTelegramButton ?? 'Открыть в Telegram'}
-            </a>
-          </Card>
-        </main>
-      </AnimatedPage>
-    );
-  }
+  // Browser guests can use the return page - no need to block
 
   return (
     <>
@@ -361,6 +369,27 @@ function PayOneTimeReturnClient() {
                 <p className="mt-2 text-center text-xs text-slate-500">
                   {copy.hint}
                 </p>
+              </>
+            )}
+            {status === 'polling' && (
+              <>
+                <p className="text-center text-slate-600">{message || copy.waiting}</p>
+                <div className="mt-4 flex flex-col gap-3">
+                  <button
+                    type="button"
+                    onClick={handleRetryCheck}
+                    className="w-full rounded-xl bg-slate-800 px-5 py-3 text-base font-semibold text-white shadow-sm hover:bg-slate-900 active:scale-95"
+                  >
+                    {copy.retryCheck}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRestartPayment}
+                    className="w-full rounded-xl bg-slate-200 px-5 py-3 text-base font-medium text-slate-800 hover:bg-slate-300 active:scale-95"
+                  >
+                    {copy.choosePaymentAgain}
+                  </button>
+                </div>
               </>
             )}
             {status === 'error' && (

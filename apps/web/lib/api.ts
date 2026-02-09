@@ -329,24 +329,28 @@ export async function createPayment(params: CreatePaymentParams): Promise<Create
 }
 
 export interface PaymentStatusResult {
-  status: string;
+  status: 'paid' | 'created' | 'failed' | 'expired';
   kind?: string;
   examId?: string | null;
+  belongsToUser: boolean;
+  alreadyConsumed: boolean;
   receiptUrl?: string;
   amountTiyin?: number;
   subscriptionEndsAt?: string | null;
 }
 
 export async function getPaymentStatus(invoiceId: string): Promise<PaymentStatusResult> {
-  const { response, data } = await apiFetch(`/payments/status/${encodeURIComponent(invoiceId)}`);
+  const { response, data } = await apiFetch(`/payments/status?invoiceId=${encodeURIComponent(invoiceId)}`);
   if (!response.ok) {
     throw data as ApiError;
   }
   const payload = data as PaymentStatusResult | null;
   return {
-    status: payload?.status ?? 'created',
+    status: (payload?.status ?? 'created') as 'paid' | 'created' | 'failed' | 'expired',
     kind: payload?.kind,
     examId: payload?.examId,
+    belongsToUser: payload?.belongsToUser ?? false,
+    alreadyConsumed: payload?.alreadyConsumed ?? false,
     receiptUrl: payload?.receiptUrl,
     amountTiyin: payload?.amountTiyin,
     subscriptionEndsAt: payload?.subscriptionEndsAt,

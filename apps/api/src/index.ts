@@ -2,6 +2,7 @@
 
 import express from 'express';
 import compression from 'compression';
+import cookieParser from 'cookie-parser';
 import type { Request, Response, NextFunction } from 'express';
 import attemptsRouter from './modules/attempts/attempts.routes';
 import categoriesRouter from './modules/categories/categories.routes';
@@ -29,6 +30,7 @@ import { AGREEMENT_VERSION } from './constants/agreement';
 const app = express();
 
 app.use(compression());
+app.use(cookieParser());
 app.use(express.json({ limit: '25mb' })); // chat images + admin Excel import (base64 ~+33%)
 app.use((req, res, next) => {
   res.setHeader(

@@ -43,8 +43,28 @@ router.post('/create', async (req: Request, res: Response) => {
   const psRaw = typeof req.body?.paymentSystem === 'string' ? req.body.paymentSystem.trim().toLowerCase() : '';
   const ps = psRaw && PS_MAP[psRaw] ? PS_MAP[psRaw] : '';
 
-  if (!userId) {
+  // Subscription requires authenticated user; one-time can be guest
+  if (kind === 'subscription' && !userId) {
     return res.status(401).json({ ok: false, reasonCode: 'AUTH_REQUIRED' });
+  }
+
+  // For guest one-time payments, generate guestSessionId
+  let guestSessionId: string | null = null;
+  if (!userId && kind === 'one-time') {
+    // Check for existing guest session cookie or generate new
+    const existingGuestId = req.cookies?.['guest-session-id'] || req.header('x-guest-session-id');
+    if (existingGuestId && typeof existingGuestId === 'string' && existingGuestId.trim()) {
+      guestSessionId = existingGuestId.trim();
+    } else {
+      guestSessionId = randomUUID();
+      // Set cookie (30 days expiry)
+      res.cookie('guest-session-id', guestSessionId, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+      });
+    }
   }
 
   if (!ps) {
@@ -100,7 +120,8 @@ router.post('/create', async (req: Request, res: Response) => {
     await prisma.paymentInvoice.create({
       data: {
         invoiceId,
-        userId,
+        userId: userId ?? null,
+        guestSessionId: guestSessionId ?? null,
         kind,
         examId: kind === 'one-time' ? examId! : null,
         amountTiyin,
@@ -164,6 +185,7 @@ router.post('/multicard/callback', async (req: Request, res: Response) => {
           id: true,
           kind: true,
           userId: true,
+          guestSessionId: true,
           examId: true,
           status: true,
           amountTiyin: true,
@@ -190,7 +212,11 @@ router.post('/multicard/callback', async (req: Request, res: Response) => {
 
         if (inv.kind === 'one-time' && inv.examId) {
           await prisma.oneTimeAccess.create({
-            data: { userId: inv.userId, examId: inv.examId },
+            data: {
+              userId: inv.userId ?? null,
+              guestSessionId: inv.guestSessionId ?? null,
+              examId: inv.examId,
+            },
           });
         } else if (inv.kind === 'subscription') {
           const now = new Date();
@@ -209,6 +235,10 @@ router.post('/multicard/callback', async (req: Request, res: Response) => {
         void (async () => {
           try {
             console.log('[payments/callback] Preparing Telegram notification for invoice:', invoiceId);
+            // Only send notification for authenticated users (not guests)
+            if (!inv.userId) {
+              return;
+            }
             const user = await prisma.user.findUnique({
               where: { id: inv.userId },
               select: { telegramId: true, firstName: true, username: true },
@@ -256,22 +286,54 @@ router.post('/multicard/callback', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /payments/status/:invoiceId
- * Returns { status, kind, examId } and when paid: receiptUrl, amountTiyin, subscriptionEndsAt (for subscription).
+ * GET /payments/status?invoiceId=...
+ * Returns { status, kind, examId, belongsToUser, alreadyConsumed } and when paid: receiptUrl, amountTiyin, subscriptionEndsAt (for subscription).
  */
-router.get('/status/:invoiceId', async (req: Request, res: Response) => {
-  const raw = req.params.invoiceId;
-  const invoiceId = typeof raw === 'string' ? raw.trim() : Array.isArray(raw) ? raw[0]?.trim() ?? '' : '';
+router.get('/status', async (req: Request, res: Response) => {
+  const invoiceId = typeof req.query?.invoiceId === 'string' ? req.query.invoiceId.trim() : '';
   if (!invoiceId) {
     return res.status(400).json({ ok: false, reasonCode: 'INVALID_INVOICE' });
   }
 
+  const userId = (req as Request & { user?: { id: string } }).user?.id;
+  const guestSessionId = req.cookies?.['guest-session-id'] || req.header('x-guest-session-id') || null;
+
   const inv = await prisma.paymentInvoice.findUnique({
     where: { invoiceId },
-    select: { status: true, kind: true, examId: true, amountTiyin: true, mcUuid: true, userId: true },
+    select: {
+      status: true,
+      kind: true,
+      examId: true,
+      amountTiyin: true,
+      mcUuid: true,
+      userId: true,
+      guestSessionId: true,
+    },
   });
   if (!inv) {
     return res.status(404).json({ ok: false, reasonCode: 'NOT_FOUND' });
+  }
+
+  // Check if invoice belongs to current user/session
+  const belongsToUser =
+    (userId && inv.userId === userId) ||
+    (guestSessionId && inv.guestSessionId === guestSessionId);
+
+  // Check if one-time access was already consumed
+  let alreadyConsumed = false;
+  if (inv.kind === 'one-time' && inv.examId && inv.status === 'paid') {
+    const oneTime = await prisma.oneTimeAccess.findFirst({
+      where: {
+        examId: inv.examId,
+        consumedAt: { not: null },
+        OR: [
+          inv.userId ? { userId: inv.userId } : {},
+          inv.guestSessionId ? { guestSessionId: inv.guestSessionId } : {},
+        ],
+      },
+      select: { id: true },
+    });
+    alreadyConsumed = Boolean(oneTime);
   }
 
   const payload: {
@@ -279,6 +341,8 @@ router.get('/status/:invoiceId', async (req: Request, res: Response) => {
     status: string;
     kind?: string;
     examId?: string | null;
+    belongsToUser: boolean;
+    alreadyConsumed: boolean;
     receiptUrl?: string;
     amountTiyin?: number;
     subscriptionEndsAt?: string | null;
@@ -287,6 +351,8 @@ router.get('/status/:invoiceId', async (req: Request, res: Response) => {
     status: inv.status,
     kind: inv.kind,
     examId: inv.examId,
+    belongsToUser,
+    alreadyConsumed,
   };
 
   if (inv.status === 'paid') {
@@ -294,7 +360,7 @@ router.get('/status/:invoiceId', async (req: Request, res: Response) => {
       payload.receiptUrl = `https://checkout.multicard.uz/check/${inv.mcUuid}`;
     }
     payload.amountTiyin = inv.amountTiyin;
-    if (inv.kind === 'subscription') {
+    if (inv.kind === 'subscription' && inv.userId) {
       const sub = await prisma.userSubscription.findFirst({
         where: { userId: inv.userId },
         orderBy: { endsAt: 'desc' },

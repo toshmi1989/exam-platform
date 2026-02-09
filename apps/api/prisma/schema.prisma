@@ -200,17 +200,20 @@ model UserSubscription {
 }
 
 model OneTimeAccess {
-  id         String   @id @default(cuid())
-  userId     String
-  examId     String
-  consumedAt DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id            String   @id @default(cuid())
+  userId        String?  // null if guestSessionId is set
+  guestSessionId String? @unique // null if userId is set
+  examId        String
+  consumedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([userId])
+  @@index([guestSessionId])
   @@index([examId])
   @@index([consumedAt])
   @@unique([userId, examId, consumedAt])
+  @@unique([guestSessionId, examId, consumedAt])
 }
 
 model AccessSettings {
@@ -246,19 +249,21 @@ model OralAccessLog {
 }
 
 model PaymentInvoice {
-  id         String    @id @default(cuid())
-  invoiceId  String    @unique
-  userId     String
-  kind       String
-  examId     String?
-  amountTiyin Int
-  ps         String
-  status     String    @default("created")
-  mcUuid     String?
-  createdAt  DateTime  @default(now())
-  paidAt     DateTime?
+  id            String    @id @default(cuid())
+  invoiceId     String    @unique
+  userId        String?   // null if guestSessionId is set
+  guestSessionId String?  // null if userId is set
+  kind          String
+  examId        String?
+  amountTiyin   Int
+  ps            String
+  status        String    @default("created")
+  mcUuid        String?
+  createdAt     DateTime  @default(now())
+  paidAt        DateTime?
 
   @@index([userId])
+  @@index([guestSessionId])
   @@index([invoiceId])
   @@index([status])
 }

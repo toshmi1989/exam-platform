@@ -5,20 +5,28 @@ import { prisma } from '../../db/prisma';
 export type ConsumableEntitlement = 'subscription' | 'oneTime' | 'daily';
 
 export async function consumeEntitlement(
-  userId: string,
+  userId: string | null,
   examId: string,
   entitlementType: ConsumableEntitlement | 'none',
-  idempotencyKey: string
+  idempotencyKey: string,
+  guestSessionId?: string | null
 ): Promise<void> {
   if (entitlementType === 'none') return;
   if (entitlementType === 'oneTime') {
     const now = new Date();
+    const where: { examId: string; consumedAt: null; userId?: string; guestSessionId?: string } = {
+      examId,
+      consumedAt: null,
+    };
+    if (userId) {
+      where.userId = userId;
+    } else if (guestSessionId) {
+      where.guestSessionId = guestSessionId;
+    } else {
+      return;
+    }
     const existing = await prisma.oneTimeAccess.findFirst({
-      where: {
-        userId,
-        examId,
-        consumedAt: null,
-      },
+      where,
       select: { id: true },
     });
     if (!existing) return;

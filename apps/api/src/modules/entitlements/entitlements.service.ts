@@ -6,9 +6,10 @@ import { getAccessSettings } from '../settings/accessSettings.service';
 export type ExamTypeForEntitlements = 'TEST' | 'ORAL';
 
 export async function getEntitlementsForExam(
-  userId: string,
+  userId: string | null,
   examId: string,
-  examType: ExamTypeForEntitlements = 'TEST'
+  examType: ExamTypeForEntitlements = 'TEST',
+  guestSessionId?: string | null
 ): Promise<{
   subscriptionActive: boolean;
   hasOneTimeForExam: boolean;
@@ -22,49 +23,63 @@ export async function getEntitlementsForExam(
   todayEnd.setDate(todayEnd.getDate() + 1);
 
   const now = new Date();
-  const activeSubscription = await prisma.userSubscription.findFirst({
-    where: {
-      userId,
-      status: 'ACTIVE',
-      startsAt: { lte: now },
-      endsAt: { gt: now },
-    },
-    select: { id: true },
-  });
+  // Subscriptions only for authenticated users (not guests)
+  const activeSubscription = userId
+    ? await prisma.userSubscription.findFirst({
+        where: {
+          userId,
+          status: 'ACTIVE',
+          startsAt: { lte: now },
+          endsAt: { gt: now },
+        },
+        select: { id: true },
+      })
+    : null;
   const subscriptionActive = Boolean(activeSubscription);
 
+  // Check one-time access for either userId or guestSessionId
+  const oneTimeWhere: { examId: string; consumedAt: null; userId?: string; guestSessionId?: string } = {
+    examId,
+    consumedAt: null,
+  };
+  if (userId) {
+    oneTimeWhere.userId = userId;
+  } else if (guestSessionId) {
+    oneTimeWhere.guestSessionId = guestSessionId;
+  }
   const oneTime = await prisma.oneTimeAccess.findFirst({
-    where: {
-      userId,
-      examId,
-      consumedAt: null,
-    },
+    where: oneTimeWhere,
     select: { id: true },
   });
   const hasOneTimeForExam = Boolean(oneTime);
 
   // Дневной лимит тратится при запуске попытки (startAttempt), а не при завершении.
   // Считаем все запуски за сегодня: и «Сдать тест» (EXAM), и «Готовиться к тесту» (PRACTICE).
-  const dailyCount = await prisma.examAttempt.count({
-    where: {
-      userId,
-      startedAt: {
-        not: null,
-        gte: todayStart,
-        lt: todayEnd,
-      },
-    },
-  });
+  // Daily limit only for authenticated users (not guests)
+  const dailyCount = userId
+    ? await prisma.examAttempt.count({
+        where: {
+          userId,
+          startedAt: {
+            not: null,
+            gte: todayStart,
+            lt: todayEnd,
+          },
+        },
+      })
+    : 0;
 
   const dailyLimitAvailable =
+    userId !== null &&
     examType === 'TEST' &&
     settings.allowFreeAttempts &&
     settings.freeDailyLimit > 0 &&
     dailyCount < settings.freeDailyLimit;
 
   // Устный режим: подписчики без лимита; без подписки — freeOralDailyLimit = число разных вопросов, ответы на которые просмотрены сегодня.
+  // Oral mode only for authenticated users (not guests)
   let oralDailyLimitAvailable = false;
-  if (examType === 'ORAL') {
+  if (examType === 'ORAL' && userId) {
     if (subscriptionActive) {
       oralDailyLimitAvailable = true;
     } else if (settings.allowFreeAttempts && settings.freeOralDailyLimit > 0) {

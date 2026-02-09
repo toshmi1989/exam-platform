@@ -27,9 +27,9 @@ export async function createAttemptHandler(
   const userId = req.user?.id;
   const examId = req.body.examId;
   const mode = req.body.mode === 'practice' ? 'practice' : 'exam';
+  const guestSessionId = req.cookies?.['guest-session-id'] || req.header('x-guest-session-id') || null;
 
-  // TODO: derive userId from authenticated user (Telegram).
-  if (!userId || !examId) {
+  if (!examId) {
     res.status(400).json({
       success: false,
       reasonCode: 'INVALID_INPUT',
@@ -37,11 +37,21 @@ export async function createAttemptHandler(
     return;
   }
 
+  // Either userId or guestSessionId must be present
+  if (!userId && !guestSessionId) {
+    res.status(401).json({
+      success: false,
+      reasonCode: 'AUTH_REQUIRED',
+    });
+    return;
+  }
+
   const result = await createAttempt({
-    userId,
+    userId: userId ?? null,
     examId,
     idempotencyKey: getIdempotencyKey(req),
     mode,
+    guestSessionId: guestSessionId ?? null,
   });
 
   if (!result.success) {

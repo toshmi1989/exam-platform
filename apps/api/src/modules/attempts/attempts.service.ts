@@ -63,14 +63,15 @@ export interface CreateAttemptParams {
 // ================== Helpers ==================
 
 async function buildAccessContext(
-  userId: string,
-  examId: string
+  userId: string | null,
+  examId: string,
+  guestSessionId?: string | null
 ): Promise<AccessContext> {
-  const entitlements = await getEntitlementsForExam(userId, examId);
+  const entitlements = await getEntitlementsForExam(userId, examId, 'TEST', guestSessionId);
 
   return {
     user: {
-      id: userId,
+      id: userId ?? `guest-${guestSessionId ?? 'unknown'}`,
       role: 'authorized',
       status: 'active',
       hasActiveAttempt: false,
@@ -110,11 +111,43 @@ async function finalizeAttempt(
 // ================== Public API ==================
 
 export async function createAttempt(
-  params: CreateAttemptParams
+  params: CreateAttemptParams & { guestSessionId?: string | null }
 ): Promise<AttemptActionResult> {
+  // Validate invoice ownership if one-time payment
+  if (!params.userId && params.guestSessionId) {
+    // Guest user: check if they have a paid invoice for this exam
+    const invoice = await prisma.paymentInvoice.findFirst({
+      where: {
+        guestSessionId: params.guestSessionId,
+        examId: params.examId,
+        kind: 'one-time',
+        status: 'paid',
+      },
+      select: { id: true },
+    });
+    if (!invoice) {
+      return { success: false, reasonCode: 'ACCESS_DENIED' };
+    }
+  } else if (params.userId) {
+    // Authenticated user: check invoice ownership
+    const invoice = await prisma.paymentInvoice.findFirst({
+      where: {
+        userId: params.userId,
+        examId: params.examId,
+        kind: 'one-time',
+        status: 'paid',
+      },
+      select: { id: true, userId: true, guestSessionId: true },
+    });
+    if (invoice && invoice.userId !== params.userId) {
+      return { success: false, reasonCode: 'ACCESS_DENIED' };
+    }
+  }
+
   const accessContext = await buildAccessContext(
-    params.userId,
-    params.examId
+    params.userId ?? null,
+    params.examId,
+    params.guestSessionId
   );
 
   const decision: AccessDecision = evaluateAccess(accessContext);
@@ -124,15 +157,16 @@ export async function createAttempt(
   }
 
   await consumeEntitlement(
-    params.userId,
+    params.userId ?? null,
     params.examId,
     decision.entitlementType,
-    params.idempotencyKey
+    params.idempotencyKey,
+    params.guestSessionId ?? null
   );
 
   const attempt: ExamAttempt = {
     id: randomUUID(),
-    userId: params.userId,
+    userId: params.userId ?? `guest-${params.guestSessionId ?? 'unknown'}`,
     examId: params.examId,
     status: 'created',
     mode: params.mode,
