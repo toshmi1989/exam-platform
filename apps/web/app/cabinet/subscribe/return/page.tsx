@@ -28,11 +28,38 @@ function formatDate(iso: string): string {
   });
 }
 
+function detectBrowserLanguage(): Language {
+  if (typeof window === 'undefined') return 'Русский';
+  try {
+    const browserLang = navigator.language || (navigator as { userLanguage?: string }).userLanguage || 'ru';
+    if (browserLang.toLowerCase().startsWith('uz')) return 'Узбекский';
+    if (browserLang.toLowerCase().startsWith('en')) return 'Английский';
+  } catch {
+    // ignore
+  }
+  return 'Русский';
+}
+
 function SubscribeReturnClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const invoiceId = searchParams.get('invoiceId') ?? '';
-  const [language, setLanguage] = useState<Language>(() => readSettings().language);
+  const [language, setLanguage] = useState<Language>(() => {
+    if (typeof window === 'undefined') return 'Русский';
+    try {
+      const raw = window.localStorage.getItem('calmexam.uiSettings');
+      if (raw) {
+        const parsed = JSON.parse(raw) as { language?: Language };
+        if (parsed.language && ['Узбекский', 'Русский', 'Английский'].includes(parsed.language)) {
+          return parsed.language;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    // No saved settings - use browser language
+    return detectBrowserLanguage();
+  });
   const [mounted, setMounted] = useState(false);
   const inTelegram = mounted && isTelegramWebApp();
 
@@ -57,8 +84,16 @@ function SubscribeReturnClient() {
         }
       }
     };
+    const onSettingsChange = () => {
+      const settings = readSettings();
+      if (settings.language) setLanguage(settings.language);
+    };
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    window.addEventListener('ui-settings-changed', onSettingsChange);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('ui-settings-changed', onSettingsChange);
+    };
   }, []);
 
   const copy = useMemo(() => {
@@ -143,26 +178,29 @@ function SubscribeReturnClient() {
           const result = await getPaymentStatus(invoiceId);
           if (cancelled) return;
           
+          // Update copy ref to ensure we have latest language
+          const currentCopy = copyRef.current;
+          
           // Check for legacy format or foreign payment regardless of status
           if (result.isLegacyFormat) {
             setStatus('error');
-            setMessage(copyRef.current.legacyFormatMessage);
+            setMessage(currentCopy.legacyFormatMessage);
             return;
           }
           if (result.status === 'paid' && !result.belongsToUser) {
             setStatus('error');
-            setMessage(copyRef.current.notYourPaymentMessage);
+            setMessage(currentCopy.notYourPaymentMessage);
             return;
           }
           
           // Valid payment - show Telegram link
           if (result.status === 'paid') {
             setStatus('paid');
-            setMessage(copyRef.current.paidMessage);
+            setMessage(currentCopy.paidMessage);
           } else {
             // Other statuses - show error
             setStatus('error');
-            setMessage(copyRef.current.errorNoInvoice);
+            setMessage(currentCopy.errorNoInvoice);
           }
         } catch {
           setStatus('error');
@@ -173,7 +211,7 @@ function SubscribeReturnClient() {
         cancelled = true;
       };
     }
-  }, [mounted, invoiceId, inTelegram, checkedBrowser]);
+  }, [mounted, invoiceId, inTelegram, checkedBrowser, copy]);
 
   // Poll for payment status in Telegram
   useEffect(() => {
