@@ -6,6 +6,7 @@
 import * as crypto from 'crypto';
 import { prisma } from '../../db/prisma';
 import { getEmbedding, findTopKWithScores } from './embedding';
+import { sanitizeAIOutput } from './sanitizeAIOutput';
 import { generateForZiyoda } from './ziyoda-llm.client';
 import { getZiyodaPrompts, DEFAULT_PROMPTS } from './ziyoda-prompts.service';
 
@@ -144,7 +145,7 @@ export async function askZiyoda(
       const cached = await prisma.botAnswerCache.findUnique({
         where: { questionHash },
       });
-      if (cached) return ret(cached.answer);
+      if (cached) return ret(sanitizeAIOutput(cached.answer));
     }
 
     const queryEmbedding = await getEmbedding(trimmed);
@@ -191,7 +192,8 @@ export async function askZiyoda(
         }
       : undefined;
     const prompt = buildPrompt(prompts, lang, firstName, contextChunks, trimmed, previousExchange);
-    const answer = await generateForZiyoda(prompt);
+    let answer = await generateForZiyoda(prompt);
+    answer = sanitizeAIOutput(answer);
 
     if (!hasContext) {
       await prisma.botAnswerCache.upsert({

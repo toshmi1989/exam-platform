@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../db/prisma';
+import { sanitizeAIOutput } from '../ai/sanitizeAIOutput';
 import { askZiyoda, detectLang } from '../ai/ziyoda-rag.service';
 import { checkBotAiLimit, recordBotAiRequest } from './bot-ai-limit.service';
 
@@ -90,17 +91,18 @@ router.post('/ask', async (req: Request, res: Response): Promise<void> => {
       }
     }
 
+    const answer = sanitizeAIOutput(result.answer);
     if (result.noAnswerFound) {
       await logUnanswered();
       res.json({
-        answer: result.answer,
+        answer,
         noAnswerFound: true,
         lang,
         inlineButtons: buildLimitInlineButtons(lang),
       });
       return;
     }
-    const raw = result.answer.trim();
+    const raw = answer.trim();
     const isNoAnswerResponse =
       /в базе зиёды нет|нет этой информации|можешь уточнить вопрос/i.test(raw) ||
       /ziyoda bazasida .* ma['ʼʻ\u0027]lumot yo['ʼʻ\u0027]q/i.test(raw) ||
@@ -112,7 +114,7 @@ router.post('/ask', async (req: Request, res: Response): Promise<void> => {
     if (isNoAnswerResponse) {
       await logUnanswered();
     }
-    res.json({ answer: result.answer, lang });
+    res.json({ answer, lang });
   } catch (err) {
     console.error('[bot/ask]', err);
     res.status(500).json({

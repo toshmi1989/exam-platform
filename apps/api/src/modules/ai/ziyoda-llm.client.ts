@@ -28,6 +28,7 @@ function getOpenAI(): OpenAI {
 
 /**
  * Generate completion for Ziyoda RAG (single prompt as user message).
+ * Only assistant content is returned; system role is ignored.
  */
 export async function generateForZiyoda(prompt: string): Promise<string> {
   const openai = getOpenAI();
@@ -37,7 +38,18 @@ export async function generateForZiyoda(prompt: string): Promise<string> {
     temperature: 0.3,
     max_tokens: 512,
   });
-  const raw = completion.choices[0]?.message?.content?.trim();
+  const msg = completion.choices[0]?.message;
+  if (!msg) {
+    throw new Error('Пустой ответ от модели');
+  }
+  const role = (msg as { role?: string }).role;
+  if (role === 'system') {
+    throw new Error('Получен ответ с role=system, не показываем пользователю');
+  }
+  if (role !== 'assistant' && role != null) {
+    throw new Error('Ожидался ответ assistant');
+  }
+  const raw = msg.content?.trim();
   if (raw == null || raw === '') {
     throw new Error('Пустой ответ от модели');
   }

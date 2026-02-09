@@ -1,11 +1,16 @@
 /**
  * Telegram bot process: long polling → POST /bot/ask → send answer.
  * Run on server: node dist/scripts/ziyoda-bot.js (after npm run build)
- * Env: TELEGRAM_BOT_TOKEN, BOT_API_URL (e.g. http://127.0.0.1:3001)
+ * Env: TELEGRAM_BOT_TOKEN, BOT_API_URL (e.g. http://127.0.0.1:3001), ADMIN_TELEGRAM_IDS (comma-separated)
  */
 
+import { exec } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { promisify } from 'util';
+import { sanitizeAIOutput } from '../modules/ai/sanitizeAIOutput';
+
+const execAsync = promisify(exec);
 
 // Load .env from cwd (apps/api when run via PM2) so vars are set before reading
 try {
@@ -43,6 +48,67 @@ const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 /** URL аватарки Зиёды для приветствия по /start (должен быть доступен по HTTPS для Telegram). */
 const ZIYODA_AVATAR_URL = PLATFORM_URL ? `${PLATFORM_URL}/ziyoda-avatar.png` : '';
 let offset = 0;
+
+/** Admin Telegram IDs (from ADMIN_TELEGRAM_IDS). Only these can use /server and admin callbacks. */
+const ADMIN_TELEGRAM_IDS = new Set(
+  (process.env.ADMIN_TELEGRAM_IDS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+);
+function isAdmin(telegramId: string): boolean {
+  return ADMIN_TELEGRAM_IDS.has(telegramId);
+}
+
+const LOG_OUTPUT_MAX = 3500;
+function trimOutput(s: string): string {
+  const t = s.trim();
+  return t.length <= LOG_OUTPUT_MAX ? t : t.slice(0, LOG_OUTPUT_MAX) + '\n... (truncated)';
+}
+function escapeHtmlForPre(s: string): string {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+async function sendMessageHtml(chatId: number, html: string): Promise<void> {
+  const url = `${TELEGRAM_API}/sendMessage`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text: html, parse_mode: 'HTML' }),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    if (res.status !== 403 || !errText.includes('blocked')) {
+      console.error('[sendMessageHtml]', res.status, errText.slice(0, 200));
+    }
+  }
+}
+
+/** Admin panel inline keyboard. */
+function getAdminPanelKeyboard(): ReplyMarkup {
+  return {
+    inline_keyboard: [
+      [{ text: '🔄 Restart API', callback_data: 'restart_api' }],
+      [{ text: '🔄 Restart WEB', callback_data: 'restart_web' }],
+      [{ text: '📄 API Logs', callback_data: 'logs_api' }],
+      [{ text: '📄 WEB Logs', callback_data: 'logs_web' }],
+      [{ text: '📊 Status', callback_data: 'status' }],
+    ],
+  };
+}
+
+function getConfirmRestartKeyboard(target: 'api' | 'web'): ReplyMarkup {
+  const confirmData = target === 'api' ? 'confirm_restart_api' : 'confirm_restart_web';
+  return {
+    inline_keyboard: [
+      [{ text: 'Confirm', callback_data: confirmData }],
+      [{ text: 'Cancel', callback_data: 'cancel_restart' }],
+    ],
+  };
+}
 
 const GREETING_WORDS = [
   '/start',
@@ -278,6 +344,15 @@ function detectLangForBot(text: string): 'ru' | 'uz' {
   return 'ru';
 }
 
+/** Hard block: AI must NEVER receive commands, system alerts, or admin events. Only normal user chat text. */
+function isAIChatBlocked(text: string): boolean {
+  const t = text.trim();
+  if (t.startsWith('/')) return true;
+  if (t.startsWith('🛑')) return true;
+  if (/Server/i.test(t)) return true;
+  return false;
+}
+
 async function run(): Promise<void> {
   console.log('[ziyoda-bot] Started. API:', BOT_API_URL);
   await fetch(`${TELEGRAM_API}/setMyCommands`, {
@@ -304,10 +379,47 @@ async function run(): Promise<void> {
           const lang = isUzbekCyrillic(telegramId) ? 'uz' : 'ru';
           try {
             await answerCallbackQuery(cq.id);
-            if (data === 'help') {
+            if (isAdmin(telegramId) && (data === 'restart_api' || data === 'restart_web')) {
+              const name = data === 'restart_api' ? 'exam-api' : 'exam-web';
+              await sendMessage(chatId, `⚠️ Restart ${name}?`, getConfirmRestartKeyboard(data === 'restart_api' ? 'api' : 'web'));
+            } else if (isAdmin(telegramId) && (data === 'confirm_restart_api' || data === 'confirm_restart_web')) {
+              const cmd = data === 'confirm_restart_api' ? 'pm2 restart exam-api' : 'pm2 restart exam-web';
+              let out: string;
+              try {
+                const { stdout, stderr } = await execAsync(cmd, { timeout: 15000, maxBuffer: 5000 });
+                out = trimOutput(stdout + (stderr ? '\n' + stderr : ''));
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                out = 'Error: ' + msg.slice(0, 500);
+              }
+              await sendMessageHtml(chatId, '<pre>' + escapeHtmlForPre(out) + '</pre>');
+            } else if (isAdmin(telegramId) && data === 'cancel_restart') {
+              await sendMessage(chatId, 'Cancelled.');
+            } else if (isAdmin(telegramId) && ['logs_api', 'logs_web', 'status'].includes(data)) {
+              const commands: Record<string, string> = {
+                logs_api: 'pm2 logs exam-api --lines 40',
+                logs_web: 'pm2 logs exam-web --lines 40',
+                status: 'pm2 list',
+              };
+              const cmd = commands[data];
+              const isLogs = data.startsWith('logs_');
+              let out: string;
+              try {
+                const { stdout, stderr } = await execAsync(cmd, {
+                  timeout: isLogs ? 8000 : 15000,
+                  maxBuffer: isLogs ? 10000 : 5000,
+                });
+                out = trimOutput(stdout + (stderr ? '\n' + stderr : ''));
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                out = 'Error: ' + msg.slice(0, 500);
+              }
+              const pre = '<pre>' + escapeHtmlForPre(out) + '</pre>';
+              await sendMessageHtml(chatId, pre);
+            } else if (data === 'help') {
               const helpIntro = lang === 'uz' ? HELP_INTRO_UZ : HELP_INTRO_RU;
               await sendMessage(chatId, helpIntro, getHelpTopicsKeyboard(lang));
-            } else             if (data === 'profile') {
+            } else if (data === 'profile') {
               const pr = await fetch(`${BOT_API_URL}/bot/profile?telegramId=${encodeURIComponent(telegramId)}`);
               const profile = (await pr.json()) as {
                 ok?: boolean;
@@ -368,6 +480,11 @@ async function run(): Promise<void> {
           let answer: string;
           let replyMarkup: ReplyMarkup | undefined;
 
+          if (text === '/server' && isAdmin(telegramId)) {
+            await sendMessage(chatId, 'Admin panel', getAdminPanelKeyboard());
+            continue;
+          }
+
           if (text === '/menu') {
             const lang = langFromText;
             answer = wrapWithHeader(
@@ -389,6 +506,8 @@ async function run(): Promise<void> {
             const lang = langFromText;
             answer = wrapWithHeader(getStartTestMessage(lang), lang);
             replyMarkup = { inline_keyboard: [[{ text: getPlatformButtonLabel(lang), url: BOT_START_URL }]] };
+          } else if (isAIChatBlocked(text)) {
+            continue;
           } else {
             const ctx = conversationContext.get(telegramId);
             const result = await askZiyoda(
@@ -398,9 +517,10 @@ async function run(): Promise<void> {
               ctx?.lastUserMessage,
               ctx?.lastBotMessage
             );
+            const answerText = sanitizeAIOutput(result.answer);
             const lang = result.lang ?? langFromText;
-            answer = wrapWithHeader(result.answer, lang);
-            const raw = result.answer.trim();
+            answer = wrapWithHeader(answerText, lang);
+            const raw = answerText.trim();
             const isNoInfoFallback =
               /в базе зиёды нет/i.test(raw) ||
               /ziyoda bazasida .* ma['ʼʻ]lumot yo['ʼʻ]q/i.test(raw);
@@ -414,10 +534,11 @@ async function run(): Promise<void> {
             }
             conversationContext.set(telegramId, {
               lastUserMessage: text,
-              lastBotMessage: result.answer,
+              lastBotMessage: answerText,
             });
           }
-          const out = answer.length > 4096 ? answer.slice(0, 4093) + '...' : answer;
+          let out = answer.length > 4096 ? answer.slice(0, 4093) + '...' : answer;
+          out = sanitizeAIOutput(out);
           await sendMessage(chatId, out, replyMarkup);
         } catch (e) {
           console.error('[ziyoda-bot]', e);
