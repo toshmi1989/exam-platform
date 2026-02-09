@@ -61,15 +61,64 @@ function isAdmin(telegramId: string): boolean {
 }
 
 const LOG_OUTPUT_MAX = 3500;
+const PM2_BIN = '/usr/bin/pm2';
+const EXEC_CWD = '/opt/exam/exam-platform';
+
 function trimOutput(s: string): string {
   const t = s.trim();
   return t.length <= LOG_OUTPUT_MAX ? t : t.slice(0, LOG_OUTPUT_MAX) + '\n... (truncated)';
+}
+
+/** Strip ANSI escape codes. */
+function stripAnsi(text: string): string {
+  return text.replace(/\x1B\[[0-9;]*m/g, '');
 }
 function escapeHtmlForPre(s: string): string {
   return String(s)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+}
+
+/** Summarized status for Telegram: "API: 🟢 Online | RAM 160MB | 2m" etc. */
+function summarizePm2Status(raw: unknown[]): string {
+  const byName: Record<string, { status: string; memoryMb: number; uptimeSec: number }> = {};
+  for (const p of raw) {
+    const obj = p as {
+      name?: string;
+      pm2_env?: { status?: string; pm_uptime?: number };
+      monit?: { memory?: number };
+    };
+    const name = obj.name ?? '';
+    const status = obj.pm2_env?.status ?? 'unknown';
+    const memBytes = obj.monit?.memory ?? 0;
+    const memoryMb = Math.round(memBytes / 1024 / 1024);
+    const pmUptime = obj.pm2_env?.pm_uptime;
+    const uptimeSec = typeof pmUptime === 'number' ? Math.max(0, Math.floor((Date.now() - pmUptime) / 1000)) : 0;
+    byName[name] = { status, memoryMb, uptimeSec };
+  }
+  const fmtUptime = (sec: number) => {
+    if (sec >= 3600) return `${Math.floor(sec / 3600)}h`;
+    if (sec >= 60) return `${Math.floor(sec / 60)}m`;
+    return `${sec}s`;
+  };
+  const lines: string[] = ['Status:'];
+  const order = [
+    { key: 'exam-api', label: 'API' },
+    { key: 'exam-web', label: 'WEB' },
+    { key: 'ziyoda-bot', label: 'BOT' },
+  ];
+  for (const { key, label } of order) {
+    const v = byName[key];
+    if (v) {
+      const icon = v.status === 'online' ? '🟢' : '🔴';
+      const statusLabel = v.status === 'online' ? 'online' : v.status;
+      lines.push(`${icon} ${label}: ${statusLabel} (${v.memoryMb}MB) | ${fmtUptime(v.uptimeSec)}`);
+    } else {
+      lines.push(`🔴 ${label}: —`);
+    }
+  }
+  return lines.join('\n');
 }
 
 async function sendMessageHtml(chatId: number, html: string): Promise<void> {
@@ -93,15 +142,18 @@ function getAdminPanelKeyboard(): ReplyMarkup {
     inline_keyboard: [
       [{ text: '🔄 Restart API', callback_data: 'restart_api' }],
       [{ text: '🔄 Restart WEB', callback_data: 'restart_web' }],
+      [{ text: '🔄 Restart BOT', callback_data: 'restart_bot' }],
+      [{ text: '📊 Status', callback_data: 'status' }],
       [{ text: '📄 API Logs', callback_data: 'logs_api' }],
       [{ text: '📄 WEB Logs', callback_data: 'logs_web' }],
-      [{ text: '📊 Status', callback_data: 'status' }],
+      [{ text: '🧹 Clear Logs', callback_data: 'clear_logs' }],
     ],
   };
 }
 
-function getConfirmRestartKeyboard(target: 'api' | 'web'): ReplyMarkup {
-  const confirmData = target === 'api' ? 'confirm_restart_api' : 'confirm_restart_web';
+function getConfirmRestartKeyboard(target: 'api' | 'web' | 'bot'): ReplyMarkup {
+  const confirmData =
+    target === 'api' ? 'confirm_restart_api' : target === 'web' ? 'confirm_restart_web' : 'confirm_restart_bot';
   return {
     inline_keyboard: [
       [{ text: 'Confirm', callback_data: confirmData }],
@@ -379,43 +431,68 @@ async function run(): Promise<void> {
           const lang = isUzbekCyrillic(telegramId) ? 'uz' : 'ru';
           try {
             await answerCallbackQuery(cq.id);
-            if (isAdmin(telegramId) && (data === 'restart_api' || data === 'restart_web')) {
-              const name = data === 'restart_api' ? 'exam-api' : 'exam-web';
-              await sendMessage(chatId, `⚠️ Restart ${name}?`, getConfirmRestartKeyboard(data === 'restart_api' ? 'api' : 'web'));
-            } else if (isAdmin(telegramId) && (data === 'confirm_restart_api' || data === 'confirm_restart_web')) {
-              const cmd = data === 'confirm_restart_api' ? 'pm2 restart exam-api' : 'pm2 restart exam-web';
-              let out: string;
+            if (isAdmin(telegramId) && (data === 'restart_api' || data === 'restart_web' || data === 'restart_bot')) {
+              const name = data === 'restart_api' ? 'exam-api' : data === 'restart_web' ? 'exam-web' : 'ziyoda-bot';
+              const target = data === 'restart_api' ? 'api' : data === 'restart_web' ? 'web' : 'bot';
+              await sendMessage(chatId, `⚠️ Restart ${name}?`, getConfirmRestartKeyboard(target));
+            } else if (isAdmin(telegramId) && (data === 'confirm_restart_api' || data === 'confirm_restart_web' || data === 'confirm_restart_bot')) {
+              const proc = data === 'confirm_restart_api' ? 'exam-api' : data === 'confirm_restart_web' ? 'exam-web' : 'ziyoda-bot';
+              const label = data === 'confirm_restart_api' ? 'API' : data === 'confirm_restart_web' ? 'WEB' : 'BOT';
               try {
-                const { stdout, stderr } = await execAsync(cmd, { timeout: 15000, maxBuffer: 5000 });
-                out = trimOutput(stdout + (stderr ? '\n' + stderr : ''));
+                await execAsync(`${PM2_BIN} restart ${proc}`, {
+                  timeout: 15000,
+                  maxBuffer: 5000,
+                  env: { ...process.env, PM2_NO_COLOR: 'true' },
+                  cwd: EXEC_CWD,
+                });
+                await sendMessage(chatId, `✅ ${label} restarted`);
               } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
-                out = 'Error: ' + msg.slice(0, 500);
+                await sendMessage(chatId, 'Error: ' + trimOutput(msg));
               }
-              await sendMessageHtml(chatId, '<pre>' + escapeHtmlForPre(out) + '</pre>');
             } else if (isAdmin(telegramId) && data === 'cancel_restart') {
               await sendMessage(chatId, 'Cancelled.');
-            } else if (isAdmin(telegramId) && ['logs_api', 'logs_web', 'status'].includes(data)) {
-              const commands: Record<string, string> = {
-                logs_api: 'pm2 logs exam-api --lines 40',
-                logs_web: 'pm2 logs exam-web --lines 40',
-                status: 'pm2 list',
-              };
-              const cmd = commands[data];
-              const isLogs = data.startsWith('logs_');
-              let out: string;
+            } else if (isAdmin(telegramId) && data === 'clear_logs') {
               try {
-                const { stdout, stderr } = await execAsync(cmd, {
-                  timeout: isLogs ? 8000 : 15000,
-                  maxBuffer: isLogs ? 10000 : 5000,
+                await execAsync(`${PM2_BIN} flush`, {
+                  timeout: 10000,
+                  maxBuffer: 2000,
+                  env: { ...process.env, PM2_NO_COLOR: 'true' },
+                  cwd: EXEC_CWD,
                 });
-                out = trimOutput(stdout + (stderr ? '\n' + stderr : ''));
+                await sendMessage(chatId, '✅ Logs cleared');
               } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
-                out = 'Error: ' + msg.slice(0, 500);
+                await sendMessage(chatId, 'Error: ' + trimOutput(msg));
               }
-              const pre = '<pre>' + escapeHtmlForPre(out) + '</pre>';
-              await sendMessageHtml(chatId, pre);
+            } else if (isAdmin(telegramId) && data === 'status') {
+              try {
+                const { stdout } = await execAsync(`PM2_NO_COLOR=true ${PM2_BIN} jlist`, {
+                  timeout: 15000,
+                  maxBuffer: 500 * 1024,
+                  env: { ...process.env, PM2_NO_COLOR: 'true' },
+                  cwd: EXEC_CWD,
+                });
+                const raw = JSON.parse(stdout) as unknown[];
+                const out = Array.isArray(raw) ? summarizePm2Status(raw) : 'Unexpected PM2 output';
+                await sendMessage(chatId, trimOutput(out));
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                await sendMessage(chatId, 'Error: ' + trimOutput(msg));
+              }
+            } else if (isAdmin(telegramId) && (data === 'logs_api' || data === 'logs_web')) {
+              const logFile = data === 'logs_api' ? '/root/.pm2/logs/exam-api-error.log' : '/root/.pm2/logs/exam-web-error.log';
+              try {
+                const { stdout } = await execAsync(`tail -n 20 ${logFile}`, {
+                  timeout: 5000,
+                  maxBuffer: 10000,
+                });
+                const out = trimOutput(stripAnsi(stdout));
+                await sendMessageHtml(chatId, '<pre>' + escapeHtmlForPre(out) + '</pre>');
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                await sendMessage(chatId, 'Error: ' + trimOutput(msg));
+              }
             } else if (data === 'help') {
               const helpIntro = lang === 'uz' ? HELP_INTRO_UZ : HELP_INTRO_RU;
               await sendMessage(chatId, helpIntro, getHelpTopicsKeyboard(lang));

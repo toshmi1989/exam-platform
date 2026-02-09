@@ -19,7 +19,8 @@ type CommandId =
   | 'network'
   | 'recent-api-errors'
   | 'recent-web-errors'
-  | 'uptime';
+  | 'uptime'
+  | 'clear-logs';
 
 interface CommandSpec {
   id: CommandId;
@@ -41,17 +42,27 @@ const COMMANDS: CommandSpec[] = [
   { id: 'recent-api-errors', label: 'API Errors', icon: '📄', method: 'GET', path: '/admin/server/recent-api-errors' },
   { id: 'recent-web-errors', label: 'WEB Errors', icon: '📄', method: 'GET', path: '/admin/server/recent-web-errors' },
   { id: 'uptime', label: 'Uptime', icon: '⏱', method: 'GET', path: '/admin/server/uptime' },
+  { id: 'clear-logs', label: 'Clear Logs', icon: '🧹', method: 'POST', path: '/admin/server/clear-logs' },
 ];
 
 interface Block {
-  ts: string;
+  ts: string;   // "19:44:02"
   title: string;
   output: string;
 }
 
-function formatTs(): string {
+const MAX_TERMINAL_LINES = 200;
+
+function formatTime(): string {
   const d = new Date();
-  return d.toISOString().replace('T', ' ').slice(0, 19);
+  const h = d.getHours().toString().padStart(2, '0');
+  const m = d.getMinutes().toString().padStart(2, '0');
+  const s = d.getSeconds().toString().padStart(2, '0');
+  return `${h}:${m}:${s}`;
+}
+
+function blockToLines(block: Block): number {
+  return 2 + (block.output.match(/\n/g)?.length ?? 0) + 1; // [ts]\n------\noutput
 }
 
 export default function AdminServerPage() {
@@ -72,10 +83,30 @@ export default function AdminServerPage() {
       const output = (data && typeof data === 'object' && 'output' in data && typeof (data as { output: string }).output === 'string')
         ? (data as { output: string }).output
         : (response.ok ? '' : `HTTP ${response.status}`);
-      setBlocks((prev) => [...prev, { ts: formatTs(), title, output }]);
+      setBlocks((prev) => {
+        const next = [...prev, { ts: formatTime(), title, output }];
+        let total = 0;
+        let i = next.length - 1;
+        while (i >= 0 && total + blockToLines(next[i]) <= MAX_TERMINAL_LINES) {
+          total += blockToLines(next[i]);
+          i--;
+        }
+        if (i >= 0) return next.slice(i + 1);
+        return next;
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      setBlocks((prev) => [...prev, { ts: formatTs(), title: spec.label, output: `Error: ${msg}` }]);
+      setBlocks((prev) => {
+        const next = [...prev, { ts: formatTime(), title: spec.label, output: `Error: ${msg}` }];
+        let total = 0;
+        let i = next.length - 1;
+        while (i >= 0 && total + blockToLines(next[i]) <= MAX_TERMINAL_LINES) {
+          total += blockToLines(next[i]);
+          i--;
+        }
+        if (i >= 0) return next.slice(i + 1);
+        return next;
+      });
     } finally {
       setLoading(null);
       setTimeout(() => terminalRef.current?.scrollTo({ top: terminalRef.current.scrollHeight, behavior: 'smooth' }), 50);
@@ -111,7 +142,7 @@ export default function AdminServerPage() {
               className="mt-2 flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-left text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
             >
               <span>🧹</span>
-              <span>Clear Screen</span>
+                <span>Clear Screen</span>
             </button>
           </Card>
           <Card className="flex min-h-[420px] flex-col overflow-hidden p-0">
@@ -126,10 +157,10 @@ export default function AdminServerPage() {
                 </div>
               )}
               {blocks.map((b, i) => (
-                <div key={i} className="mb-4">
-                  <div className="text-slate-400">{b.ts}</div>
-                  <div className="mt-0.5 font-semibold text-[#58a6ff]">&gt; {b.title}</div>
-                  <pre className="mt-1 whitespace-pre-wrap break-words text-[#3fb950]">
+                <div key={i} className="mb-3">
+                  <div className="text-slate-400">[{b.ts}] {b.title}</div>
+                  <div className="text-slate-500">----------------------</div>
+                  <pre className="mt-0.5 whitespace-pre-wrap break-words text-[#3fb950]">
                     {b.output || '(no output)'}
                   </pre>
                 </div>
