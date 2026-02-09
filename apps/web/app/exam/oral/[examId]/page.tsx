@@ -168,8 +168,8 @@ export default function OralExamPage() {
         dailyLimitTitle: 'Daily limit used',
         dailyLimitHint: 'Your free attempts for today are used. Get a subscription to continue.',
         buySubscriptionCta: 'Get subscription',
-        guestOralLimitHint: 'To continue, open ZiyoMed in Telegram and buy a subscription.',
-        openInTelegramCta: 'Open in Telegram',
+        guestOralLimitHint: 'Limit exhausted. To continue, make a one-time payment for 1 session or buy a subscription in your Telegram account!',
+        openInTelegramCta: 'Go to Telegram',
       };
     }
     if (language === 'Узбекский') {
@@ -189,8 +189,8 @@ export default function OralExamPage() {
         dailyLimitTitle: 'Kunlik limit tugadi',
         dailyLimitHint: 'Bepul urinishlar bugun tugadi. Davom etish uchun obuna oling.',
         buySubscriptionCta: 'Obuna olish',
-        guestOralLimitHint: "Davom etish uchun ZiyoMed ni Telegramda oching va obuna oling.",
-        openInTelegramCta: "Telegramda ochish",
+        guestOralLimitHint: "Limit tugadi. Davom etish uchun 1 seans uchun bir martalik to'lov qiling yoki Telegramdagi shaxsiy kabinetingizda obuna oling!",
+        openInTelegramCta: "Telegramga o'tish",
       };
     }
     return {
@@ -209,8 +209,8 @@ export default function OralExamPage() {
       dailyLimitTitle: 'Дневной лимит исчерпан',
       dailyLimitHint: 'Бесплатные попытки на сегодня израсходованы. Для продолжения нужна подписка.',
       buySubscriptionCta: 'Купить подписку',
-      guestOralLimitHint: 'Чтобы продолжить, откройте ZiyoMed в Telegram и оформите подписку.',
-      openInTelegramCta: 'Открыть в Telegram',
+      guestOralLimitHint: 'Лимит закончился. Для продолжения совершите разовый платёж для 1 сеанса или купите подписку в личном кабинете с Telegram!',
+      openInTelegramCta: 'Перейти в Telegram',
     };
   }, [language]);
 
