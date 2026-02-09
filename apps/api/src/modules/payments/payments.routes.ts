@@ -360,37 +360,36 @@ router.get('/status', async (req: Request, res: Response) => {
       const paymentTime = inv.paidAt;
       const timeWindowStart = new Date(paymentTime.getTime() - 5000); // 5 seconds before
       const timeWindowEnd = new Date(paymentTime.getTime() + 5000); // 5 seconds after
-        
-        const whereClause: {
-          examId: string;
-          consumedAt: { not: null };
-          createdAt: { gte: Date; lte: Date };
-          userId?: string | null;
-          guestSessionId?: string | null;
-        } = {
-          examId: inv.examId,
-          consumedAt: { not: null },
-          createdAt: {
-            gte: timeWindowStart,
-            lte: timeWindowEnd,
-          },
-        };
-        
-        // Use invoice user/session (the one that created the OneTimeAccess)
-        if (inv.userId) {
-          whereClause.userId = inv.userId;
-        } else if (inv.guestSessionId) {
-          whereClause.guestSessionId = inv.guestSessionId;
-        }
-        
-        // Only check if invoice has user/session identifier
-        if (whereClause.userId || whereClause.guestSessionId) {
-          const oneTime = await prisma.oneTimeAccess.findFirst({
-            where: whereClause,
-            select: { id: true },
-          });
-          alreadyConsumed = Boolean(oneTime);
-        }
+      
+      const whereClause: {
+        examId: string;
+        consumedAt: { not: null };
+        createdAt: { gte: Date; lte: Date };
+        userId?: string | null;
+        guestSessionId?: string | null;
+      } = {
+        examId: inv.examId,
+        consumedAt: { not: null },
+        createdAt: {
+          gte: timeWindowStart,
+          lte: timeWindowEnd,
+        },
+      };
+      
+      // Use invoice user/session (the one that created the OneTimeAccess)
+      if (inv.userId) {
+        whereClause.userId = inv.userId;
+      } else if (inv.guestSessionId) {
+        whereClause.guestSessionId = inv.guestSessionId;
+      }
+      
+      // Only check if invoice has user/session identifier
+      if (whereClause.userId || whereClause.guestSessionId) {
+        const oneTime = await prisma.oneTimeAccess.findFirst({
+          where: whereClause,
+          select: { id: true },
+        });
+        alreadyConsumed = Boolean(oneTime);
       }
     }
   }
