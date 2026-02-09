@@ -23,10 +23,37 @@ const CREATE_ATTEMPT_RETRY_DELAY_MS = 1000;
 
 const STORAGE_KEY = 'exam_one_time_return';
 
+function detectBrowserLanguage(): Language {
+  if (typeof window === 'undefined') return 'Русский';
+  try {
+    const browserLang = navigator.language || (navigator as { userLanguage?: string }).userLanguage || 'ru';
+    if (browserLang.toLowerCase().startsWith('uz')) return 'Узбекский';
+    if (browserLang.toLowerCase().startsWith('en')) return 'Английский';
+  } catch {
+    // ignore
+  }
+  return 'Русский';
+}
+
 function PayOneTimeReturnClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [language, setLanguage] = useState<Language>(() => readSettings().language);
+  const [language, setLanguage] = useState<Language>(() => {
+    if (typeof window === 'undefined') return 'Русский';
+    try {
+      const raw = window.localStorage.getItem('calmexam.uiSettings');
+      if (raw) {
+        const parsed = JSON.parse(raw) as { language?: Language };
+        if (parsed.language && ['Узбекский', 'Русский', 'Английский'].includes(parsed.language)) {
+          return parsed.language;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    // No saved settings - use browser language
+    return detectBrowserLanguage();
+  });
   const [invoiceId, setInvoiceId] = useState(() => searchParams.get('invoiceId') ?? '');
   const [examId, setExamId] = useState(() => searchParams.get('examId') ?? '');
   const [mode, setMode] = useState<'exam' | 'practice'>(() =>
@@ -56,8 +83,26 @@ function PayOneTimeReturnClient() {
         }
       }
     };
+    const onSettingsChange = () => {
+      if (typeof window === 'undefined') return;
+      try {
+        const raw = window.localStorage.getItem('calmexam.uiSettings');
+        if (raw) {
+          const parsed = JSON.parse(raw) as { language?: Language };
+          if (parsed.language && ['Узбекский', 'Русский', 'Английский'].includes(parsed.language)) {
+            setLanguage(parsed.language);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    };
     window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    window.addEventListener('ui-settings-changed', onSettingsChange);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('ui-settings-changed', onSettingsChange);
+    };
   }, []);
 
   const copy = useMemo(() => {
