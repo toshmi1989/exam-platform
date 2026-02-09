@@ -1,12 +1,7 @@
 /**
  * Health watchdog: checks URLs every run. On any failure, notifies admins via Telegram.
  * Do NOT auto-restart; only alert.
- *
- * Run every 2 minutes via cron, e.g.:
- *   */2 * * * * cd /opt/exam/exam-platform/apps/api && node dist/scripts/check-health.js >> /var/log/check-health.log 2>&1
- *
- * Or deploy to /opt/monitor and set env:
- *   */2 * * * * TELEGRAM_BOT_TOKEN=... ADMIN_TELEGRAM_IDS=... node /opt/monitor/check-health.js
+ * Cron setup: see apps/api/docs/HEALTH_CHECK_CRON.md
  */
 
 import * as fs from 'fs';
