@@ -57,6 +57,7 @@ export default function AdminNav() {
         { href: '/admin/import', label: 'Import' },
         { href: '/admin/ai', label: 'AI' },
         { href: '/admin/analytics', label: 'Analytics' },
+        { href: '/admin/server', label: 'Server' },
       ];
     }
     if (language === 'Узбекский') {
@@ -71,6 +72,7 @@ export default function AdminNav() {
         { href: '/admin/import', label: 'Import' },
         { href: '/admin/ai', label: 'AI' },
         { href: '/admin/analytics', label: 'Analitika' },
+        { href: '/admin/server', label: 'Server' },
       ];
     }
     return [
@@ -84,6 +86,7 @@ export default function AdminNav() {
       { href: '/admin/import', label: 'Импорт' },
       { href: '/admin/ai', label: 'AI' },
       { href: '/admin/analytics', label: 'Аналитика' },
+      { href: '/admin/server', label: 'Сервер' },
     ];
   }, [language]);
 

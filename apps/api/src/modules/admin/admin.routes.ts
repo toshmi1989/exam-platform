@@ -40,6 +40,7 @@ import {
 } from '../ai/knowledge.service';
 import { getZiyodaPrompts, setZiyodaPrompts } from '../ai/ziyoda-prompts.service';
 import { sendBroadcastToUsers } from '../../services/broadcastSender.service';
+import serverOpsRouter from './serverOps.routes';
 
 const router = Router();
 
@@ -51,6 +52,8 @@ router.use((err: unknown, req: express.Request, res: express.Response, next: exp
   next(err);
 });
 router.use(requireAdmin);
+
+router.use('/server', serverOpsRouter);
 
 router.get('/stats', async (_req, res) => {
   const now = new Date();
