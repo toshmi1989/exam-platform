@@ -316,7 +316,9 @@ router.get('/status', async (req: Request, res: Response) => {
 
   // Check if invoice is in legacy format (created before guestSessionId support)
   // Legacy: no guestSessionId AND (no userId OR guest trying to access userId-based invoice)
-  const isLegacyFormat = inv.guestSessionId === null && (inv.userId === null || (!userId && guestSessionId && inv.userId));
+  const isLegacyFormat = Boolean(
+    inv.guestSessionId === null && (inv.userId === null || (!userId && Boolean(guestSessionId) && Boolean(inv.userId)))
+  );
 
   // Check if one-time access was already consumed
   let alreadyConsumed = false;
