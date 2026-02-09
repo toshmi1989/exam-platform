@@ -24,6 +24,7 @@ export default function AdminUsersPage() {
   const [query, setQuery] = useState('');
   const [users, setUsers] = useState<UserItem[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserItem | null>(null);
+  const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [recentDirections, setRecentDirections] = useState<{ direction: string; examType: string; attemptedAt: string }[]>([]);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -44,8 +45,11 @@ export default function AdminUsersPage() {
   useEffect(() => {
     if (!selectedUser?.telegramId) {
       setRecentDirections([]);
+      setUserAvatar(null);
       return;
     }
+    
+    // Load recent directions
     apiFetch(`/admin/users/${encodeURIComponent(selectedUser.telegramId)}/recent-directions`)
       .then(({ response, data }) => {
         if (!response.ok) return;
@@ -53,6 +57,18 @@ export default function AdminUsersPage() {
         setRecentDirections(payload?.items ?? []);
       })
       .catch(() => setRecentDirections([]));
+    
+    // Load avatar
+    apiFetch(`/admin/users/${encodeURIComponent(selectedUser.telegramId)}/avatar`)
+      .then(({ response, data }) => {
+        if (response.ok) {
+          const payload = data as { avatarUrl?: string };
+          setUserAvatar(payload?.avatarUrl ?? null);
+        } else {
+          setUserAvatar(null);
+        }
+      })
+      .catch(() => setUserAvatar(null));
   }, [selectedUser?.telegramId]);
 
   const copy = useMemo(() => {
@@ -209,6 +225,16 @@ export default function AdminUsersPage() {
             {selectedUser ? (
               <Card title={selectedUser.name}>
                 <div className="flex flex-col gap-4">
+                  {userAvatar && (
+                    <div className="flex justify-center">
+                      <img
+                        src={userAvatar}
+                        alt={selectedUser.name}
+                        className="h-24 w-24 rounded-full object-cover border-2 border-slate-200"
+                        onError={() => setUserAvatar(null)}
+                      />
+                    </div>
+                  )}
                   <div className="grid gap-2 text-sm">
                     <p className="text-slate-600">
                       <span className="font-medium text-slate-500">

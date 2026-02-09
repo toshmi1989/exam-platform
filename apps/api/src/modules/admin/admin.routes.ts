@@ -274,6 +274,75 @@ router.get('/users', async (req, res) => {
 });
 
 /** Последние 10 направлений (тест/устный), по которым пользователь открывал экзамен. */
+router.get('/users/:telegramId/avatar', async (req, res) => {
+  const telegramId = String(req.params.telegramId ?? '').trim();
+  if (!telegramId) {
+    return res.status(400).json({ ok: false });
+  }
+  
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  if (!botToken) {
+    return res.status(500).json({ ok: false, error: 'Bot token not configured' });
+  }
+  
+  try {
+    // Get user profile photos
+    const photosUrl = `https://api.telegram.org/bot${botToken}/getUserProfilePhotos`;
+    const photosResponse = await fetch(photosUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: parseInt(telegramId, 10),
+        limit: 1,
+      }),
+    });
+    
+    if (!photosResponse.ok) {
+      return res.status(404).json({ ok: false, error: 'Avatar not found' });
+    }
+    
+    const photosData = await photosResponse.json() as {
+      ok?: boolean;
+      result?: {
+        photos?: Array<Array<{ file_id: string; file_size?: number }>>;
+      };
+    };
+    
+    if (!photosData.ok || !photosData.result?.photos?.length || !photosData.result.photos[0]?.length) {
+      return res.status(404).json({ ok: false, error: 'No avatar found' });
+    }
+    
+    // Get file path for the largest photo
+    const fileId = photosData.result.photos[0][photosData.result.photos[0].length - 1].file_id;
+    const fileUrl = `https://api.telegram.org/bot${botToken}/getFile`;
+    const fileResponse = await fetch(fileUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_id: fileId }),
+    });
+    
+    if (!fileResponse.ok) {
+      return res.status(404).json({ ok: false, error: 'File not found' });
+    }
+    
+    const fileData = await fileResponse.json() as {
+      ok?: boolean;
+      result?: { file_path?: string };
+    };
+    
+    if (!fileData.ok || !fileData.result?.file_path) {
+      return res.status(404).json({ ok: false, error: 'File path not found' });
+    }
+    
+    // Return direct URL to the file
+    const avatarUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
+    return res.json({ ok: true, avatarUrl });
+  } catch (err) {
+    console.error('[admin/users/avatar]', err);
+    return res.status(500).json({ ok: false, error: 'Failed to get avatar' });
+  }
+});
+
 router.get('/users/:telegramId/recent-directions', async (req, res) => {
   const telegramId = String(req.params.telegramId ?? '').trim();
   if (!telegramId) {
