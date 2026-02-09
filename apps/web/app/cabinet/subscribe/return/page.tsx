@@ -28,24 +28,12 @@ function formatDate(iso: string): string {
   });
 }
 
-function detectBrowserLanguage(): Language {
-  if (typeof window === 'undefined') return 'Русский';
-  try {
-    const browserLang = navigator.language || (navigator as { userLanguage?: string }).userLanguage || 'ru';
-    if (browserLang.toLowerCase().startsWith('uz')) return 'Узбекский';
-    if (browserLang.toLowerCase().startsWith('en')) return 'Английский';
-  } catch {
-    // ignore
-  }
-  return 'Русский';
-}
-
 function SubscribeReturnClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const invoiceId = searchParams.get('invoiceId') ?? '';
   const [language, setLanguage] = useState<Language>(() => {
-    if (typeof window === 'undefined') return 'Русский';
+    if (typeof window === 'undefined') return 'Узбекский';
     try {
       const raw = window.localStorage.getItem('calmexam.uiSettings');
       if (raw) {
@@ -57,8 +45,8 @@ function SubscribeReturnClient() {
     } catch {
       // ignore
     }
-    // No saved settings - use browser language
-    return detectBrowserLanguage();
+    // Default to Uzbek
+    return 'Узбекский';
   });
   const [mounted, setMounted] = useState(false);
   const inTelegram = mounted && isTelegramWebApp();
@@ -181,19 +169,21 @@ function SubscribeReturnClient() {
           // Update copy ref to ensure we have latest language
           const currentCopy = copyRef.current;
           
-          // Check for legacy format or foreign payment regardless of status
+          // Check for legacy format first
           if (result.isLegacyFormat) {
             setStatus('error');
             setMessage(currentCopy.legacyFormatMessage);
             return;
           }
-          if (result.status === 'paid' && !result.belongsToUser) {
+          
+          // Always check if payment belongs to user - if not, show error
+          if (!result.belongsToUser) {
             setStatus('error');
             setMessage(currentCopy.notYourPaymentMessage);
             return;
           }
           
-          // Valid payment - show Telegram link
+          // Valid payment that belongs to user - show Telegram link
           if (result.status === 'paid') {
             setStatus('paid');
             setMessage(currentCopy.paidMessage);
@@ -232,17 +222,21 @@ function SubscribeReturnClient() {
         try {
           const result = await getPaymentStatus(invoiceId);
           if (cancelled) return;
+          
+          // Always check for legacy format and ownership first
+          if (result.isLegacyFormat) {
+            setStatus('error');
+            setMessage(copyRef.current.legacyFormatMessage);
+            return;
+          }
+          if (!result.belongsToUser) {
+            setStatus('error');
+            setMessage(copyRef.current.notYourPaymentMessage);
+            return;
+          }
+          
+          // Valid payment that belongs to user
           if (result.status === 'paid') {
-            if (result.isLegacyFormat) {
-              setStatus('error');
-              setMessage(copyRef.current.legacyFormatMessage);
-              return;
-            }
-            if (!result.belongsToUser) {
-              setStatus('error');
-              setMessage(copyRef.current.notYourPaymentMessage);
-              return;
-            }
             setPaidDetails(result);
             setStatus('paid');
             setMessage(copyRef.current.paidMessage);

@@ -23,23 +23,11 @@ const CREATE_ATTEMPT_RETRY_DELAY_MS = 1000;
 
 const STORAGE_KEY = 'exam_one_time_return';
 
-function detectBrowserLanguage(): Language {
-  if (typeof window === 'undefined') return 'Русский';
-  try {
-    const browserLang = navigator.language || (navigator as { userLanguage?: string }).userLanguage || 'ru';
-    if (browserLang.toLowerCase().startsWith('uz')) return 'Узбекский';
-    if (browserLang.toLowerCase().startsWith('en')) return 'Английский';
-  } catch {
-    // ignore
-  }
-  return 'Русский';
-}
-
 function PayOneTimeReturnClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [language, setLanguage] = useState<Language>(() => {
-    if (typeof window === 'undefined') return 'Русский';
+    if (typeof window === 'undefined') return 'Узбекский';
     try {
       const raw = window.localStorage.getItem('calmexam.uiSettings');
       if (raw) {
@@ -51,8 +39,8 @@ function PayOneTimeReturnClient() {
     } catch {
       // ignore
     }
-    // No saved settings - use browser language
-    return detectBrowserLanguage();
+    // Default to Uzbek
+    return 'Узбекский';
   });
   const [invoiceId, setInvoiceId] = useState(() => searchParams.get('invoiceId') ?? '');
   const [examId, setExamId] = useState(() => searchParams.get('examId') ?? '');
@@ -131,6 +119,7 @@ function PayOneTimeReturnClient() {
         openInTelegramMessage: 'Payment successful. Open ZiyoMed in Telegram to start your test.',
         openInTelegramButton: 'Open in Telegram',
         legacyFormatMessage: 'This payment was made in the old format and cannot be verified. Please contact support or make a new payment.',
+        notYourPaymentMessage: 'This payment does not belong to your session.',
       };
     }
     if (language === 'Узбекский') {
@@ -158,6 +147,7 @@ function PayOneTimeReturnClient() {
         openInTelegramMessage: "To'lov muvaffaqiyatli. Testni boshlash uchun ZiyoMed ni Telegramda oching.",
         openInTelegramButton: "Telegramda ochish",
         legacyFormatMessage: "Bu to'lov eski formatda amalga oshirilgan va tekshirib bo'lmaydi. Iltimos, qo'llab-quvvatlash xizmatiga murojaat qiling yoki yangi to'lov qiling.",
+        notYourPaymentMessage: "Bu to'lov sizning seansingizga tegishli emas.",
       };
     }
     return {
@@ -184,6 +174,7 @@ function PayOneTimeReturnClient() {
       openInTelegramMessage: 'Оплата прошла успешно. Откройте ZiyoMed в Telegram, чтобы начать тест.',
       openInTelegramButton: 'Открыть в Telegram',
       legacyFormatMessage: 'Этот платёж был выполнен в старом формате и не может быть проверен. Обратитесь в поддержку или выполните новый платёж.',
+      notYourPaymentMessage: 'Этот платёж не принадлежит вашему сеансу.',
     };
   }, [language]);
 
@@ -251,17 +242,21 @@ function PayOneTimeReturnClient() {
         try {
           const result = await getPaymentStatus(invoiceId);
           if (cancelled) return;
+          
+          // Always check for legacy format and ownership first
+          if (result.isLegacyFormat) {
+            setStatus('error');
+            setMessage(copyRef.current.legacyFormatMessage);
+            return;
+          }
+          if (!result.belongsToUser) {
+            setStatus('error');
+            setMessage(copyRef.current.notYourPaymentMessage);
+            return;
+          }
+          
+          // Valid payment that belongs to user
           if (result.status === 'paid') {
-            if (result.isLegacyFormat) {
-              setStatus('error');
-              setMessage(copyRef.current.legacyFormatMessage);
-              return;
-            }
-            if (!result.belongsToUser) {
-              setStatus('error');
-              setMessage('Этот платёж не принадлежит вашему сеансу');
-              return;
-            }
             if (result.alreadyConsumed) {
               setStatus('error');
               setMessage('Этот платёж уже был использован');
@@ -326,17 +321,21 @@ function PayOneTimeReturnClient() {
       setStatus('polling');
       setMessage(copy.retryChecking);
       const result = await getPaymentStatus(invoiceId);
+      
+      // Always check for legacy format and ownership first
+      if (result.isLegacyFormat) {
+        setStatus('error');
+        setMessage(copy.legacyFormatMessage);
+        return;
+      }
+      if (!result.belongsToUser) {
+        setStatus('error');
+        setMessage(copy.notYourPaymentMessage);
+        return;
+      }
+      
+      // Valid payment that belongs to user
       if (result.status === 'paid') {
-        if (result.isLegacyFormat) {
-          setStatus('error');
-          setMessage(copy.legacyFormatMessage);
-          return;
-        }
-        if (!result.belongsToUser) {
-          setStatus('error');
-          setMessage('Этот платёж не принадлежит вашему сеансу');
-          return;
-        }
         if (result.alreadyConsumed) {
           setStatus('error');
           setMessage('Этот платёж уже был использован');
