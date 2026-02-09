@@ -225,36 +225,39 @@ export default function AdminUsersPage() {
             {selectedUser ? (
               <Card title={selectedUser.name}>
                 <div className="flex flex-col gap-4">
-                  {userAvatar && (
-                    <div className="flex justify-center">
-                      <img
-                        src={userAvatar}
-                        alt={selectedUser.name}
-                        className="h-24 w-24 rounded-full object-cover border-2 border-slate-200"
-                        onError={() => setUserAvatar(null)}
-                      />
+                  {/* Аватар и основная информация в одну строку */}
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 relative h-16 w-16 rounded-full overflow-hidden border-2 border-slate-200 bg-slate-100 flex items-center justify-center">
+                      {userAvatar ? (
+                        <img
+                          src={userAvatar}
+                          alt=""
+                          className="absolute inset-0 h-full w-full object-cover"
+                          onError={() => setUserAvatar(null)}
+                        />
+                      ) : (
+                        <span className="text-xl font-semibold text-slate-500 select-none">
+                          {(selectedUser.name || selectedUser.telegramId).charAt(0).toUpperCase()}
+                        </span>
+                      )}
                     </div>
-                  )}
-                  <div className="grid gap-2 text-sm">
-                    <p className="text-slate-600">
-                      <span className="font-medium text-slate-500">
-                        {copy.telegramId}:
-                      </span>{' '}
-                      {selectedUser.telegramId}
-                    </p>
-                    <p className="text-slate-600">
-                      <span className="font-medium text-slate-500">
-                        {copy.lastVisit}:
-                      </span>{' '}
-                      {new Date(selectedUser.lastSeen).toLocaleString()}
-                    </p>
-                    <p className="text-slate-600">
-                      <span className="font-medium text-slate-500">
-                        {copy.subscriptionLabel}:
-                      </span>{' '}
-                      {selectedUser.subscriptionActive ? copy.subActive : copy.noSub}
-                    </p>
+                    <div className="min-w-0 flex-1 grid gap-1.5 text-sm">
+                      <p className="text-slate-600">
+                        <span className="font-medium text-slate-500">{copy.telegramId}:</span>{' '}
+                        {selectedUser.telegramId}
+                      </p>
+                      <p className="text-slate-600">
+                        <span className="font-medium text-slate-500">{copy.lastVisit}:</span>{' '}
+                        {new Date(selectedUser.lastSeen).toLocaleString()}
+                      </p>
+                      <p className="text-slate-600">
+                        <span className="font-medium text-slate-500">{copy.subscriptionLabel}:</span>{' '}
+                        {selectedUser.subscriptionActive ? copy.subActive : copy.noSub}
+                      </p>
+                    </div>
                   </div>
+
+                  {/* Ниже: история направлений и кнопки */}
                   {recentDirections.length > 0 ? (
                     <div className="border-t border-slate-200 pt-3">
                       <p className="mb-2 text-xs font-medium text-slate-500">

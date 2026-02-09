@@ -274,45 +274,51 @@ router.get('/users', async (req, res) => {
 });
 
 /** Последние 10 направлений (тест/устный), по которым пользователь открывал экзамен. */
+/** Avatar URL or image proxy. Telegram returns profile photos only for users who have contacted the bot. */
 router.get('/users/:telegramId/avatar', async (req, res) => {
   const telegramId = String(req.params.telegramId ?? '').trim();
   if (!telegramId) {
     return res.status(400).json({ ok: false });
   }
-  
+
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (!botToken) {
     return res.status(500).json({ ok: false, error: 'Bot token not configured' });
   }
-  
+
   try {
-    // Get user profile photos
+    const userId = parseInt(telegramId, 10);
+    if (!Number.isFinite(userId)) {
+      return res.status(404).json({ ok: false, error: 'Invalid telegram id' });
+    }
+
     const photosUrl = `https://api.telegram.org/bot${botToken}/getUserProfilePhotos`;
     const photosResponse = await fetch(photosUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        user_id: parseInt(telegramId, 10),
-        limit: 1,
-      }),
+      body: JSON.stringify({ user_id: userId, limit: 1 }),
     });
-    
+
     if (!photosResponse.ok) {
       return res.status(404).json({ ok: false, error: 'Avatar not found' });
     }
-    
-    const photosData = await photosResponse.json() as {
+
+    const photosData = (await photosResponse.json()) as {
       ok?: boolean;
       result?: {
+        total_count?: number;
         photos?: Array<Array<{ file_id: string; file_size?: number }>>;
       };
     };
-    
-    if (!photosData.ok || !photosData.result?.photos?.length || !photosData.result.photos[0]?.length) {
+
+    if (
+      !photosData.ok ||
+      !photosData.result?.photos?.length ||
+      !photosData.result.photos[0]?.length
+    ) {
       return res.status(404).json({ ok: false, error: 'No avatar found' });
     }
-    
-    // Get file path for the largest photo
+
     const fileId = photosData.result.photos[0][photosData.result.photos[0].length - 1].file_id;
     const fileUrl = `https://api.telegram.org/bot${botToken}/getFile`;
     const fileResponse = await fetch(fileUrl, {
@@ -320,21 +326,20 @@ router.get('/users/:telegramId/avatar', async (req, res) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ file_id: fileId }),
     });
-    
+
     if (!fileResponse.ok) {
       return res.status(404).json({ ok: false, error: 'File not found' });
     }
-    
-    const fileData = await fileResponse.json() as {
+
+    const fileData = (await fileResponse.json()) as {
       ok?: boolean;
       result?: { file_path?: string };
     };
-    
+
     if (!fileData.ok || !fileData.result?.file_path) {
       return res.status(404).json({ ok: false, error: 'File path not found' });
     }
-    
-    // Return direct URL to the file
+
     const avatarUrl = `https://api.telegram.org/file/bot${botToken}/${fileData.result.file_path}`;
     return res.json({ ok: true, avatarUrl });
   } catch (err) {
