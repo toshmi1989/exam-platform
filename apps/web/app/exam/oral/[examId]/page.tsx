@@ -10,6 +10,7 @@ import PageHeader from '../../../../components/PageHeader';
 import { readSettings, Language } from '../../../../lib/uiSettings';
 import { getOralQuestions, streamOralAnswer } from '../../../../lib/api';
 import { readTelegramUser } from '../../../../lib/telegramUser';
+import { getOpenInTelegramAppUrl } from '../../../../lib/telegram';
 import ReactMarkdown from 'react-markdown';
 import AiLoadingDots from '../../../../components/AiLoadingDots';
 import remarkGfm from 'remark-gfm';
@@ -167,6 +168,8 @@ export default function OralExamPage() {
         dailyLimitTitle: 'Daily limit used',
         dailyLimitHint: 'Your free attempts for today are used. Get a subscription to continue.',
         buySubscriptionCta: 'Get subscription',
+        guestOralLimitHint: 'To continue, open ZiyoMed in Telegram and buy a subscription.',
+        openInTelegramCta: 'Open in Telegram',
       };
     }
     if (language === 'Узбекский') {
@@ -186,6 +189,8 @@ export default function OralExamPage() {
         dailyLimitTitle: 'Kunlik limit tugadi',
         dailyLimitHint: 'Bepul urinishlar bugun tugadi. Davom etish uchun obuna oling.',
         buySubscriptionCta: 'Obuna olish',
+        guestOralLimitHint: "Davom etish uchun ZiyoMed ni Telegramda oching va obuna oling.",
+        openInTelegramCta: "Telegramda ochish",
       };
     }
     return {
@@ -204,6 +209,8 @@ export default function OralExamPage() {
       dailyLimitTitle: 'Дневной лимит исчерпан',
       dailyLimitHint: 'Бесплатные попытки на сегодня израсходованы. Для продолжения нужна подписка.',
       buySubscriptionCta: 'Купить подписку',
+      guestOralLimitHint: 'Чтобы продолжить, откройте ZiyoMed в Telegram и оформите подписку.',
+      openInTelegramCta: 'Открыть в Telegram',
     };
   }, [language]);
 
@@ -219,6 +226,8 @@ export default function OralExamPage() {
   }
 
   if (accessDenied) {
+    const guestHint = (copy as { guestOralLimitHint?: string }).guestOralLimitHint;
+    const openInTelegramCta = (copy as { openInTelegramCta?: string }).openInTelegramCta;
     return (
       <AnimatedPage>
         <main className="flex min-h-[50vh] flex-col gap-4 pb-28 pt-[3.75rem]">
@@ -226,11 +235,22 @@ export default function OralExamPage() {
           <Card>
             <div className="flex flex-col gap-3">
               <p className="font-semibold text-amber-800">{copy.dailyLimitTitle}</p>
-              <p className="text-sm text-slate-600">{copy.dailyLimitHint}</p>
+              <p className="text-sm text-slate-600">
+                {isGuest ? (guestHint ?? 'Чтобы продолжить, откройте ZiyoMed в Telegram и оформите подписку.') : copy.dailyLimitHint}
+              </p>
               <div className="mt-2">
-                <Button href="/cabinet/subscribe" size="lg">
-                  {copy.buySubscriptionCta}
-                </Button>
+                {isGuest ? (
+                  <a
+                    href={getOpenInTelegramAppUrl()}
+                    className="inline-flex w-full justify-center rounded-xl bg-[#2AABEE] px-5 py-3 text-base font-semibold text-white hover:bg-[#229ED9]"
+                  >
+                    {openInTelegramCta ?? 'Открыть в Telegram'}
+                  </a>
+                ) : (
+                  <Button href="/cabinet/subscribe" size="lg">
+                    {copy.buySubscriptionCta}
+                  </Button>
+                )}
               </div>
             </div>
           </Card>
@@ -285,8 +305,19 @@ export default function OralExamPage() {
             {answerLimitReached && (
               <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
                 <p className="font-semibold text-amber-800">{copy.dailyLimitTitle}</p>
-                <p className="mt-0.5 text-sm text-amber-800">{copy.dailyLimitHint}</p>
-                {!isGuest && (
+                <p className="mt-0.5 text-sm text-amber-800">
+                  {isGuest
+                    ? ((copy as { guestOralLimitHint?: string }).guestOralLimitHint ?? 'Чтобы продолжить, откройте ZiyoMed в Telegram и оформите подписку.')
+                    : copy.dailyLimitHint}
+                </p>
+                {isGuest ? (
+                  <a
+                    href={getOpenInTelegramAppUrl()}
+                    className="mt-3 inline-flex w-full justify-center rounded-xl bg-[#2AABEE] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#229ED9]"
+                  >
+                    {(copy as { openInTelegramCta?: string }).openInTelegramCta ?? 'Открыть в Telegram'}
+                  </a>
+                ) : (
                   <Button href="/cabinet/subscribe" size="md" className="mt-3">
                     {copy.buySubscriptionCta}
                   </Button>
