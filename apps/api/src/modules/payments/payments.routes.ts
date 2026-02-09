@@ -211,13 +211,30 @@ router.post('/multicard/callback', async (req: Request, res: Response) => {
         let subscriptionEndsAt: Date | null = null;
 
         if (inv.kind === 'one-time' && inv.examId) {
-          await prisma.oneTimeAccess.create({
-            data: {
-              userId: inv.userId ?? null,
-              guestSessionId: inv.guestSessionId ?? null,
+          // Check if OneTimeAccess already exists (to avoid duplicate key error)
+          // This can happen if callback is called multiple times
+          const existing = await prisma.oneTimeAccess.findFirst({
+            where: {
               examId: inv.examId,
+              consumedAt: null,
+              OR: [
+                inv.userId ? { userId: inv.userId } : {},
+                inv.guestSessionId ? { guestSessionId: inv.guestSessionId } : {},
+              ],
             },
+            select: { id: true },
           });
+          
+          if (!existing) {
+            // Only create if doesn't exist (avoid unique constraint violation)
+            await prisma.oneTimeAccess.create({
+              data: {
+                userId: inv.userId ?? null,
+                guestSessionId: inv.guestSessionId ?? null,
+                examId: inv.examId,
+              },
+            });
+          }
         } else if (inv.kind === 'subscription') {
           const now = new Date();
           subscriptionEndsAt = new Date(now);
@@ -308,6 +325,7 @@ router.get('/status', async (req: Request, res: Response) => {
       mcUuid: true,
       userId: true,
       guestSessionId: true,
+      paidAt: true,
     },
   });
   if (!inv) {
@@ -328,20 +346,53 @@ router.get('/status', async (req: Request, res: Response) => {
   );
 
   // Check if one-time access was already consumed
+  // Only check if payment belongs to current user/session (security)
   let alreadyConsumed = false;
   if (inv.kind === 'one-time' && inv.examId && inv.status === 'paid') {
-    const oneTime = await prisma.oneTimeAccess.findFirst({
-      where: {
-        examId: inv.examId,
-        consumedAt: { not: null },
-        OR: [
-          inv.userId ? { userId: inv.userId } : {},
-          inv.guestSessionId ? { guestSessionId: inv.guestSessionId } : {},
-        ],
-      },
-      select: { id: true },
-    });
-    alreadyConsumed = Boolean(oneTime);
+    // Only check if payment belongs to current user/session
+    const belongsToCurrentUser =
+      (userId && inv.userId === userId) ||
+      (guestSessionId && inv.guestSessionId === guestSessionId);
+    
+    if (belongsToCurrentUser && inv.paidAt) {
+      // Find OneTimeAccess created around the time of payment (within 5 seconds)
+      // This matches the OneTimeAccess that was created for this specific invoice
+      const paymentTime = inv.paidAt;
+      const timeWindowStart = new Date(paymentTime.getTime() - 5000); // 5 seconds before
+      const timeWindowEnd = new Date(paymentTime.getTime() + 5000); // 5 seconds after
+        
+        const whereClause: {
+          examId: string;
+          consumedAt: { not: null };
+          createdAt: { gte: Date; lte: Date };
+          userId?: string | null;
+          guestSessionId?: string | null;
+        } = {
+          examId: inv.examId,
+          consumedAt: { not: null },
+          createdAt: {
+            gte: timeWindowStart,
+            lte: timeWindowEnd,
+          },
+        };
+        
+        // Use invoice user/session (the one that created the OneTimeAccess)
+        if (inv.userId) {
+          whereClause.userId = inv.userId;
+        } else if (inv.guestSessionId) {
+          whereClause.guestSessionId = inv.guestSessionId;
+        }
+        
+        // Only check if invoice has user/session identifier
+        if (whereClause.userId || whereClause.guestSessionId) {
+          const oneTime = await prisma.oneTimeAccess.findFirst({
+            where: whereClause,
+            select: { id: true },
+          });
+          alreadyConsumed = Boolean(oneTime);
+        }
+      }
+    }
   }
 
   // Check if invoice belongs to current user/session
