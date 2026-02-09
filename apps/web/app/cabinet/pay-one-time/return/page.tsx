@@ -82,12 +82,13 @@ function PayOneTimeReturnClient() {
         choosePaymentAgain: 'Choose payment method again',
       goToMyExams: 'Go to "My exams"',
       cancel: 'Cancel',
-      openInTelegramTitle: 'Payment received',
-      openInTelegramMessage: 'Payment successful. Open ZiyoMed in Telegram to start your test.',
-      openInTelegramButton: 'Open in Telegram',
-    };
-  }
-  if (language === 'Узбекский') {
+        openInTelegramTitle: 'Payment received',
+        openInTelegramMessage: 'Payment successful. Open ZiyoMed in Telegram to start your test.',
+        openInTelegramButton: 'Open in Telegram',
+        legacyFormatMessage: 'This payment was made in the old format and cannot be verified. Please contact support or make a new payment.',
+      };
+    }
+    if (language === 'Узбекский') {
       return {
         title: "To'lovdan keyin qaytish",
         waiting: "To'lov tasdiqlanishi kutilmoqda…",
@@ -111,6 +112,7 @@ function PayOneTimeReturnClient() {
         openInTelegramTitle: "To'lov qabul qilindi",
         openInTelegramMessage: "To'lov muvaffaqiyatli. Testni boshlash uchun ZiyoMed ni Telegramda oching.",
         openInTelegramButton: "Telegramda ochish",
+        legacyFormatMessage: "Bu to'lov eski formatda amalga oshirilgan va tekshirib bo'lmaydi. Iltimos, qo'llab-quvvatlash xizmatiga murojaat qiling yoki yangi to'lov qiling.",
       };
     }
     return {
@@ -136,6 +138,7 @@ function PayOneTimeReturnClient() {
       openInTelegramTitle: 'Оплата получена',
       openInTelegramMessage: 'Оплата прошла успешно. Откройте ZiyoMed в Telegram, чтобы начать тест.',
       openInTelegramButton: 'Открыть в Telegram',
+      legacyFormatMessage: 'Этот платёж был выполнен в старом формате и не может быть проверен. Обратитесь в поддержку или выполните новый платёж.',
     };
   }, [language]);
 
@@ -204,6 +207,11 @@ function PayOneTimeReturnClient() {
           const result = await getPaymentStatus(invoiceId);
           if (cancelled) return;
           if (result.status === 'paid') {
+            if (result.isLegacyFormat) {
+              setStatus('error');
+              setMessage(copyRef.current.legacyFormatMessage);
+              return;
+            }
             if (!result.belongsToUser) {
               setStatus('error');
               setMessage('Этот платёж не принадлежит вашему сеансу');
@@ -274,6 +282,11 @@ function PayOneTimeReturnClient() {
       setMessage(copy.retryChecking);
       const result = await getPaymentStatus(invoiceId);
       if (result.status === 'paid') {
+        if (result.isLegacyFormat) {
+          setStatus('error');
+          setMessage(copy.legacyFormatMessage);
+          return;
+        }
         if (!result.belongsToUser) {
           setStatus('error');
           setMessage('Этот платёж не принадлежит вашему сеансу');

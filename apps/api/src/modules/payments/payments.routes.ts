@@ -314,10 +314,9 @@ router.get('/status', async (req: Request, res: Response) => {
     return res.status(404).json({ ok: false, reasonCode: 'NOT_FOUND' });
   }
 
-  // Check if invoice belongs to current user/session
-  const belongsToUser =
-    (userId && inv.userId === userId) ||
-    (guestSessionId && inv.guestSessionId === guestSessionId);
+  // Check if invoice is in legacy format (created before guestSessionId support)
+  // Legacy: no guestSessionId AND (no userId OR guest trying to access userId-based invoice)
+  const isLegacyFormat = inv.guestSessionId === null && (inv.userId === null || (!userId && guestSessionId && inv.userId));
 
   // Check if one-time access was already consumed
   let alreadyConsumed = false;
@@ -336,6 +335,11 @@ router.get('/status', async (req: Request, res: Response) => {
     alreadyConsumed = Boolean(oneTime);
   }
 
+  // Check if invoice belongs to current user/session
+  const belongsToUser =
+    (userId && inv.userId === userId) ||
+    (guestSessionId && inv.guestSessionId === guestSessionId);
+
   const payload: {
     ok: boolean;
     status: string;
@@ -343,6 +347,7 @@ router.get('/status', async (req: Request, res: Response) => {
     examId?: string | null;
     belongsToUser: boolean;
     alreadyConsumed: boolean;
+    isLegacyFormat?: boolean;
     receiptUrl?: string;
     amountTiyin?: number;
     subscriptionEndsAt?: string | null;
@@ -351,8 +356,9 @@ router.get('/status', async (req: Request, res: Response) => {
     status: inv.status,
     kind: inv.kind,
     examId: inv.examId,
-    belongsToUser,
+    belongsToUser: isLegacyFormat ? false : belongsToUser,
     alreadyConsumed,
+    isLegacyFormat,
   };
 
   if (inv.status === 'paid') {

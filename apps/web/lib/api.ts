@@ -334,6 +334,7 @@ export interface PaymentStatusResult {
   examId?: string | null;
   belongsToUser: boolean;
   alreadyConsumed: boolean;
+  isLegacyFormat?: boolean;
   receiptUrl?: string;
   amountTiyin?: number;
   subscriptionEndsAt?: string | null;
@@ -351,6 +352,7 @@ export async function getPaymentStatus(invoiceId: string): Promise<PaymentStatus
     examId: payload?.examId,
     belongsToUser: payload?.belongsToUser ?? false,
     alreadyConsumed: payload?.alreadyConsumed ?? false,
+    isLegacyFormat: payload?.isLegacyFormat ?? false,
     receiptUrl: payload?.receiptUrl,
     amountTiyin: payload?.amountTiyin,
     subscriptionEndsAt: payload?.subscriptionEndsAt,
