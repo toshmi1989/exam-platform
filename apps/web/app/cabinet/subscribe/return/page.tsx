@@ -40,6 +40,7 @@ function SubscribeReturnClient() {
   const [message, setMessage] = useState<string>('');
   const [paidDetails, setPaidDetails] = useState<PaymentStatusResult | null>(null);
   const pollCount = useRef(0);
+  const [checkedBrowser, setCheckedBrowser] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -130,42 +131,54 @@ function SubscribeReturnClient() {
   const copyRef = useRef(copy);
   copyRef.current = copy;
 
+  // Check payment status immediately when opened in browser (for legacy/foreign invoice detection)
   useEffect(() => {
-    if (!invoiceId) {
-      setStatus('error');
-      setMessage(copyRef.current.errorNoInvoice);
-      return;
-    }
-
-    // Check payment status even in browser (for legacy/foreign invoice detection)
+    if (!mounted || !invoiceId || checkedBrowser) return;
+    
     if (!inTelegram) {
+      setCheckedBrowser(true);
       let cancelled = false;
       (async () => {
         try {
           const result = await getPaymentStatus(invoiceId);
           if (cancelled) return;
+          
+          // Check for legacy format or foreign payment regardless of status
+          if (result.isLegacyFormat) {
+            setStatus('error');
+            setMessage(copyRef.current.legacyFormatMessage);
+            return;
+          }
+          if (result.status === 'paid' && !result.belongsToUser) {
+            setStatus('error');
+            setMessage(copyRef.current.notYourPaymentMessage);
+            return;
+          }
+          
+          // Valid payment - show Telegram link
           if (result.status === 'paid') {
-            if (result.isLegacyFormat) {
-              setStatus('error');
-              setMessage(copyRef.current.legacyFormatMessage);
-              return;
-            }
-            if (!result.belongsToUser) {
-              setStatus('error');
-              setMessage(copyRef.current.notYourPaymentMessage);
-              return;
-            }
-            // Valid payment - show Telegram link
             setStatus('paid');
             setMessage(copyRef.current.paidMessage);
+          } else {
+            // Other statuses - show error
+            setStatus('error');
+            setMessage(copyRef.current.errorNoInvoice);
           }
         } catch {
-          // ignore
+          setStatus('error');
+          setMessage(copyRef.current.errorNoInvoice);
         }
       })();
       return () => {
         cancelled = true;
       };
+    }
+  }, [mounted, invoiceId, inTelegram, checkedBrowser]);
+
+    if (!invoiceId) {
+      setStatus('error');
+      setMessage(copyRef.current.errorNoInvoice);
+      return;
     }
 
     let cancelled = false;
