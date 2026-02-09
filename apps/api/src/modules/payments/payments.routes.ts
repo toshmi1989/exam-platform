@@ -211,41 +211,93 @@ router.post('/multicard/callback', async (req: Request, res: Response) => {
         let subscriptionEndsAt: Date | null = null;
 
         if (inv.kind === 'one-time' && inv.examId) {
-          // Check if OneTimeAccess already exists (to avoid duplicate key error)
-          // This can happen if callback is called multiple times
-          const existing = await prisma.oneTimeAccess.findFirst({
-            where: {
-              examId: inv.examId,
-              consumedAt: null,
-              OR: [
-                inv.userId ? { userId: inv.userId } : {},
-                inv.guestSessionId ? { guestSessionId: inv.guestSessionId } : {},
-              ],
+          // Create OneTimeAccess for this payment
+          // Use upsert-like logic: check if OneTimeAccess was already created for this payment
+          // by checking creation time around paidAt (within 10 seconds window)
+          const paidAtTime = updateData.paidAt;
+          const timeWindowStart = new Date(paidAtTime.getTime() - 10000); // 10 seconds before
+          const timeWindowEnd = new Date(paidAtTime.getTime() + 10000); // 10 seconds after
+          
+          const whereClause: {
+            examId: string;
+            createdAt: { gte: Date; lte: Date };
+            userId?: string | null;
+            guestSessionId?: string | null;
+          } = {
+            examId: inv.examId,
+            createdAt: {
+              gte: timeWindowStart,
+              lte: timeWindowEnd,
             },
+          };
+          
+          if (inv.userId) {
+            whereClause.userId = inv.userId;
+          } else if (inv.guestSessionId) {
+            whereClause.guestSessionId = inv.guestSessionId;
+          }
+          
+          const existing = await prisma.oneTimeAccess.findFirst({
+            where: whereClause,
             select: { id: true },
           });
           
           if (!existing) {
-            // Only create if doesn't exist (avoid unique constraint violation)
-            await prisma.oneTimeAccess.create({
-              data: {
-                userId: inv.userId ?? null,
-                guestSessionId: inv.guestSessionId ?? null,
-                examId: inv.examId,
-              },
-            });
+            // Create OneTimeAccess for this payment
+            try {
+              await prisma.oneTimeAccess.create({
+                data: {
+                  userId: inv.userId ?? null,
+                  guestSessionId: inv.guestSessionId ?? null,
+                  examId: inv.examId,
+                },
+              });
+            } catch (createErr: any) {
+              // If unique constraint violation, ignore (already exists from concurrent callback)
+              if (createErr?.code !== 'P2002') {
+                console.error('[payments/callback] Failed to create OneTimeAccess:', createErr);
+                throw createErr;
+              }
+            }
           }
         } else if (inv.kind === 'subscription') {
-          const now = new Date();
-          subscriptionEndsAt = new Date(now);
-          subscriptionEndsAt.setDate(subscriptionEndsAt.getDate() + settings.subscriptionDurationDays);
-          await prisma.userSubscription.create({
-            data: {
-              userId: inv.userId,
-              endsAt: subscriptionEndsAt,
+          // Check if subscription already exists for this payment (avoid duplicates)
+          const existingSub = await prisma.userSubscription.findFirst({
+            where: {
+              userId: inv.userId!,
               status: 'ACTIVE',
+              endsAt: { gte: new Date() },
             },
+            select: { id: true },
           });
+          
+          if (!existingSub) {
+            const now = new Date();
+            subscriptionEndsAt = new Date(now);
+            subscriptionEndsAt.setDate(subscriptionEndsAt.getDate() + settings.subscriptionDurationDays);
+            try {
+              await prisma.userSubscription.create({
+                data: {
+                  userId: inv.userId!,
+                  endsAt: subscriptionEndsAt,
+                  status: 'ACTIVE',
+                },
+              });
+            } catch (createErr: any) {
+              // If unique constraint violation or other error, log but don't fail callback
+              if (createErr?.code !== 'P2002') {
+                console.error('[payments/callback] Failed to create subscription:', createErr);
+              }
+            }
+          } else {
+            // Subscription already exists, calculate endsAt from existing subscription
+            const existing = await prisma.userSubscription.findFirst({
+              where: { userId: inv.userId! },
+              orderBy: { endsAt: 'desc' },
+              select: { endsAt: true },
+            });
+            subscriptionEndsAt = existing?.endsAt ?? null;
+          }
         }
 
         // Send Telegram notification (non-blocking)
