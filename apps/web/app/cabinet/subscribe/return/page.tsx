@@ -79,6 +79,8 @@ function SubscribeReturnClient() {
         openInTelegramTitle: 'Payment received',
         openInTelegramMessage: 'Subscription activated. Open ZiyoMed in Telegram to continue.',
         openInTelegramButton: 'Open in Telegram',
+        legacyFormatMessage: 'This payment was made in the old format and cannot be verified. Please contact support or make a new payment.',
+        notYourPaymentMessage: 'This payment does not belong to your session.',
       };
     }
     if (language === 'Узбекский') {
@@ -99,6 +101,8 @@ function SubscribeReturnClient() {
         openInTelegramTitle: "To'lov qabul qilindi",
         openInTelegramMessage: "Obuna faollashtirildi. Davom etish uchun ZiyoMed ni Telegramda oching.",
         openInTelegramButton: "Telegramda ochish",
+        legacyFormatMessage: "Bu to'lov eski formatda amalga oshirilgan va tekshirib bo'lmaydi. Iltimos, qo'llab-quvvatlash xizmatiga murojaat qiling yoki yangi to'lov qiling.",
+        notYourPaymentMessage: "Bu to'lov sizning seansingizga tegishli emas.",
       };
     }
     return {
@@ -118,6 +122,8 @@ function SubscribeReturnClient() {
       openInTelegramTitle: 'Оплата получена',
       openInTelegramMessage: 'Подписка активирована. Откройте ZiyoMed в Telegram, чтобы продолжить.',
       openInTelegramButton: 'Открыть в Telegram',
+      legacyFormatMessage: 'Этот платёж был выполнен в старом формате и не может быть проверен. Обратитесь в поддержку или выполните новый платёж.',
+      notYourPaymentMessage: 'Этот платёж не принадлежит вашему сеансу.',
     };
   }, [language]);
 
@@ -125,13 +131,41 @@ function SubscribeReturnClient() {
   copyRef.current = copy;
 
   useEffect(() => {
-    if (!inTelegram || !invoiceId) {
-      if (!inTelegram && invoiceId) return; // opened in browser — no poll
-      if (!invoiceId) {
-        setStatus('error');
-        setMessage(copyRef.current.errorNoInvoice);
-      }
+    if (!invoiceId) {
+      setStatus('error');
+      setMessage(copyRef.current.errorNoInvoice);
       return;
+    }
+
+    // Check payment status even in browser (for legacy/foreign invoice detection)
+    if (!inTelegram) {
+      let cancelled = false;
+      (async () => {
+        try {
+          const result = await getPaymentStatus(invoiceId);
+          if (cancelled) return;
+          if (result.status === 'paid') {
+            if (result.isLegacyFormat) {
+              setStatus('error');
+              setMessage(copyRef.current.legacyFormatMessage);
+              return;
+            }
+            if (!result.belongsToUser) {
+              setStatus('error');
+              setMessage(copyRef.current.notYourPaymentMessage);
+              return;
+            }
+            // Valid payment - show Telegram link
+            setStatus('paid');
+            setMessage(copyRef.current.paidMessage);
+          }
+        } catch {
+          // ignore
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
     }
 
     let cancelled = false;
@@ -143,6 +177,16 @@ function SubscribeReturnClient() {
           const result = await getPaymentStatus(invoiceId);
           if (cancelled) return;
           if (result.status === 'paid') {
+            if (result.isLegacyFormat) {
+              setStatus('error');
+              setMessage(copyRef.current.legacyFormatMessage);
+              return;
+            }
+            if (!result.belongsToUser) {
+              setStatus('error');
+              setMessage(copyRef.current.notYourPaymentMessage);
+              return;
+            }
             setPaidDetails(result);
             setStatus('paid');
             setMessage(copyRef.current.paidMessage);
@@ -181,20 +225,42 @@ function SubscribeReturnClient() {
   }
 
   if (mounted && !inTelegram) {
+    const openInTelegramTitle = (copy as { openInTelegramTitle?: string }).openInTelegramTitle ?? 'Оплата получена';
+    const openInTelegramMessage = (copy as { openInTelegramMessage?: string }).openInTelegramMessage ?? 'Подписка активирована. Откройте ZiyoMed в Telegram, чтобы продолжить.';
+    const openInTelegramButton = (copy as { openInTelegramButton?: string }).openInTelegramButton ?? 'Открыть в Telegram';
+    const legacyFormatMessage = (copy as { legacyFormatMessage?: string }).legacyFormatMessage ?? 'Этот платёж был выполнен в старом формате и не может быть проверен.';
+    const notYourPaymentMessage = (copy as { notYourPaymentMessage?: string }).notYourPaymentMessage ?? 'Этот платёж не принадлежит вашему сеансу.';
+
     return (
       <AnimatedPage>
         <main className="flex flex-col gap-6 pb-28 pt-[3.75rem]">
-          <PageHeader title={(copy as { openInTelegramTitle?: string }).openInTelegramTitle ?? 'Оплата получена'} subtitle="" />
+          <PageHeader title={status === 'error' ? copy.title : openInTelegramTitle} subtitle="" />
           <Card className="flex flex-col items-center gap-6 py-8">
-            <p className="text-center text-slate-700">
-              {(copy as { openInTelegramMessage?: string }).openInTelegramMessage ?? 'Подписка активирована. Откройте ZiyoMed в Telegram, чтобы продолжить.'}
-            </p>
-            <a
-              href={getOpenInTelegramAppUrl()}
-              className="inline-flex w-full max-w-xs justify-center rounded-xl bg-[#2AABEE] px-5 py-4 text-base font-semibold text-white hover:bg-[#229ED9]"
-            >
-              {(copy as { openInTelegramButton?: string }).openInTelegramButton ?? 'Открыть в Telegram'}
-            </a>
+            {status === 'error' ? (
+              <>
+                <p className="text-center text-rose-600">
+                  {message || legacyFormatMessage || notYourPaymentMessage}
+                </p>
+                <a
+                  href="/cabinet"
+                  className="inline-flex w-full max-w-xs justify-center rounded-xl bg-slate-200 px-5 py-4 text-base font-medium text-slate-800 hover:bg-slate-300"
+                >
+                  {copy.toCabinet}
+                </a>
+              </>
+            ) : (
+              <>
+                <p className="text-center text-slate-700">
+                  {message || openInTelegramMessage}
+                </p>
+                <a
+                  href={getOpenInTelegramAppUrl()}
+                  className="inline-flex w-full max-w-xs justify-center rounded-xl bg-[#2AABEE] px-5 py-4 text-base font-semibold text-white hover:bg-[#229ED9]"
+                >
+                  {openInTelegramButton}
+                </a>
+              </>
+            )}
           </Card>
         </main>
       </AnimatedPage>
