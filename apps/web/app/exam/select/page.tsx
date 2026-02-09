@@ -12,6 +12,7 @@ import { readSettings, Language } from '../../../lib/uiSettings';
 import { apiFetch } from '../../../lib/api/client';
 import { createAttempt, startAttempt, getProfile } from '../../../lib/api';
 import { readTelegramUser } from '../../../lib/telegramUser';
+import { getOpenInTelegramAppUrl } from '../../../lib/telegram';
 
 export const dynamic = 'force-dynamic';
 
@@ -183,6 +184,8 @@ function ExamSelectClient() {
         accessDeniedHint: 'To take this test you need a subscription or one-time access.',
         dailyLimitExhaustedTitle: 'Daily limit used',
         dailyLimitExhaustedHint: 'Your free attempts for today are used. Get a subscription to continue.',
+        guestLimitHint: 'Limit exhausted. To continue, make a one-time payment for 1 session or buy a subscription in your Telegram account!',
+        goToTelegramCta: 'Go to Telegram',
         buySubscriptionCta: 'Get subscription',
         subscribeCta: 'Get subscription',
         subscribeCtaFor: 'Get subscription for',
@@ -225,6 +228,8 @@ function ExamSelectClient() {
         accessDeniedHint: 'Bu testni topshirish uchun obuna yoki bir martalik kirish kerak.',
         dailyLimitExhaustedTitle: 'Kunlik limit tugadi',
         dailyLimitExhaustedHint: 'Bepul urinishlar bugun tugadi. Davom etish uchun obuna oling.',
+        guestLimitHint: "Limit tugadi. Davom etish uchun 1 seans uchun bir martalik to'lov qiling yoki Telegramdagi shaxsiy kabinetingizda obuna oling!",
+        goToTelegramCta: "Telegramga o'tish",
         buySubscriptionCta: 'Obuna olish',
         subscribeCta: 'Obuna olish',
         subscribeCtaFor: 'Obuna olish',
@@ -266,6 +271,8 @@ function ExamSelectClient() {
       accessDeniedHint: 'Чтобы пройти этот тест, нужна подписка или разовый доступ.',
       dailyLimitExhaustedTitle: 'Дневной лимит исчерпан',
       dailyLimitExhaustedHint: 'Бесплатные попытки на сегодня израсходованы. Для продолжения нужна подписка.',
+      guestLimitHint: 'Лимит закончился. Для продолжения совершите разовый платёж для 1 сеанса или купите подписку в личном кабинете с Telegram!',
+      goToTelegramCta: 'Перейти в Telegram',
       buySubscriptionCta: 'Купить подписку',
       subscribeCta: 'Оформить подписку',
       subscribeCtaFor: 'Оформить подписку за',
@@ -722,7 +729,9 @@ function ExamSelectClient() {
                       {copy.dailyLimitExhaustedTitle}
                     </p>
                     <p className="mt-0.5 text-sm text-amber-800">
-                      {copy.dailyLimitExhaustedHint}
+                      {isGuest
+                        ? ((copy as { guestLimitHint?: string }).guestLimitHint ?? copy.dailyLimitExhaustedHint)
+                        : copy.dailyLimitExhaustedHint}
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {isAuthenticated && !isGuest && (
@@ -755,19 +764,28 @@ function ExamSelectClient() {
                       {(isGuest || (!isAuthenticated && !isGuest)) && (
                         <>
                           {isGuest ? (
-                            <Button
-                              href={
-                                direction
-                                  ? `/cabinet/pay-one-time?examId=${encodeURIComponent(direction.examId)}&mode=${mode ?? 'exam'}`
-                                  : '/cabinet/pay-one-time'
-                              }
-                              size="md"
-                              className="w-full sm:w-auto"
-                            >
-                              {oneTimePrice != null
-                                ? `${copy.oneTimeCtaFor} ${oneTimePrice.toLocaleString('ru-UZ')} сум`
-                                : copy.payCta}
-                            </Button>
+                            <>
+                              <Button
+                                href={
+                                  direction
+                                    ? `/cabinet/pay-one-time?examId=${encodeURIComponent(direction.examId)}&mode=${mode ?? 'exam'}`
+                                    : '/cabinet/pay-one-time'
+                                }
+                                size="md"
+                                variant="secondary"
+                                className="w-full sm:w-auto"
+                              >
+                                {oneTimePrice != null
+                                  ? `${copy.oneTimeCtaFor} ${oneTimePrice.toLocaleString('ru-UZ')} сум`
+                                  : copy.payCta}
+                              </Button>
+                              <a
+                                href={getOpenInTelegramAppUrl()}
+                                className="inline-flex w-full sm:w-auto justify-center rounded-xl bg-[#2AABEE] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#229ED9]"
+                              >
+                                {(copy as { goToTelegramCta?: string }).goToTelegramCta ?? 'Перейти в Telegram'}
+                              </a>
+                            </>
                           ) : (
                             <Button href="/cabinet" size="md" className="w-full sm:w-auto">
                               {copy.loginToPurchase}
