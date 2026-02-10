@@ -38,10 +38,10 @@ import { notifyAdmins } from '../modules/ops/serverNotifier';
 const CHECK_TIMEOUT_MS = 12000;
 
 const ENDPOINTS: { name: string; url: string }[] = [
-  { name: 'ziyomed.com', url: 'https://ziyomed.com' },
-  { name: 'api.ziyomed.com', url: 'https://api.ziyomed.com' },
-  { name: 'localhost:3000', url: 'http://127.0.0.1:3000' },
-  { name: 'localhost:3001', url: 'http://127.0.0.1:3001' },
+  { name: 'WEB', url: 'https://ziyomed.com' },
+  { name: 'API', url: 'https://api.ziyomed.com/health' },
+  { name: 'WEB_LOCAL', url: 'http://127.0.0.1:3000' },
+  { name: 'API_LOCAL', url: 'http://127.0.0.1:3001/health' },
 ];
 
 async function checkUrl(name: string, url: string): Promise<{ ok: boolean; error?: string }> {
