@@ -109,27 +109,43 @@ export async function getOrCreateAudio(
     // Clean text: remove invalid UTF-16 surrogates and normalize
     // More aggressive cleaning for Prisma compatibility
     let cleanContent = scriptContent
-      .replace(/[\uD800-\uDFFF]/g, '') // Remove invalid surrogates
-      .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g, '') // Remove all control chars
-      .replace(/[\uFEFF]/g, '') // Remove BOM
-      .normalize('NFC') // Normalize Unicode
+      // First, normalize to remove any invalid sequences
+      .normalize('NFC')
+      // Remove invalid UTF-16 surrogates (lone surrogates)
+      .replace(/[\uD800-\uDFFF]/g, '')
+      // Remove all control characters except newlines and tabs
+      .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g, '')
+      // Remove BOM
+      .replace(/[\uFEFF]/g, '')
+      // Remove any remaining problematic Unicode ranges
+      .replace(/[\uFFFE\uFFFF]/g, '')
       .trim();
     
-    // Additional safety: ensure valid UTF-8
+    // Additional safety: ensure valid UTF-8 by re-encoding
     try {
-      // Try to encode/decode to validate UTF-8
-      Buffer.from(cleanContent, 'utf8').toString('utf8');
-    } catch {
-      // If invalid, remove problematic characters more aggressively
+      // Re-encode to ensure valid UTF-8
+      const buffer = Buffer.from(cleanContent, 'utf8');
+      cleanContent = buffer.toString('utf8');
+      
+      // Validate: check for any remaining surrogates
+      if (/[\uD800-\uDFFF]/.test(cleanContent)) {
+        console.warn('[TTS] Warning: Found remaining surrogates after cleaning, removing...');
+        cleanContent = cleanContent.replace(/[\uD800-\uDFFF]/g, '');
+      }
+    } catch (error) {
+      console.error('[TTS] UTF-8 validation failed:', error);
+      // Fallback: remove all non-printable characters
       cleanContent = cleanContent
         .split('')
         .filter((char) => {
-          try {
-            Buffer.from(char, 'utf8').toString('utf8');
-            return true;
-          } catch {
-            return false;
-          }
+          const code = char.charCodeAt(0);
+          // Keep printable characters and common Unicode ranges
+          return (
+            (code >= 32 && code <= 126) || // ASCII printable
+            (code >= 160 && code <= 55295) || // Latin-1 Supplement and most of BMP
+            (code >= 57344 && code <= 65533) || // Private Use Area (skip surrogates)
+            (code >= 65536 && code <= 1114111) // Supplementary planes
+          );
         })
         .join('');
     }

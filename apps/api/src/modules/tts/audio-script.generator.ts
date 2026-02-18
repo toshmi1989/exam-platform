@@ -11,8 +11,15 @@ interface GenerateScriptInput {
   lang: 'ru' | 'uz';
 }
 
+// Uzbek-specific Cyrillic letters pattern (shared)
+const uzbekCyrillic = /[ЎўҚқҒғҲҳ]/;
+
+// Common Uzbek Latin words pattern (expanded list, shared)
+const uzbekLatinWords = /\b(tushuntiradi|Savol|javob|Tibbiy|mazmuni|orasidagi|farq|shovqinlar|qattiq|baland|nafas|chiqarish|eshitiladi|yumshoq|past|kuchliroq|traxeya|bronxlarda|bo'lib|paytida|anik|teng|kichik|havo|yo'llaridan|keladi|tonli|olish|rentgen|tasvirlarini|qo'llaniladigan|fizik|asoslar|haqida|nurlari|orqali|tana|ichidagi|strukturalarni|ko'rsatish|uchun|ularning|turli|to'siqlarga|duch|kelishi|va|so'rilishi|prinsipiga|asoslanadi|elektromagnit|to'lqinlarning|yuqori|chastotali|turi|bo'lib|to'qimalaridan|o'tishi|asosida|tasvir|hosil|qilinadi|suv|yog'|kabi|yumshoq|to'qimalar|kamroq|so'radi|suyak|zich|to'qimalar|esa|ko'proq|so'rib|tasvirda|oq|rangda|ko'rinadi|bu|jarayon|kontrastini|yaratadi|ichki|organlar|suyaklar|holatini|baholash|imkonini|beradi)\b/i;
+
 /**
  * Filter text by language - keep only sentences in target language.
+ * STRICT: Azure TTS does not support mixed languages in one SSML without <lang> tags.
  */
 function filterByLanguage(text: string, targetLang: 'ru' | 'uz'): string {
   const sentences = text.split(/[.!?]\s+/).filter(Boolean);
@@ -23,18 +30,35 @@ function filterByLanguage(text: string, targetLang: 'ru' | 'uz'): string {
     if (trimmed.length < 10) continue;
 
     if (targetLang === 'ru') {
-      // Keep Russian: has Cyrillic, no Uzbek Latin patterns
+      // STRICT: For Russian, reject ANY Uzbek content
       const hasCyrillic = /[А-Яа-яЁё]/.test(trimmed);
-      const hasUzbekLatin = /\b(tushuntiradi|Savol|javob|Tibbiy|mazmuni|orasidagi|farq|shovqinlar|qattiq|baland|nafas|chiqarish|eshitiladi|yumshoq|past|kuchliroq|traxeya|bronxlarda|bo'lib|paytida|anik|teng|kichik|havo|yo'llaridan|keladi|tonli|olish)\b/i.test(trimmed);
-      if (hasCyrillic && !hasUzbekLatin) {
-        filtered.push(trimmed);
+      const hasUzbekCyrillic = uzbekCyrillic.test(trimmed);
+      const hasUzbekLatin = uzbekLatinWords.test(trimmed);
+      
+      // Only keep if: has Russian Cyrillic AND no Uzbek content
+      if (hasCyrillic && !hasUzbekCyrillic && !hasUzbekLatin) {
+        // Additional check: count Russian vs non-Russian characters
+        const russianChars = (trimmed.match(/[А-Яа-яЁё]/g) || []).length;
+        const totalChars = trimmed.replace(/\s+/g, '').length;
+        const russianRatio = totalChars > 0 ? russianChars / totalChars : 0;
+        
+        // Keep if at least 60% of content is Russian
+        if (russianRatio >= 0.6) {
+          filtered.push(trimmed);
+        }
       }
     } else {
-      // Keep Uzbek: has Uzbek Latin or Cyrillic patterns
-      const hasUzbek = /[А-Яа-яЁёЎўҚқҒғҲҳ]/.test(trimmed) || /\b(tushuntiradi|Savol|javob|Tibbiy|mazmuni|orasidagi|farq|shovqinlar|qattiq|baland|nafas|chiqarish|eshitiladi|yumshoq|past|kuchliroq|traxeya|bronxlarda|bo'lib|paytida|anik|teng|kichik|havo|yo'llaridan|keladi|tonli|olish)\b/i.test(trimmed);
-      const hasOnlyRussian = /[А-Яа-яЁё]/.test(trimmed) && !/[ЎўҚқҒғҲҳ]/.test(trimmed) && !/\b(tushuntiradi|Savol|javob|Tibbiy|mazmuni|orasidagi|farq|shovqinlar|qattiq|baland|nafas|chiqarish|eshitiladi|yumshoq|past|kuchliroq|traxeya|bronxlarda|bo'lib|paytida|anik|teng|kichik|havo|yo'llaridan|keladi|tonli|olish)\b/i.test(trimmed);
-      if (hasUzbek && !hasOnlyRussian) {
+      // For Uzbek: keep if has Uzbek-specific characters or Uzbek words
+      const hasUzbekCyrillic = uzbekCyrillic.test(trimmed);
+      const hasUzbekLatin = uzbekLatinWords.test(trimmed);
+      const hasAnyCyrillic = /[А-Яа-яЁё]/.test(trimmed);
+      
+      // Keep if has Uzbek markers OR (has Cyrillic AND Uzbek-specific letters)
+      if (hasUzbekLatin || (hasAnyCyrillic && hasUzbekCyrillic)) {
         filtered.push(trimmed);
+      } else if (hasAnyCyrillic && !hasUzbekCyrillic) {
+        // Has Cyrillic but no Uzbek-specific letters - might be Russian, skip
+        continue;
       }
     }
   }
@@ -69,19 +93,46 @@ export function generateAudioScript(input: GenerateScriptInput): string {
     .replace(/🤖 Ziyoda tushuntiradi/gi, '')
     .trim();
 
-  // Filter by target language, but keep original if filtered result is too short
+  // Filter by target language - STRICT: Azure TTS doesn't support mixed languages
   const filtered = filterByLanguage(clean, lang);
-  const finalExplanation = filtered.length > 50 ? filtered : clean;
   
-  // Log for debugging
-  if (finalExplanation.length < 50) {
-    console.warn('[Audio Script] Warning: explanation is very short after filtering:', {
-      originalLength: clean.length,
-      filteredLength: filtered.length,
-      finalLength: finalExplanation.length,
-      lang,
-      preview: finalExplanation.slice(0, 100),
-    });
+  // If filtered result is too short, check if original has mixed languages
+  let finalExplanation = filtered;
+  if (filtered.length < 50) {
+    // Check if original has mixed languages
+    const hasMixedLang = lang === 'ru' 
+      ? (uzbekCyrillic.test(clean) || uzbekLatinWords.test(clean))
+      : (!uzbekCyrillic.test(clean) && !uzbekLatinWords.test(clean) && /[А-Яа-яЁё]/.test(clean));
+    
+    if (hasMixedLang) {
+      // Original has mixed languages - use filtered only, even if short
+      console.warn('[Audio Script] Warning: explanation has mixed languages, using filtered only:', {
+        originalLength: clean.length,
+        filteredLength: filtered.length,
+        lang,
+        preview: filtered.slice(0, 100),
+      });
+      finalExplanation = filtered;
+    } else {
+      // No mixed languages, safe to use original
+      finalExplanation = clean;
+    }
+  }
+  
+  // Final validation: ensure no mixed languages in final explanation
+  if (lang === 'ru') {
+    const hasUzbek = uzbekCyrillic.test(finalExplanation) || uzbekLatinWords.test(finalExplanation);
+    if (hasUzbek) {
+      console.error('[Audio Script] ERROR: Final explanation still contains Uzbek text for Russian SSML!');
+      // Remove Uzbek sentences
+      const sentences = finalExplanation.split(/[.!?]\s+/).filter(Boolean);
+      finalExplanation = sentences
+        .filter((s) => {
+          const trimmed = s.trim();
+          return !uzbekCyrillic.test(trimmed) && !uzbekLatinWords.test(trimmed);
+        })
+        .join('. ') + '.';
+    }
   }
 
   // Build teacher-style explanation
