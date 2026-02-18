@@ -65,7 +65,7 @@ function calculateHash(questionText: string, aiExplanation: string, lang: string
  */
 export async function getOrCreateAudio(
   questionId: string,
-  lang: 'ru' | 'uz' // Requested lang (may differ from question lang)
+  lang: 'ru' | 'uz' // Requested lang (ignored, we use question-based detection)
 ): Promise<{ audioUrl: string }> {
   // 1. Load question first to determine language
   const question = await prisma.question.findUnique({
@@ -81,6 +81,7 @@ export async function getOrCreateAudio(
   }
 
   // DETERMINISTIC: Detect language from question text
+  // Cyrillic → RU, Latin → UZ
   const questionLang = /[А-Яа-яЁё]/.test(question.prompt) ? 'ru' : 'uz';
   
   // Check if audio exists for question language
@@ -181,7 +182,7 @@ export async function getOrCreateAudio(
     where: { questionId_lang: { questionId, lang: questionLang } },
     create: {
       questionId,
-      lang,
+      lang: questionLang, // Use question language, not requested
       audioPath,
     },
     update: {
