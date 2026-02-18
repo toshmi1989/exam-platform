@@ -36,7 +36,7 @@ const KEYWORD_TO_SECTION: Record<string, SectionKey> = {
   diagnostika: 'diagnosis',
   диагностика: 'diagnosis',
   shoshilinch: 'emergency',
-  shoshilinch yordam: 'emergency',
+  'shoshilinch yordam': 'emergency',
   emergency: 'emergency',
   neotlozhnaya: 'emergency',
   неотложная: 'emergency',
