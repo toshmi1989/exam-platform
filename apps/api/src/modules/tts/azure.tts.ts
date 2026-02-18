@@ -122,29 +122,46 @@ function buildSSML(script: string, lang: 'ru' | 'uz', options: TtsOptions = {}):
   const enhancedScript = enhanceScriptWithSSML(script, lang);
 
   // Escape XML - preserve SSML tags by temporarily replacing them
+  // Use a more robust approach: extract all SSML tags first
   const ssmlTagPattern = /<\/?(?:break|emphasis)[^>]*>/g;
-  const placeholders: Map<string, string> = new Map();
-  let placeholderCounter = 0;
+  const tags: Array<{ placeholder: string; tag: string }> = [];
+  let tagIndex = 0;
   
-  // Replace SSML tags with unique placeholders
-  const uniqueId = `_${Date.now()}_${Math.random().toString(36).substr(2, 9)}_`;
-  let textWithPlaceholders = enhancedScript.replace(ssmlTagPattern, (match) => {
-    const key = `${uniqueId}${placeholderCounter++}`;
-    placeholders.set(key, match);
-    return key;
-  });
+  // Extract all SSML tags with their positions
+  const tagMatches: Array<{ index: number; tag: string }> = [];
+  let match;
+  const regex = new RegExp(ssmlTagPattern.source, 'g');
+  while ((match = regex.exec(enhancedScript)) !== null) {
+    tagMatches.push({ index: match.index, tag: match[0] });
+  }
   
-  // Escape XML in text content
-  let escaped = textWithPlaceholders
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+  // Build escaped text by processing character by character, skipping SSML tags
+  let escaped = '';
+  let lastIndex = 0;
+  for (const { index, tag } of tagMatches) {
+    // Escape text before this tag
+    const beforeTag = enhancedScript.substring(lastIndex, index);
+    escaped += beforeTag
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+    
+    // Add the SSML tag as-is (it's already valid XML)
+    escaped += tag;
+    lastIndex = index + tag.length;
+  }
   
-  // Restore SSML tags
-  for (const [key, tag] of placeholders.entries()) {
-    escaped = escaped.replace(new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), tag);
+  // Escape remaining text after last tag
+  if (lastIndex < enhancedScript.length) {
+    const remaining = enhancedScript.substring(lastIndex);
+    escaped += remaining
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
   }
 
   // Validate pitch value (Azure accepts -50% to +50%)
