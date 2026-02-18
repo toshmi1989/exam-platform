@@ -108,11 +108,7 @@ export async function getOrCreateAudio(
     throw new Error('AI explanation record not found');
   }
 
-  // 4. DETERMINISTIC: Detect language from QUESTION (not requested lang)
-  // Language is determined by question text: Cyrillic = RU, Latin = UZ
-  const questionLang = /[А-Яа-яЁё]/.test(question.prompt) ? 'ru' : 'uz';
-  
-  // Use question language for hash and cache key
+  // 3. Use question language for hash and cache key (already determined above)
   const expectedHash = calculateHash(question.prompt, explanationRecord.content, questionLang);
   let script = await prisma.questionAudioScript.findUnique({
     where: { questionId_lang: { questionId, lang: questionLang } },
