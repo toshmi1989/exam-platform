@@ -3,11 +3,6 @@
  * Implements getOrCreateAudio flow with caching.
  */
 
-/**
- * TTS service: orchestrates script generation and audio synthesis.
- * Implements getOrCreateAudio flow with caching.
- */
-
 import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -114,6 +109,8 @@ export async function getOrCreateAudio(
     where: { questionId_lang: { questionId, lang: questionLang } },
   });
 
+  let generationLang: 'ru' | 'uz' = questionLang;
+
   if (!script || script.hash !== expectedHash) {
     // Generate new script based on QUESTION + ANSWER + explanation
     // For oral questions, there might be no correct option - extract from explanation
@@ -137,7 +134,7 @@ export async function getOrCreateAudio(
     });
 
     const scriptContent = scriptResult.script;
-    const actualLang = scriptResult.actualLang; // Should match questionLang
+    generationLang = scriptResult.actualLang; // deterministic from question text
 
     // Validate script was generated
     if (!scriptContent || scriptContent.trim().length < 20) {
@@ -154,10 +151,10 @@ export async function getOrCreateAudio(
       .trim();
 
     script = await prisma.questionAudioScript.upsert({
-      where: { questionId_lang: { questionId, lang: questionLang } },
+      where: { questionId_lang: { questionId, lang: generationLang } },
       create: {
         questionId,
-        lang: questionLang, // Store question language
+        lang: generationLang,
         content: cleanContent,
         hash: expectedHash,
       },
@@ -168,17 +165,27 @@ export async function getOrCreateAudio(
     });
   }
 
-  // 5. Generate audio using question language (deterministic)
-  const audioPath = getAudioPath(questionId, questionLang);
-  // Use script content as-is (sanitization happens in buildSSML)
-  await synthesizeSpeech(script.content, questionLang, audioPath);
+  // 5. Generate audio using language derived from question text.
+  const audioPath = getAudioPath(questionId, generationLang);
+  try {
+    await synthesizeSpeech(script.content, generationLang, audioPath);
+  } catch (error) {
+    // Do not break exam flow when generation fails and old audio exists.
+    const fallback = await prisma.questionAudio.findUnique({
+      where: { questionId_lang: { questionId, lang: generationLang } },
+    });
+    if (fallback && fs.existsSync(fallback.audioPath)) {
+      return { audioUrl: `${AUDIO_BASE_URL}/${path.basename(fallback.audioPath)}` };
+    }
+    throw error;
+  }
 
-  // 6. Save audio record (use questionLang, deterministic)
+  // 6. Save audio record.
   await prisma.questionAudio.upsert({
-    where: { questionId_lang: { questionId, lang: questionLang } },
+    where: { questionId_lang: { questionId, lang: generationLang } },
     create: {
       questionId,
-      lang: questionLang, // Use question language, not requested
+      lang: generationLang,
       audioPath,
     },
     update: {

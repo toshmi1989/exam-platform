@@ -1,7 +1,6 @@
 /**
  * Azure Text-to-Speech module.
- * Premium teacher mode with female voice only.
- * Natural paragraph-based pauses + academic intonation.
+ * Academic Lecture Voice Engine renderer for Azure TTS.
  */
 
 import * as fs from 'fs';
@@ -45,24 +44,35 @@ function applyOutsideTags(input: string, fn: (text: string) => string): string {
   return parts.map((p) => (p.startsWith('<') && p.endsWith('>') ? p : fn(p))).join('');
 }
 
-/**
- * Emphasize important keywords with SSML emphasis tags.
- */
+function removeDuplicateSentences(text: string): string {
+  const seen = new Set<string>();
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => {
+      if (!s) return false;
+      const key = s.toLowerCase().replace(/\s+/g, ' ');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .join(' ');
+}
+
 function emphasizeKeywords(text: string, lang: 'ru' | 'uz'): string {
-  const keywords = lang === 'ru'
-    ? ['важно', 'основное', 'главное', 'ключевой', 'обратите внимание', 'запомните', 'необходимо']
-    : ['muhim', 'asosiy', 'eng muhim', 'e\'tibor bering', 'esda tuting', 'kerak', 'zarur'];
-  
-  let result = text;
-  
-  for (const keyword of keywords) {
-    const regex = new RegExp(`\\b${escapeRegExp(keyword)}\\b`, 'gi');
-    result = result.replace(regex, (match) => {
-      return `<emphasis level="moderate">${match}</emphasis>`;
-    });
-  }
-  
-  return result;
+  const keywords =
+    lang === 'ru'
+      ? ['обратите внимание', 'важно', 'ключевой', 'практически', 'итоговый вывод']
+      : ["e'tibor bering", 'muhim', 'asosiy', 'amaliyotda', 'yakuniy xulosa'];
+
+  return applyOutsideTags(text, (chunk) => {
+    let out = chunk;
+    for (const keyword of keywords) {
+      const regex = new RegExp(`\\b${escapeRegExp(keyword)}\\b`, 'gi');
+      out = out.replace(regex, (match) => `<emphasis level="moderate">${match}</emphasis>`);
+    }
+    return out;
+  });
 }
 
 /**
@@ -71,147 +81,92 @@ function emphasizeKeywords(text: string, lang: 'ru' | 'uz'): string {
 const PHONEMES_RU: Record<string, string> = {
   'томография': 'təməˈɡrafʲɪjə',
   'рентгеноскопия': 'rentɡenɔˈskopʲɪjə',
+  'диагностика': 'dʲɪaɡˈnostʲɪkə',
 };
 
-function applyPhonemes(text: string, lang: 'ru' | 'uz'): string {
-  if (lang !== 'ru') return text;
-  let out = text;
-  for (const [term, ipa] of Object.entries(PHONEMES_RU)) {
-    const re = new RegExp(`\\b${escapeRegExp(term)}\\b`, 'gi');
-    out = out.replace(re, (match) => `<mstts:phoneme alphabet="ipa" ph="${ipa}">${match}</mstts:phoneme>`);
-  }
-  return out;
-}
-
-/**
- * Detect complex medical terms.
- */
 function detectTerms(text: string): string[] {
   const endings = /\b[\p{L}]+(?:itis|osis|oma|logiya|grafiya|skopiya)\b/giu;
   const words = text.match(/\b\p{L}[\p{L}\-']{2,}\b/gu) || [];
+  const known = ['infektsiya', 'tomografiya', 'диагностика', 'инфекция', 'патогенез'];
   const out: string[] = [];
   for (const w of words) {
     const norm = w.replace(/[-']/g, '');
-    if (norm.length > 9) out.push(w);
+    if (norm.length > 9 || known.some((k) => w.toLowerCase().includes(k))) out.push(w);
     if (/^[A-ZА-ЯЁ]/.test(w) && norm.length > 6) out.push(w);
   }
   out.push(...(text.match(endings) || []));
   return Array.from(new Set(out.map((t) => t.trim()))).slice(0, 8);
 }
 
-/**
- * Slow down complex Latin/medical terms without slowing the whole speech.
- */
-function slowDownTerms(text: string): string {
+function slowDownFirstTermMentions(text: string, lang: 'ru' | 'uz'): string {
   const terms = detectTerms(text);
   if (!terms.length) return text;
+  const seen = new Set<string>();
+
   return applyOutsideTags(text, (chunk) => {
     let out = chunk;
     for (const term of terms) {
-      const re = new RegExp(`\\b${escapeRegExp(term)}\\b`, 'g');
-      out = out.replace(re, (m) => `<prosody rate="-15%" pitch="+1%">${m}</prosody>`);
+      const key = term.toLowerCase();
+      if (seen.has(key)) continue;
+      const re = new RegExp(`\\b${escapeRegExp(term)}\\b`, 'i');
+      out = out.replace(re, (matched) => {
+        seen.add(key);
+        if (lang === 'ru') {
+          const phoneme = PHONEMES_RU[key];
+          if (phoneme) {
+            return `<prosody rate="-12%"><mstts:phoneme alphabet="ipa" ph="${phoneme}">${matched}</mstts:phoneme></prosody>`;
+          }
+        }
+        return `<prosody rate="-12%">${matched}</prosody>`;
+      });
     }
     return out;
   });
 }
 
-/**
- * Intelligent enumeration SSML intonation.
- * Convert list sections to natural lecture flow.
- */
-function intonateEnumerations(text: string, lang: 'ru' | 'uz'): string {
-  const lines = text.split('\n');
-  const out: string[] = [];
-
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-    
-    // Check for list patterns
-    const numberedMatch = line.trim().match(/^(\d+)\.\s+(.*)$/);
-    const dashMatch = line.trim().match(/^[-–—]\s+(.*)$/);
-    
-    if (!numberedMatch && !dashMatch) {
-      out.push(line);
-      i++;
-      continue;
-    }
-
-    // Collect consecutive list items
-    const items: string[] = [];
-    let j = i;
-    while (j < lines.length) {
-      const l = lines[j].trim();
-      const mm = l.match(/^(\d+)\.\s+(.*)$/);
-      const md = l.match(/^[-–—]\s+(.*)$/);
-      if (mm) items.push(mm[2].trim());
-      else if (md) items.push(md[1].trim());
-      else break;
-      j++;
-    }
-
-    if (items.length >= 2) {
-      // Add transition phrase
-      if (lang === 'uz') {
-        out.push('Endi sabablarga to\'xtalamiz.');
-      } else {
-        out.push('Теперь рассмотрим основные пункты.');
-      }
-      
-      // Render items with intonation
-      const rendered = items.map((it, idx) => {
-        const pitch = idx === 0 ? '+3%' : idx === items.length - 1 ? '+6%' : '+4%';
-        if (idx === items.length - 1) {
-          const lead = lang === 'ru' ? 'и самое важное — ' : 'eng muhimi shuki — ';
-          return `<prosody pitch="${pitch}">${lead}${it}</prosody>`;
-        }
-        return `<prosody pitch="${pitch}">${it}</prosody>, <break time="300ms"/>`;
-      });
-      out.push(rendered.join(' '));
-    } else {
-      out.push(line);
-    }
-
-    i = j;
-  }
-
-  return out.join('\n');
+function addCommaPauses(text: string): string {
+  return applyOutsideTags(text, (chunk) => chunk.replace(/,\s*/g, ', <break time="250ms"/> '));
 }
 
-/**
- * Add paragraph-based breaks:
- * - 650ms between semantic blocks
- * - 250ms after commas
- * - 400ms after term explanation sentence
- */
-function addParagraphBreaks(text: string, lang: 'ru' | 'uz'): string {
-  const paragraphs = text.split('\n\n').filter((p) => p.trim().length > 0);
-  const processed = paragraphs.map((p) => {
-    let chunk = p.trim();
-    // After commas: 250ms
-    chunk = applyOutsideTags(chunk, (c) => c.replace(/,\s*/g, ', <break time="250ms"/> '));
-    // After term explanations: 400ms
-    if (lang === 'uz') {
-      chunk = chunk.replace(/(\.)(\s*)(Bu atama)/g, `.$2 <break time="400ms"/> $3`);
-    } else {
-      chunk = chunk.replace(/(\.)(\s*)(Это термин)/g, `.$2 <break time="400ms"/> $3`);
+function addSemanticPacing(text: string, lang: 'ru' | 'uz'): string {
+  const blocks = text.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
+  if (!blocks.length) return text;
+
+  const paced: string[] = [];
+  blocks.forEach((block, index) => {
+    let current = addCommaPauses(block);
+
+    if (index === 1) {
+      current = `<break time="300ms"/> ${current}`;
     }
-    if (!/[.!?]$/.test(chunk)) chunk += '.';
-    return chunk;
+
+    // Slightly more expressive final conclusion.
+    if (index === blocks.length - 1) {
+      current = `<prosody rate="-4%" pitch="+4%">${current}</prosody>`;
+    }
+
+    paced.push(current);
+
+    if (index === 0) paced.push('<break time="600ms"/>');
+    if (index === 2) paced.push('<break time="500ms"/>');
+    if (index < blocks.length - 1) paced.push('<break time="700ms"/>');
   });
-  return processed.map((p) => `${p} <break time="650ms"/>`).join('\n');
+
+  const importantCue = lang === 'ru' ? 'Важно понимать' : 'Muhim jihat shundaki';
+  return paced.join('\n').replace(
+    new RegExp(`\\b${escapeRegExp(importantCue)}\\b`, 'g'),
+    `<break time="300ms"/> ${importantCue}`
+  );
 }
 
 /**
  * Build premium SSML with teacher style and natural pauses.
  */
 function buildSSML(text: string, lang: 'ru' | 'uz'): string {
-  const clean = sanitizeForSSML(text);
-  const withPhonemes = applyPhonemes(clean, lang);
-  const withSlowedTerms = slowDownTerms(withPhonemes);
-  const withListIntonation = intonateEnumerations(withSlowedTerms, lang);
-  const emphasized = emphasizeKeywords(withListIntonation, lang);
-  const withParagraphBreaks = addParagraphBreaks(emphasized, lang);
+  const clean = sanitizeForSSML(removeDuplicateSentences(text));
+  const withTermProsody = slowDownFirstTermMentions(clean, lang);
+  const emphasized = emphasizeKeywords(withTermProsody, lang);
+  const withPacing = addSemanticPacing(emphasized, lang);
   
   // FEMALE VOICES ONLY
   const voice = lang === 'ru' 
@@ -227,9 +182,9 @@ function buildSSML(text: string, lang: 'ru' | 'uz'): string {
  xmlns:mstts="http://www.w3.org/2001/mstts"
  xml:lang="${xmlLang}">
   <voice name="${voice}">
-    <mstts:express-as style="teacher" styledegree="1.8">
-      <prosody rate="+4%" pitch="+2%">
-        ${withParagraphBreaks}
+    <mstts:express-as style="teacher" styledegree="1.9">
+      <prosody rate="+3%" pitch="+2%">
+        ${withPacing}
       </prosody>
     </mstts:express-as>
   </voice>
@@ -309,7 +264,7 @@ export async function synthesizeSpeech(
     throw new Error(`Script is too short or empty: "${trimmedScript}"`);
   }
   
-  // Build SSML (rate is fixed at +4%, not configurable)
+  // Build SSML using academic lecture template.
   const ssml = buildSSML(trimmedScript, lang);
   
   // Log SSML for debugging (first 500 chars)
