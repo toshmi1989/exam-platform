@@ -305,6 +305,7 @@ export async function synthesizeSpeech(
     throw new Error(`Script is too short or empty: "${trimmedScript}"`);
   }
 
+  const chunks = splitScriptIntoChunks(trimmedScript, MAX_CHARS_PER_REQUEST);
   const voiceOverrides = {
     ...(options.voiceRu && { voiceRu: options.voiceRu }),
     ...(options.voiceUz && { voiceUz: options.voiceUz }),
