@@ -47,24 +47,23 @@ function applyOutsideTags(input: string, fn: (text: string) => string): string {
 
 /**
  * Emphasize important keywords with SSML emphasis tags.
- */
++ */
 function emphasizeKeywords(text: string, lang: 'ru' | 'uz'): string {
-  const keywords = lang === 'ru'
-    ? ['важно', 'основное', 'главное', 'ключевой', 'обратите внимание', 'запомните', 'это', 'необходимо']
-    : ['muhim', 'asosiy', 'eng muhim', 'e\'tibor bering', 'esda tuting', 'bu', 'kerak'];
-  
-  let result = text;
-  
-  // Wrap keywords with emphasis (work backwards to preserve positions)
-  for (const keyword of keywords) {
-    const regex = new RegExp(`\\b${keyword}\\b`, 'gi');
-    result = result.replace(regex, (match) => {
-      return `<emphasis level="moderate">${match}</emphasis>`;
-    });
-  }
-  
-  return result;
-}
++  const keywords = lang === 'ru'
++    ? ['важно', 'основное', 'главное', 'ключевой', 'обратите внимание', 'запомните', 'необходимо']
++    : ['muhim', 'asosiy', 'eng muhim', 'e\'tibor bering', 'esda tuting', 'kerak', 'zarur'];
++  
++  let result = text;
++  
++  for (const keyword of keywords) {
++    const regex = new RegExp(`\\b${escapeRegExp(keyword)}\\b`, 'gi');
++    result = result.replace(regex, (match) => {
++      return `<emphasis level="moderate">${match}</emphasis>`;
++    });
++  }
++  
++  return result;
++}
 
 /**
  * Known phoneme corrections (IPA).
@@ -89,7 +88,6 @@ function applyPhonemes(text: string, lang: 'ru' | 'uz'): string {
  */
 function detectTerms(text: string): string[] {
   const endings = /\b[\p{L}]+(?:itis|osis|oma|logiya|grafiya|skopiya)\b/giu;
-  // Match words: letter followed by letters, hyphens, or apostrophes
   const words = text.match(/\b\p{L}[\p{L}\-']{2,}\b/gu) || [];
   const out: string[] = [];
   for (const w of words) {
@@ -119,7 +117,7 @@ function slowDownTerms(text: string): string {
 
 /**
  * Intelligent enumeration SSML intonation.
- * Supports numbered lists and dash lists.
+ * Convert list sections to natural lecture flow.
  */
 function intonateEnumerations(text: string, lang: 'ru' | 'uz'): string {
   const lines = text.split('\n');
@@ -128,8 +126,12 @@ function intonateEnumerations(text: string, lang: 'ru' | 'uz'): string {
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
-    const m = line.trim().match(/^(\d+)\.\s+(.*)$/) || line.trim().match(/^[-–—]\s+(.*)$/);
-    if (!m) {
+    
+    // Check for list patterns
+    const numberedMatch = line.trim().match(/^(\d+)\.\s+(.*)$/);
+    const dashMatch = line.trim().match(/^[-–—]\s+(.*)$/);
+    
+    if (!numberedMatch && !dashMatch) {
       out.push(line);
       i++;
       continue;
@@ -149,10 +151,18 @@ function intonateEnumerations(text: string, lang: 'ru' | 'uz'): string {
     }
 
     if (items.length >= 2) {
+      // Add transition phrase
+      if (lang === 'uz') {
+        out.push('Endi sabablarga to\'xtalamiz.');
+      } else {
+        out.push('Теперь рассмотрим основные пункты.');
+      }
+      
+      // Render items with intonation
       const rendered = items.map((it, idx) => {
         const pitch = idx === 0 ? '+3%' : idx === items.length - 1 ? '+6%' : '+4%';
         if (idx === items.length - 1) {
-          const lead = lang === 'ru' ? 'и самое важное — ' : 'eng muhimi — ';
+          const lead = lang === 'ru' ? 'и самое важное — ' : 'eng muhimi shuki — ';
           return `<prosody pitch="${pitch}">${lead}${it}</prosody>`;
         }
         return `<prosody pitch="${pitch}">${it}</prosody>, <break time="300ms"/>`;
@@ -170,7 +180,7 @@ function intonateEnumerations(text: string, lang: 'ru' | 'uz'): string {
 
 /**
  * Add paragraph-based breaks:
- * - 700ms between semantic blocks
+ * - 650ms between semantic blocks
  * - 250ms after commas
  * - 400ms after term explanation sentence
  */
@@ -181,15 +191,15 @@ function addParagraphBreaks(text: string, lang: 'ru' | 'uz'): string {
     // After commas: 250ms
     chunk = applyOutsideTags(chunk, (c) => c.replace(/,\s*/g, ', <break time="250ms"/> '));
     // After term explanations: 400ms
-    if (lang === 'ru') {
-      chunk = chunk.replace(/(\.)(\s*)(Это термин, обозначающий)/g, `.$2 <break time="400ms"/> $3`);
-    } else {
+    if (lang === 'uz') {
       chunk = chunk.replace(/(\.)(\s*)(Bu atama)/g, `.$2 <break time="400ms"/> $3`);
+    } else {
+      chunk = chunk.replace(/(\.)(\s*)(Это термин)/g, `.$2 <break time="400ms"/> $3`);
     }
     if (!/[.!?]$/.test(chunk)) chunk += '.';
     return chunk;
   });
-  return processed.map((p) => `${p} <break time="700ms"/>`).join('\n');
+  return processed.map((p) => `${p} <break time="650ms"/>`).join('\n');
 }
 
 /**
@@ -217,8 +227,8 @@ function buildSSML(text: string, lang: 'ru' | 'uz'): string {
  xmlns:mstts="http://www.w3.org/2001/mstts"
  xml:lang="${xmlLang}">
   <voice name="${voice}">
-    <mstts:express-as style="teacher" styledegree="1.7">
-      <prosody rate="+3%" pitch="+2%">
+    <mstts:express-as style="teacher" styledegree="1.8">
+      <prosody rate="+4%" pitch="+2%">
         ${withParagraphBreaks}
       </prosody>
     </mstts:express-as>
@@ -299,7 +309,7 @@ export async function synthesizeSpeech(
     throw new Error(`Script is too short or empty: "${trimmedScript}"`);
   }
   
-  // Build SSML (rate is fixed at +3%, not configurable)
+  // Build SSML (rate is fixed at +4%, not configurable)
   const ssml = buildSSML(trimmedScript, lang);
   
   // Log SSML for debugging (first 500 chars)
