@@ -126,7 +126,7 @@ export async function getOrCreateAudio(
       }
     }
 
-    const scriptResult = generateAudioScript({
+    const scriptResult = await generateAudioScript({
       question: question.prompt,
       correctAnswer,
       aiExplanation: explanationRecord.content,
