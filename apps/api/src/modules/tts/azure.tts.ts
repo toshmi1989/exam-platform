@@ -37,15 +37,32 @@ function enhanceScriptWithSSML(script: string, lang: 'ru' | 'uz'): string {
     .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g, '') // Remove control chars
     .normalize('NFC');
 
-  // Split into sentences
-  const sentences = clean.split(/([.!?]\s+)/).filter((s) => s.trim().length > 0);
+  // Split into sentences more carefully
+  const parts: string[] = [];
+  let current = '';
+  
+  for (let i = 0; i < clean.length; i++) {
+    const char = clean[i];
+    current += char;
+    if (char.match(/[.!?]/) && (i === clean.length - 1 || clean[i + 1] === ' ')) {
+      const sentence = current.trim();
+      if (sentence.length > 3) {
+        parts.push(sentence);
+      }
+      current = '';
+    }
+  }
+  if (current.trim().length > 3) {
+    parts.push(current.trim());
+  }
+
   const enhanced: string[] = [];
 
-  for (let i = 0; i < sentences.length; i++) {
-    let sentence = sentences[i].trim();
+  for (let i = 0; i < parts.length; i++) {
+    let sentence = parts[i];
     if (!sentence || sentence.length < 3) continue;
 
-    // Add emphasis on key words (simple approach)
+    // Add emphasis on key words
     if (lang === 'ru') {
       sentence = sentence.replace(
         /\b(важно|ключевой|главное|основное|главный|основной|нужно|необходимо|следует|помнить)\b/gi,
@@ -60,13 +77,30 @@ function enhanceScriptWithSSML(script: string, lang: 'ru' | 'uz'): string {
       sentence = sentence.replace(/(\d+[%°]?)/g, (match) => `<emphasis level="moderate">${match}</emphasis>`);
     }
 
-    // Add pauses after commas (but not inside emphasis tags)
-    sentence = sentence.replace(/,\s+(?![^<]*<\/emphasis>)/g, ',<break time="400ms"/> ');
+    // Add pauses after commas (careful not to break inside tags)
+    // Process from end to start to avoid breaking tags
+    let processed = sentence;
+    const commaMatches: Array<{ index: number; before: string }> = [];
+    let searchIndex = processed.length - 1;
+    while (searchIndex >= 0) {
+      const commaIdx = processed.lastIndexOf(',', searchIndex);
+      if (commaIdx === -1) break;
+      const before = processed.substring(Math.max(0, commaIdx - 50), commaIdx);
+      if (!before.includes('<emphasis') || before.lastIndexOf('</emphasis>') > before.lastIndexOf('<emphasis')) {
+        commaMatches.push({ index: commaIdx, before });
+      }
+      searchIndex = commaIdx - 1;
+    }
+    // Insert breaks from end to start
+    for (const { index } of commaMatches.reverse()) {
+      processed = processed.slice(0, index + 1) + '<break time="400ms"/> ' + processed.slice(index + 1).replace(/^\s+/, '');
+    }
+    sentence = processed;
 
     enhanced.push(sentence);
 
-    // Add longer pause after sentences
-    if (sentence.match(/[.!?]$/) && i < sentences.length - 2) {
+    // Add longer pause after sentences (except last)
+    if (sentence.match(/[.!?]$/) && i < parts.length - 1) {
       enhanced.push('<break time="700ms"/>');
     }
   }
@@ -130,26 +164,10 @@ function buildSSML(script: string, lang: 'ru' | 'uz', options: TtsOptions = {}):
  * Generate audio file from script using Azure TTS REST API.
  * Returns path to generated WAV file.
  */
-export async function synthesizeSpeech(
-  script: string,
-  lang: 'ru' | 'uz',
-  outputPath: string,
-  options: TtsOptions = {}
-): Promise<string> {
-  if (!AZURE_SPEECH_KEY) {
-    throw new Error('AZURE_SPEECH_KEY not configured');
-  }
-
-  const ssml = buildSSML(script, lang, options);
-  
-  // Validate SSML structure (basic check)
-  const openTags = (ssml.match(/<[^/][^>]*>/g) || []).length;
-  const closeTags = (ssml.match(/<\/[^>]+>/g) || []).length;
-  if (openTags !== closeTags) {
-    console.error('[Azure TTS] SSML tag mismatch:', { openTags, closeTags });
-    console.error('[Azure TTS] SSML:', ssml.slice(0, 1000));
-  }
-  
+/**
+ * Internal function to send SSML to Azure TTS.
+ */
+async function synthesizeSpeechWithSSML(ssml: string, outputPath: string): Promise<string> {
   const url = `https://${AZURE_SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`;
 
   const response = await fetch(url, {
@@ -165,7 +183,6 @@ export async function synthesizeSpeech(
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => 'Unknown error');
-    // Log SSML for debugging
     console.error('[Azure TTS] SSML length:', ssml.length);
     console.error('[Azure TTS] SSML (first 800 chars):', ssml.slice(0, 800));
     console.error('[Azure TTS] Error:', response.status, errorText.slice(0, 800));
@@ -178,6 +195,51 @@ export async function synthesizeSpeech(
   fs.writeFileSync(outputPath, Buffer.from(audioBuffer));
 
   return outputPath;
+}
+
+export async function synthesizeSpeech(
+  script: string,
+  lang: 'ru' | 'uz',
+  outputPath: string,
+  options: TtsOptions = {}
+): Promise<string> {
+  if (!AZURE_SPEECH_KEY) {
+    throw new Error('AZURE_SPEECH_KEY not configured');
+  }
+
+  const ssml = buildSSML(script, lang, options);
+  
+  // Validate and fix SSML structure
+  const openEmphasis = (ssml.match(/<emphasis[^>]*>/g) || []).length;
+  const closeEmphasis = (ssml.match(/<\/emphasis>/g) || []).length;
+  
+  if (openEmphasis !== closeEmphasis) {
+    console.error('[Azure TTS] Emphasis tag mismatch:', { openEmphasis, closeEmphasis });
+    // Fix: ensure all emphasis tags are closed
+    let fixed = ssml;
+    // Count open vs close
+    const missingCloses = openEmphasis - closeEmphasis;
+    if (missingCloses > 0) {
+      // Add closing tags before </prosody>
+      fixed = fixed.replace(/<\/prosody>/, '</emphasis>'.repeat(missingCloses) + '</prosody>');
+      console.warn('[Azure TTS] Fixed SSML: added', missingCloses, 'closing emphasis tags');
+    } else {
+      // Too many closes - remove extras (shouldn't happen but be safe)
+      const extraCloses = -missingCloses;
+      let removed = 0;
+      fixed = fixed.replace(/<\/emphasis>/g, (match) => {
+        if (removed < extraCloses) {
+          removed++;
+          return '';
+        }
+        return match;
+      });
+      console.warn('[Azure TTS] Fixed SSML: removed', extraCloses, 'extra closing emphasis tags');
+    }
+    return synthesizeSpeechWithSSML(fixed, outputPath);
+  }
+  
+  return synthesizeSpeechWithSSML(ssml, outputPath);
 }
 
 /**

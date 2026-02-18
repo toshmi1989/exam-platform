@@ -11,6 +11,37 @@ interface GenerateScriptInput {
   lang: 'ru' | 'uz';
 }
 
+/**
+ * Filter text by language - keep only sentences in target language.
+ */
+function filterByLanguage(text: string, targetLang: 'ru' | 'uz'): string {
+  const sentences = text.split(/[.!?]\s+/).filter(Boolean);
+  const filtered: string[] = [];
+
+  for (const sentence of sentences) {
+    const trimmed = sentence.trim();
+    if (trimmed.length < 10) continue;
+
+    if (targetLang === 'ru') {
+      // Keep Russian: has Cyrillic, no Uzbek Latin patterns
+      const hasCyrillic = /[А-Яа-яЁё]/.test(trimmed);
+      const hasUzbekLatin = /\b(tushuntiradi|Savol|javob|Tibbiy|mazmuni|orasidagi|farq|shovqinlar|qattiq|baland|nafas|chiqarish|eshitiladi|yumshoq|past|kuchliroq|traxeya|bronxlarda|bo'lib|paytida|anik|teng|kichik|havo|yo'llaridan|keladi|tonli|olish)\b/i.test(trimmed);
+      if (hasCyrillic && !hasUzbekLatin) {
+        filtered.push(trimmed);
+      }
+    } else {
+      // Keep Uzbek: has Uzbek Latin or Cyrillic patterns
+      const hasUzbek = /[А-Яа-яЁёЎўҚқҒғҲҳ]/.test(trimmed) || /\b(tushuntiradi|Savol|javob|Tibbiy|mazmuni|orasidagi|farq|shovqinlar|qattiq|baland|nafas|chiqarish|eshitiladi|yumshoq|past|kuchliroq|traxeya|bronxlarda|bo'lib|paytida|anik|teng|kichik|havo|yo'llaridan|keladi|tonli|olish)\b/i.test(trimmed);
+      const hasOnlyRussian = /[А-Яа-яЁё]/.test(trimmed) && !/[ЎўҚқҒғҲҳ]/.test(trimmed) && !/\b(tushuntiradi|Savol|javob|Tibbiy|mazmuni|orasidagi|farq|shovqinlar|qattiq|baland|nafas|chiqarish|eshitiladi|yumshoq|past|kuchliroq|traxeya|bronxlarda|bo'lib|paytida|anik|teng|kichik|havo|yo'llaridan|keladi|tonli|olish)\b/i.test(trimmed);
+      if (hasUzbek && !hasOnlyRussian) {
+        filtered.push(trimmed);
+      }
+    }
+  }
+
+  return filtered.join('. ') + (filtered.length > 0 ? '.' : '');
+}
+
 export function generateAudioScript(input: GenerateScriptInput): string {
   const { question, correctAnswer, aiExplanation, lang } = input;
 
@@ -27,6 +58,19 @@ export function generateAudioScript(input: GenerateScriptInput): string {
     .replace(/[🤖🟢🔴📌💡✅❌]/g, '') // emojis
     .replace(/\n{3,}/g, '\n\n') // multiple newlines
     .trim();
+
+  // Remove language-specific headers and footers
+  clean = clean
+    .replace(/Ziyoda tushuntiradi/gi, '')
+    .replace(/Savol qisqacha mazmuni/gi, '')
+    .replace(/To'g'ri javob/gi, '')
+    .replace(/Tibbiy tushuntirish/gi, '')
+    .replace(/🤖 Зиёда объясняет/gi, '')
+    .replace(/🤖 Ziyoda tushuntiradi/gi, '')
+    .trim();
+
+  // Filter by target language
+  clean = filterByLanguage(clean, lang);
 
   // Build teacher-style explanation
   if (lang === 'ru') {
