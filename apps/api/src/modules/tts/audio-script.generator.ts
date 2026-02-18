@@ -39,27 +39,43 @@ export function generateAudioScript(input: GenerateScriptInput): string {
 function buildRussianScript(question: string, correctAnswer: string, explanation: string): string {
   const parts: string[] = [];
 
-  // Opening
-  parts.push('Правильный ответ на этот вопрос:');
-  parts.push(correctAnswer);
-  parts.push('.');
+  // Teacher-style opening - natural, warm
+  const openings = [
+    'Давайте разберём этот вопрос вместе.',
+    'Это интересный вопрос, давайте его обсудим.',
+    'Хороший вопрос! Давайте разберёмся.',
+  ];
+  parts.push(openings[Math.floor(Math.random() * openings.length)]);
 
-  // Main explanation - convert to conversational flow
+  // Main explanation - convert to conversational flow with natural transitions
   const sentences = explanation
     .split(/[.!?]\s+/)
     .map((s) => s.trim())
     .filter(Boolean)
-    .slice(0, 8); // limit to avoid too long
+    .filter((s) => s.length > 10) // filter very short fragments
+    .slice(0, 10);
 
   if (sentences.length > 0) {
-    parts.push('Давайте разберём это подробнее.');
-    parts.push(...sentences);
+    // Add natural flow between sentences
+    for (let i = 0; i < sentences.length; i++) {
+      if (i === 0) {
+        parts.push(sentences[i] + '.');
+      } else if (i === Math.floor(sentences.length / 2)) {
+        // Middle transition
+        parts.push('Теперь важно понимать, что', sentences[i] + '.');
+      } else {
+        parts.push(sentences[i] + '.');
+      }
+    }
   }
 
-  // Closing emphasis
-  parts.push('Важно помнить, что');
-  parts.push(correctAnswer);
-  parts.push('является верным ответом на данный вопрос.');
+  // Natural closing with emphasis on key concept
+  const closings = [
+    `Итак, ключевой момент здесь — это ${correctAnswer}.`,
+    `Таким образом, главное, что нужно запомнить — ${correctAnswer}.`,
+    `Подводя итог, важно понимать, что ${correctAnswer} — это основное в данном вопросе.`,
+  ];
+  parts.push(closings[Math.floor(Math.random() * closings.length)]);
 
   let script = parts.join(' ').replace(/\s+/g, ' ').trim();
 
@@ -78,24 +94,39 @@ function buildRussianScript(question: string, correctAnswer: string, explanation
 function buildUzbekScript(question: string, correctAnswer: string, explanation: string): string {
   const parts: string[] = [];
 
-  parts.push('Bu savolga to\'g\'ri javob:');
-  parts.push(correctAnswer);
-  parts.push('.');
+  // Teacher-style opening
+  const openings = [
+    'Keling, bu savolni birga ko\'rib chiqamiz.',
+    'Bu qiziqarli savol, keling muhokama qilamiz.',
+    'Yaxshi savol! Keling, tushunib olamiz.',
+  ];
+  parts.push(openings[Math.floor(Math.random() * openings.length)]);
 
   const sentences = explanation
     .split(/[.!?]\s+/)
     .map((s) => s.trim())
     .filter(Boolean)
-    .slice(0, 8);
+    .filter((s) => s.length > 10)
+    .slice(0, 10);
 
   if (sentences.length > 0) {
-    parts.push('Keling, buni batafsil ko\'rib chiqamiz.');
-    parts.push(...sentences);
+    for (let i = 0; i < sentences.length; i++) {
+      if (i === 0) {
+        parts.push(sentences[i] + '.');
+      } else if (i === Math.floor(sentences.length / 2)) {
+        parts.push('Endi muhim narsa shuki,', sentences[i] + '.');
+      } else {
+        parts.push(sentences[i] + '.');
+      }
+    }
   }
 
-  parts.push('Muhim eslab qolish kerakki,');
-  parts.push(correctAnswer);
-  parts.push('bu savolga to\'g\'ri javobdir.');
+  const closings = [
+    `Demak, asosiy nuqta shuki — bu ${correctAnswer}.`,
+    `Shunday qilib, eslab qolish kerak bo\'lgan asosiy narsa — ${correctAnswer}.`,
+    `Xulosa qilib aytganda, ${correctAnswer} — bu savoldagi eng muhim narsa.`,
+  ];
+  parts.push(closings[Math.floor(Math.random() * closings.length)]);
 
   let script = parts.join(' ').replace(/\s+/g, ' ').trim();
 

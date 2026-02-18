@@ -23,36 +23,92 @@ interface TtsOptions {
   pauseMs?: number; // pause duration in ms
 }
 
-const DEFAULT_RATE = 0;
+const DEFAULT_RATE = -5; // Slightly slower for teacher clarity
 const DEFAULT_PAUSE_MS = 500;
 
 /**
- * Generate SSML for Azure TTS.
+ * Enhance script with SSML tags for natural teacher-style speech.
+ * Adds pauses, emphasis, and emotional intonation.
+ */
+function enhanceScriptWithSSML(script: string, lang: 'ru' | 'uz'): string {
+  // Split into sentences for better control
+  const sentences = script.split(/([.!?]\s+)/).filter(Boolean);
+  const enhanced: string[] = [];
+
+  for (let i = 0; i < sentences.length; i++) {
+    let sentence = sentences[i].trim();
+    if (!sentence) continue;
+
+    // Add emphasis on key words
+    if (lang === 'ru') {
+      sentence = sentence.replace(
+        /\b(важно|ключевой|главное|основное|главный|основной|нужно|необходимо|следует|помнить)\b/gi,
+        '<emphasis level="strong">$1</emphasis>'
+      );
+      sentence = sentence.replace(/(\d+[%°]?)/g, '<emphasis level="moderate">$1</emphasis>');
+    } else {
+      sentence = sentence.replace(
+        /\b(muhim|asosiy|bosh|eng|kerak|zarur|eslab)\b/gi,
+        '<emphasis level="strong">$1</emphasis>'
+      );
+      sentence = sentence.replace(/(\d+[%°]?)/g, '<emphasis level="moderate">$1</emphasis>');
+    }
+
+    // Add pauses after commas
+    sentence = sentence.replace(/,\s+/g, ',<break time="400ms"/> ');
+
+    enhanced.push(sentence);
+
+    // Add longer pause after sentences (except last)
+    if (sentence.match(/[.!?]$/) && i < sentences.length - 1) {
+      enhanced.push('<break time="700ms"/>');
+    }
+  }
+
+  return enhanced.join(' ');
+}
+
+/**
+ * Generate SSML for Azure TTS with natural teacher-style intonation.
  */
 function buildSSML(script: string, lang: 'ru' | 'uz', options: TtsOptions = {}): string {
-  const rate = options.rate ?? DEFAULT_RATE;
-  const pauseMs = options.pauseMs ?? DEFAULT_PAUSE_MS;
+  const rate = options.rate ?? -5; // Slightly slower for clarity
   const ratePercent = `${rate > 0 ? '+' : ''}${rate}%`;
-  const pauseSec = pauseMs / 1000;
 
-  // Voice mapping
+  // Voice mapping - use expressive neural voices
   const voiceName = lang === 'ru' ? 'ru-RU-MadinaNeural' : 'uz-UZ-MadinaNeural';
 
-  // Escape XML
-  const escaped = script
+  // Enhance script with SSML tags
+  const enhancedScript = enhanceScriptWithSSML(script, lang);
+
+  // Escape XML - preserve SSML tags by temporarily replacing them
+  const ssmlTagPattern = /<\/?(?:break|emphasis)[^>]*>/g;
+  const placeholders: string[] = [];
+  let placeholderIndex = 0;
+  
+  // Replace SSML tags with placeholders
+  let textWithPlaceholders = enhancedScript.replace(ssmlTagPattern, (match) => {
+    placeholders.push(match);
+    return `__SSML_${placeholderIndex++}__`;
+  });
+  
+  // Escape XML in text content
+  let escaped = textWithPlaceholders
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
+  
+  // Restore SSML tags (they're already valid XML)
+  placeholderIndex = 0;
+  escaped = escaped.replace(/__SSML_(\d+)__/g, () => placeholders[placeholderIndex++] || '');
 
   return `<speak xmlns="http://www.w3.org/2001/10/synthesis" version="1.0" xml:lang="${lang === 'ru' ? 'ru-RU' : 'uz-UZ'}">
   <voice name="${voiceName}">
-    <prosody rate="${ratePercent}">
-      <break time="${pauseSec}s"/>
-      <emphasis level="moderate">
-        ${escaped}
-      </emphasis>
+    <prosody rate="${ratePercent}" pitch="+2%">
+      <break time="500ms"/>
+      ${escaped}
     </prosody>
   </voice>
 </speak>`;
