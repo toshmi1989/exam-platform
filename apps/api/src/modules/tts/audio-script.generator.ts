@@ -69,14 +69,26 @@ export function generateAudioScript(input: GenerateScriptInput): string {
     .replace(/🤖 Ziyoda tushuntiradi/gi, '')
     .trim();
 
-  // Filter by target language
-  clean = filterByLanguage(clean, lang);
+  // Filter by target language, but keep original if filtered result is too short
+  const filtered = filterByLanguage(clean, lang);
+  const finalExplanation = filtered.length > 50 ? filtered : clean;
+  
+  // Log for debugging
+  if (finalExplanation.length < 50) {
+    console.warn('[Audio Script] Warning: explanation is very short after filtering:', {
+      originalLength: clean.length,
+      filteredLength: filtered.length,
+      finalLength: finalExplanation.length,
+      lang,
+      preview: finalExplanation.slice(0, 100),
+    });
+  }
 
   // Build teacher-style explanation
   if (lang === 'ru') {
-    return buildRussianScript(question, correctAnswer, clean);
+    return buildRussianScript(question, correctAnswer, finalExplanation);
   } else {
-    return buildUzbekScript(question, correctAnswer, clean);
+    return buildUzbekScript(question, correctAnswer, finalExplanation);
   }
 }
 
@@ -92,23 +104,68 @@ function buildRussianScript(question: string, correctAnswer: string, explanation
   parts.push(openings[Math.floor(Math.random() * openings.length)]);
 
   // Main explanation - convert to conversational flow with natural transitions
-  const sentences = explanation
+  // First try: split by punctuation
+  let sentences = explanation
     .split(/[.!?]\s+/)
     .map((s) => s.trim())
     .filter(Boolean)
     .filter((s) => s.length > 10) // filter very short fragments
     .slice(0, 10);
 
+  // If no sentences found, try splitting by commas or just take chunks
+  if (sentences.length === 0) {
+    const trimmed = explanation.trim();
+    if (trimmed.length > 20) {
+      // Try splitting by commas
+      const commaSplit = trimmed.split(/,\s+/).filter((s) => s.trim().length > 15);
+      if (commaSplit.length > 0) {
+        sentences = commaSplit.slice(0, 5).map((s) => s.trim() + '.');
+      } else {
+        // Last resort: split by length
+        const chunks = [];
+        let remaining = trimmed;
+        while (remaining.length > 50 && chunks.length < 5) {
+          const chunk = remaining.slice(0, 150).trim();
+          const lastPeriod = chunk.lastIndexOf('.');
+          if (lastPeriod > 50) {
+            chunks.push(chunk.slice(0, lastPeriod + 1));
+            remaining = remaining.slice(lastPeriod + 1).trim();
+          } else {
+            chunks.push(chunk + '.');
+            remaining = remaining.slice(150).trim();
+          }
+        }
+        if (chunks.length > 0) {
+          sentences = chunks;
+        } else {
+          // Absolute fallback: use first 200 chars
+          sentences = [trimmed.slice(0, 200).trim() + '.'];
+        }
+      }
+    } else {
+      // If explanation is too short, use it as-is
+      sentences = [explanation.trim() + '.'];
+    }
+  }
+
   if (sentences.length > 0) {
     // Add natural flow between sentences
     for (let i = 0; i < sentences.length; i++) {
+      let sentence = sentences[i].trim();
+      if (!sentence || sentence.length < 5) continue;
+      
+      // Ensure sentence ends with punctuation
+      if (!sentence.match(/[.!?]$/)) {
+        sentence += '.';
+      }
+      
       if (i === 0) {
-        parts.push(sentences[i] + '.');
-      } else if (i === Math.floor(sentences.length / 2)) {
+        parts.push(sentence);
+      } else if (i === Math.floor(sentences.length / 2) && sentences.length > 3) {
         // Middle transition
-        parts.push('Теперь важно понимать, что', sentences[i] + '.');
+        parts.push('Теперь важно понимать, что', sentence);
       } else {
-        parts.push(sentences[i] + '.');
+        parts.push(sentence);
       }
     }
   }
@@ -131,7 +188,25 @@ function buildRussianScript(question: string, correctAnswer: string, explanation
     parts.push(closings[Math.floor(Math.random() * closings.length)]);
   }
 
-  let script = parts.join(' ').replace(/\s+/g, ' ').trim();
+  // Join parts with proper spacing
+  let script = parts
+    .filter((p) => p && p.trim().length > 0)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([.!?])/g, '$1') // Remove space before punctuation
+    .replace(/([.!?])([А-Яа-яA-Za-z])/g, '$1 $2') // Add space after punctuation
+    .trim();
+
+  // Validate minimum length
+  if (script.length < 30) {
+    console.error('[Audio Script] Generated script is too short:', {
+      script,
+      partsCount: parts.length,
+      parts,
+    });
+    // Fallback: add generic explanation
+    script = 'Это важный вопрос, который требует внимательного изучения. ' + script;
+  }
 
   // Ensure length limit
   if (script.length > 1500) {
@@ -156,21 +231,60 @@ function buildUzbekScript(question: string, correctAnswer: string, explanation: 
   ];
   parts.push(openings[Math.floor(Math.random() * openings.length)]);
 
-  const sentences = explanation
+  let sentences = explanation
     .split(/[.!?]\s+/)
     .map((s) => s.trim())
     .filter(Boolean)
     .filter((s) => s.length > 10)
     .slice(0, 10);
 
+  // If no sentences found, try alternative splitting
+  if (sentences.length === 0) {
+    const trimmed = explanation.trim();
+    if (trimmed.length > 20) {
+      const commaSplit = trimmed.split(/,\s+/).filter((s) => s.trim().length > 15);
+      if (commaSplit.length > 0) {
+        sentences = commaSplit.slice(0, 5).map((s) => s.trim() + '.');
+      } else {
+        const chunks = [];
+        let remaining = trimmed;
+        while (remaining.length > 50 && chunks.length < 5) {
+          const chunk = remaining.slice(0, 150).trim();
+          const lastPeriod = chunk.lastIndexOf('.');
+          if (lastPeriod > 50) {
+            chunks.push(chunk.slice(0, lastPeriod + 1));
+            remaining = remaining.slice(lastPeriod + 1).trim();
+          } else {
+            chunks.push(chunk + '.');
+            remaining = remaining.slice(150).trim();
+          }
+        }
+        if (chunks.length > 0) {
+          sentences = chunks;
+        } else {
+          sentences = [trimmed.slice(0, 200).trim() + '.'];
+        }
+      }
+    } else {
+      sentences = [explanation.trim() + '.'];
+    }
+  }
+
   if (sentences.length > 0) {
     for (let i = 0; i < sentences.length; i++) {
+      let sentence = sentences[i].trim();
+      if (!sentence || sentence.length < 5) continue;
+      
+      if (!sentence.match(/[.!?]$/)) {
+        sentence += '.';
+      }
+      
       if (i === 0) {
-        parts.push(sentences[i] + '.');
-      } else if (i === Math.floor(sentences.length / 2)) {
-        parts.push('Endi muhim narsa shuki,', sentences[i] + '.');
+        parts.push(sentence);
+      } else if (i === Math.floor(sentences.length / 2) && sentences.length > 3) {
+        parts.push('Endi muhim narsa shuki,', sentence);
       } else {
-        parts.push(sentences[i] + '.');
+        parts.push(sentence);
       }
     }
   }
@@ -182,7 +296,24 @@ function buildUzbekScript(question: string, correctAnswer: string, explanation: 
   ];
   parts.push(closings[Math.floor(Math.random() * closings.length)]);
 
-  let script = parts.join(' ').replace(/\s+/g, ' ').trim();
+  // Join parts with proper spacing
+  let script = parts
+    .filter((p) => p && p.trim().length > 0)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([.!?])/g, '$1')
+    .replace(/([.!?])([А-Яа-яA-Za-zЎўҚқҒғҲҳ])/g, '$1 $2')
+    .trim();
+
+  // Validate minimum length
+  if (script.length < 30) {
+    console.error('[Audio Script] Generated Uzbek script is too short:', {
+      script,
+      partsCount: parts.length,
+      parts,
+    });
+    script = 'Bu muhim savol bo\'lib, diqqat bilan o\'rganishni talab qiladi. ' + script;
+  }
 
   if (script.length > 1500) {
     script = script.slice(0, 1500);

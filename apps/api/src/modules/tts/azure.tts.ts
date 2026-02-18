@@ -35,10 +35,25 @@ function enhanceScriptWithSSML(script: string, lang: 'ru' | 'uz'): string {
   let clean = script
     .replace(/[\uD800-\uDFFF]/g, '') // Remove invalid surrogates
     .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g, '') // Remove control chars
-    .normalize('NFC');
+    .normalize('NFC')
+    .replace(/\s+/g, ' ')
+    .trim();
 
-  // Split into sentences
-  const sentences = clean.split(/([.!?]\s+)/).filter((s) => s.trim().length > 3);
+  if (!clean || clean.length < 10) {
+    throw new Error(`Script is too short for SSML enhancement: "${clean}"`);
+  }
+
+  // Split into sentences - improved regex to handle punctuation better
+  const sentences = clean
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s && s.length > 3);
+  
+  if (sentences.length === 0) {
+    // Fallback: treat entire script as one sentence
+    return clean;
+  }
+  
   const enhanced: string[] = [];
 
   for (let i = 0; i < sentences.length; i++) {
@@ -118,6 +133,12 @@ function enhanceScriptWithSSML(script: string, lang: 'ru' | 'uz'): string {
  * Generate SSML for Azure TTS with natural teacher-style intonation.
  */
 function buildSSML(script: string, lang: 'ru' | 'uz', options: TtsOptions = {}): string {
+  // Validate script is not empty
+  const trimmedScript = script.trim();
+  if (!trimmedScript || trimmedScript.length < 10) {
+    throw new Error(`Script is too short or empty: "${trimmedScript}"`);
+  }
+
   const rate = options.rate ?? -5; // Slightly slower for clarity
   const ratePercent = `${rate > 0 ? '+' : ''}${rate}%`;
 
@@ -125,7 +146,12 @@ function buildSSML(script: string, lang: 'ru' | 'uz', options: TtsOptions = {}):
   const voiceName = lang === 'ru' ? 'ru-RU-MadinaNeural' : 'uz-UZ-MadinaNeural';
 
   // Enhance script with SSML tags
-  const enhancedScript = enhanceScriptWithSSML(script, lang);
+  const enhancedScript = enhanceScriptWithSSML(trimmedScript, lang);
+  
+  // Validate enhanced script is not empty
+  if (!enhancedScript.trim() || enhancedScript.trim().length < 10) {
+    throw new Error(`Enhanced script is too short: "${enhancedScript}"`);
+  }
 
   // Escape XML - preserve SSML tags by using placeholders
   // Use unique placeholders that won't conflict with text
@@ -159,14 +185,30 @@ function buildSSML(script: string, lang: 'ru' | 'uz', options: TtsOptions = {}):
   // Validate pitch value (Azure accepts -50% to +50%)
   const pitchValue = '+2%';
   
-  return `<speak xmlns="http://www.w3.org/2001/10/synthesis" version="1.0" xml:lang="${lang === 'ru' ? 'ru-RU' : 'uz-UZ'}">
+  // Ensure escaped content is not empty
+  const finalContent = escaped.trim();
+  if (!finalContent || finalContent.length < 10) {
+    throw new Error(`SSML content is too short after escaping: "${finalContent}"`);
+  }
+  
+  // Validate SSML structure - ensure no empty tags
+  if (finalContent.match(/<break\s*\/>/g) && !finalContent.match(/[А-Яа-яA-Za-zЎўҚқҒғҲҳ]/)) {
+    throw new Error('SSML contains only break tags, no text content');
+  }
+  
+  const ssml = `<speak xmlns="http://www.w3.org/2001/10/synthesis" version="1.0" xml:lang="${lang === 'ru' ? 'ru-RU' : 'uz-UZ'}">
   <voice name="${voiceName}">
     <prosody rate="${ratePercent}" pitch="${pitchValue}">
       <break time="500ms"/>
-      ${escaped}
+      ${finalContent}
     </prosody>
   </voice>
 </speak>`;
+  
+  // Log SSML for debugging (first 500 chars)
+  console.log('[Azure TTS] Generated SSML (first 500 chars):', ssml.slice(0, 500));
+  
+  return ssml;
 }
 
 /**
@@ -193,9 +235,21 @@ async function synthesizeSpeechWithSSML(ssml: string, outputPath: string): Promi
   if (!response.ok) {
     const errorText = await response.text().catch(() => 'Unknown error');
     console.error('[Azure TTS] SSML length:', ssml.length);
-    console.error('[Azure TTS] SSML (first 800 chars):', ssml.slice(0, 800));
-    console.error('[Azure TTS] Error:', response.status, errorText.slice(0, 800));
-    throw new Error(`Azure TTS failed: ${response.status} ${errorText.slice(0, 300)}`);
+    console.error('[Azure TTS] Full SSML:', ssml);
+    console.error('[Azure TTS] Error response:', response.status, errorText);
+    
+    // Try to parse error if it's XML
+    let errorMsg = errorText.slice(0, 500);
+    try {
+      const errorMatch = errorText.match(/<Message>(.*?)<\/Message>/i);
+      if (errorMatch) {
+        errorMsg = errorMatch[1];
+      }
+    } catch {
+      // ignore
+    }
+    
+    throw new Error(`Azure TTS failed: ${response.status} - ${errorMsg}`);
   }
 
   const audioBuffer = await response.arrayBuffer();

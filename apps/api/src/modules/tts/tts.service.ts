@@ -100,6 +100,12 @@ export async function getOrCreateAudio(
       lang,
     });
 
+    // Validate script was generated
+    if (!scriptContent || scriptContent.trim().length < 20) {
+      console.error('[TTS] Generated script is too short:', scriptContent);
+      throw new Error(`Failed to generate audio script: script is too short (${scriptContent?.length || 0} chars)`);
+    }
+
     // Clean text: remove invalid UTF-16 surrogates and normalize
     // More aggressive cleaning for Prisma compatibility
     let cleanContent = scriptContent
