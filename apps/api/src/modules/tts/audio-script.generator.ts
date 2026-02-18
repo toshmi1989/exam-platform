@@ -100,7 +100,7 @@ function detectLanguage(text: string): 'ru' | 'uz' | 'mixed' {
   return 'mixed';
 }
 
-export function generateAudioScript(input: GenerateScriptInput): string {
+export function generateAudioScript(input: GenerateScriptInput): GenerateScriptOutput {
   const { question, correctAnswer, aiExplanation, lang } = input;
 
   // Clean AI explanation: remove markdown, emojis, lists
