@@ -11,6 +11,11 @@ const AZURE_SPEECH_REGION = (process.env.AZURE_SPEECH_REGION ?? 'eastus').trim()
 const AZURE_OUTPUT_FORMAT = (process.env.AZURE_OUTPUT_FORMAT ?? 'riff-24khz-16bit-mono-pcm').trim();
 const AUDIO_BASE_DIR = '/opt/exam/audio';
 
+/** Max characters per SSML request to prevent audio cut-off. */
+const MAX_CHARS_PER_REQUEST = 3200;
+
+const WAV_HEADER_SIZE = 44;
+
 // Ensure audio directory exists
 try {
   fs.mkdirSync(AUDIO_BASE_DIR, { recursive: true });
@@ -192,14 +197,12 @@ function buildSSML(text: string, lang: 'ru' | 'uz'): string {
 }
 
 /**
- * Generate audio file from script using Azure TTS REST API.
- * Returns path to generated WAV file.
+ * Post SSML to Azure TTS and return audio buffer, or throw.
  */
-async function synthesizeSpeechWithSSML(ssml: string, outputPath: string): Promise<string> {
+async function requestAudioForSSML(ssml: string): Promise<ArrayBuffer> {
   const url = `https://${AZURE_SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`;
-  
-  async function post(body: string) {
-    return fetch(url, {
+  const post = (body: string) =>
+    fetch(url, {
       method: 'POST',
       headers: {
         'Ocp-Apim-Subscription-Key': AZURE_SPEECH_KEY,
@@ -209,7 +212,6 @@ async function synthesizeSpeechWithSSML(ssml: string, outputPath: string): Promi
       },
       body,
     });
-  }
 
   const attempts: Array<{ label: string; body: string }> = [
     { label: 'original', body: ssml },
@@ -221,36 +223,71 @@ async function synthesizeSpeechWithSSML(ssml: string, outputPath: string): Promi
   let lastErrorText = '';
   for (const attempt of attempts) {
     const response = await post(attempt.body);
-    if (response.ok) {
-      const audioBuffer = await response.arrayBuffer();
-      const audioDir = path.dirname(outputPath);
-      fs.mkdirSync(audioDir, { recursive: true });
-      fs.writeFileSync(outputPath, Buffer.from(audioBuffer));
-      return outputPath;
-    }
-
+    if (response.ok) return response.arrayBuffer();
     lastStatus = response.status;
     lastErrorText = await response.text().catch(() => 'Unknown error');
-    console.error('[Azure TTS] Attempt failed:', attempt.label);
-    console.error('[Azure TTS] SSML length:', attempt.body.length);
-    console.error('[Azure TTS] SSML (first 500 chars):', attempt.body.slice(0, 500));
-    console.error('[Azure TTS] Error response:', lastStatus, lastErrorText.slice(0, 500));
+    console.error('[Azure TTS] Attempt failed:', attempt.label, lastStatus);
   }
-
-  let errorMsg = lastErrorText.slice(0, 500);
-  try {
-    const errorMatch = lastErrorText.match(/<Message>(.*?)<\/Message>/i);
-    if (errorMatch) errorMsg = errorMatch[1];
-  } catch {
-    // ignore
-  }
-
+  const errorMsg = (lastErrorText.match(/<Message>(.*?)<\/Message>/i)?.[1]) || lastErrorText.slice(0, 300);
   throw new Error(`Azure TTS failed: ${lastStatus} - ${errorMsg}`);
 }
 
 /**
+ * Generate audio file from script using Azure TTS REST API.
+ * Writes to outputPath (single request).
+ */
+async function synthesizeSpeechWithSSML(ssml: string, outputPath: string): Promise<string> {
+  const audioBuffer = await requestAudioForSSML(ssml);
+  const dir = path.dirname(outputPath);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(outputPath, Buffer.from(audioBuffer));
+  return outputPath;
+}
+
+/**
+ * Split script into segments at paragraph boundaries so each is <= maxChars.
+ */
+function splitScriptIntoChunks(script: string, maxChars: number): string[] {
+  if (script.length <= maxChars) return [script];
+  const paragraphs = script.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  const chunks: string[] = [];
+  let current = '';
+  for (const p of paragraphs) {
+    const next = current ? `${current}\n\n${p}` : p;
+    if (next.length <= maxChars) {
+      current = next;
+    } else {
+      if (current) chunks.push(current);
+      current = p.length <= maxChars ? p : p.slice(0, maxChars);
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+/**
+ * Concatenate WAV buffers (same format: 24kHz 16bit mono). First buffer provides header.
+ */
+function concatenateWavBuffers(buffers: Buffer[]): Buffer {
+  if (buffers.length === 0) throw new Error('No WAV buffers to concatenate');
+  if (buffers.length === 1) return buffers[0];
+  let totalData = 0;
+  const dataParts: Buffer[] = [];
+  for (const buf of buffers) {
+    const data = buf.length > WAV_HEADER_SIZE ? buf.subarray(WAV_HEADER_SIZE) : Buffer.alloc(0);
+    totalData += data.length;
+    dataParts.push(data);
+  }
+  const header = Buffer.from(buffers[0].subarray(0, WAV_HEADER_SIZE));
+  const fileSize = 8 + 4 + 4 + 4 + 4 + totalData;
+  header.writeUInt32LE(fileSize - 8, 4);
+  header.writeUInt32LE(totalData, 40);
+  return Buffer.concat([header, ...dataParts]);
+}
+
+/**
  * Generate audio file from script.
- * Returns path to generated WAV file.
+ * If script exceeds MAX_CHARS_PER_REQUEST, splits at paragraph boundaries and concatenates audio to prevent cut-off.
  */
 export async function synthesizeSpeech(
   script: string,
@@ -258,26 +295,36 @@ export async function synthesizeSpeech(
   outputPath: string,
   options: TtsOptions = {}
 ): Promise<string> {
-  // Validate script
   const trimmedScript = script.trim();
   if (!trimmedScript || trimmedScript.length < 10) {
     throw new Error(`Script is too short or empty: "${trimmedScript}"`);
   }
-  
-  // Build SSML using academic lecture template.
-  const ssml = buildSSML(trimmedScript, lang);
-  
-  // Log SSML for debugging (first 500 chars)
-  console.log('[Azure TTS] Generated SSML (first 500 chars):', ssml.slice(0, 500));
-  
-  // Synthesize (with error handling)
-  try {
-    return await synthesizeSpeechWithSSML(ssml, outputPath);
-  } catch (error) {
-    console.error('[Azure TTS] Synthesis failed:', error);
-    // Log error but don't break exam flow
-    throw error;
+
+  const chunks = splitScriptIntoChunks(trimmedScript, MAX_CHARS_PER_REQUEST);
+
+  if (chunks.length === 1) {
+    const ssml = buildSSML(trimmedScript, lang);
+    console.log('[Azure TTS] Single segment, SSML length:', ssml.length);
+    try {
+      return await synthesizeSpeechWithSSML(ssml, outputPath);
+    } catch (error) {
+      console.error('[Azure TTS] Synthesis failed:', error);
+      throw error;
+    }
   }
+
+  const dir = path.dirname(outputPath);
+  fs.mkdirSync(dir, { recursive: true });
+  const buffers: Buffer[] = [];
+  for (let i = 0; i < chunks.length; i++) {
+    const ssml = buildSSML(chunks[i], lang);
+    console.log(`[Azure TTS] Segment ${i + 1}/${chunks.length}, SSML length:`, ssml.length);
+    const arrayBuffer = await requestAudioForSSML(ssml);
+    buffers.push(Buffer.from(arrayBuffer));
+  }
+  const combined = concatenateWavBuffers(buffers);
+  fs.writeFileSync(outputPath, combined);
+  return outputPath;
 }
 
 /**

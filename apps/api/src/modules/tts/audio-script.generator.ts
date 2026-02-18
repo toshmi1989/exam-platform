@@ -1,13 +1,13 @@
 /**
  * Academic Lecture Voice Engine.
- * Converts QUESTION + ANSWER into speech-adapted lecture text.
+ * Central topic anchor, strict section order, completeness check, forced conclusion.
  */
 
 interface GenerateScriptInput {
   question: string;
   correctAnswer: string;
   aiExplanation: string;
-  lang: "ru" | "uz"; // ignored, language is question-derived
+  lang: "ru" | "uz";
 }
 
 interface GenerateScriptOutput {
@@ -15,12 +15,32 @@ interface GenerateScriptOutput {
   actualLang: "ru" | "uz";
 }
 
-type LectureSections = {
-  concept: string;
-  mechanism: string;
-  clinical: string;
-  practical: string;
-  conclusion: string;
+/** Section keys in order as they may appear in question. */
+const SECTION_KEYS = ['classification', 'clinical', 'diagnosis', 'emergency'] as const;
+type SectionKey = (typeof SECTION_KEYS)[number];
+
+/** Keyword → section mapping (UZ and RU). */
+const KEYWORD_TO_SECTION: Record<string, SectionKey> = {
+  tasnif: 'classification',
+  tasnifi: 'classification',
+  klassifikatsiya: 'classification',
+  классификация: 'classification',
+  klinika: 'clinical',
+  klinikasi: 'clinical',
+  klinik: 'clinical',
+  klinicheskaya: 'clinical',
+  клиника: 'clinical',
+  клиническая: 'clinical',
+  tashxis: 'diagnosis',
+  tashxisi: 'diagnosis',
+  diagnostika: 'diagnosis',
+  диагностика: 'diagnosis',
+  shoshilinch: 'emergency',
+  shoshilinch yordam: 'emergency',
+  emergency: 'emergency',
+  neotlozhnaya: 'emergency',
+  неотложная: 'emergency',
+  skoraya: 'emergency',
 };
 
 function detectLang(question: string): "ru" | "uz" {
@@ -32,6 +52,55 @@ function cleanQuestion(text: string): string {
     .replace(/^\s*\d+\.\s*/, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * Extract CENTRAL_TOPIC: first major noun phrase (main medical entity).
+ * E.g. "Stenokardiya tasnifi, klinikasi, tashxisi va shoshilinch yordam" → "Stenokardiya"
+ */
+function extractCentralTopic(question: string): string {
+  const q = cleanQuestion(question).trim();
+  if (!q) return q;
+  const lang = detectLang(q);
+  const lower = q.toLowerCase();
+  const comma = q.indexOf(',');
+  const firstPart = (comma >= 0 ? q.slice(0, comma) : q).trim();
+  const words = firstPart.split(/\s+/);
+  if (words.length <= 2) return firstPart;
+  const lastWord = words[words.length - 1];
+  const lastLower = lastWord.toLowerCase();
+  if (KEYWORD_TO_SECTION[lastLower] || /^(va|и|yoki|или)$/.test(lastLower)) {
+    return words.slice(0, -1).join(' ').trim();
+  }
+  return firstPart;
+}
+
+/**
+ * Parse question for required sections in EXACT order of appearance.
+ */
+function parseQuestionKeywords(question: string): SectionKey[] {
+  const q = cleanQuestion(question).toLowerCase();
+  const seen = new Set<SectionKey>();
+  const order: SectionKey[] = [];
+  const tokens = q.split(/[\s,]+/).filter(Boolean);
+  for (const token of tokens) {
+    const normalized = token.replace(/[^\p{L}]/gu, '');
+    const key = KEYWORD_TO_SECTION[normalized] ?? KEYWORD_TO_SECTION[token];
+    if (key && !seen.has(key)) {
+      seen.add(key);
+      order.push(key);
+    }
+  }
+  for (const two of ['shoshilinch yordam', 'neotlozhnaya pomoshch']) {
+    if (q.includes(two)) {
+      const k: SectionKey = 'emergency';
+      if (!seen.has(k)) {
+        seen.add(k);
+        order.push(k);
+      }
+    }
+  }
+  return order;
 }
 
 function stripEmoji(text: string): string {
@@ -98,7 +167,6 @@ function extractListItems(text: string): string[] {
     else if (dashed) out.push(dashed[1].trim());
   }
   if (out.length >= 2) return out.slice(0, 6);
-
   const inline = text.match(/(?:Sabablari|Belgilar|Davolash|Profilaktika|Причины|Симптомы|Лечение|Профилактика)\s*:([^.]+)/gi);
   if (!inline) return [];
   const parsed: string[] = [];
@@ -124,73 +192,66 @@ function buildNarrativeFromList(items: string[], lang: "ru" | "uz"): string {
     .join(" ");
 }
 
-function detectMedicalTerms(text: string): string[] {
-  const known = [
-    "infektsiya",
-    "tomografiya",
-    "рентгенография",
-    "инфекция",
-    "патогенез",
-    "diagnostika",
-    "диагностика",
-  ];
-  const words = text.match(/\b\p{L}[\p{L}\-']{2,}\b/gu) || [];
-  const terms = new Set<string>();
-  for (const word of words) {
-    const lower = word.toLowerCase();
-    const plain = lower.replace(/[-']/g, "");
-    if (
-      plain.length > 9 ||
-      /(?:itis|osis|oma)$/i.test(lower) ||
-      known.some((k) => lower.includes(k))
-    ) {
-      terms.add(word);
-    }
-  }
-  return Array.from(terms).slice(0, 6);
-}
-
-function buildTermExplanation(term: string, lang: "ru" | "uz"): string {
+/** Only explain CENTRAL_TOPIC once; do not redefine secondary terms. */
+function buildTermExplanationForCentralTopic(centralTopic: string, lang: "ru" | "uz"): string {
   if (lang === "uz") {
-    return `${term} deganda klinik amaliyotda aniq tashxis va davolash qaroriga ta'sir qiluvchi tibbiy tushuncha nazarda tutiladi.`;
+    return `${centralTopic} deganda yurak-qon tomir tizimida yoki boshqa sohalarda klinik ahamiyatga ega bo'lgan asosiy tibbiy tushuncha nazarda tutiladi.`;
   }
-  return `${term} означает медицинское понятие, которое напрямую влияет на диагностику и выбор лечебной тактики.`;
+  return `${centralTopic} — это основное медицинское понятие, имеющее непосредственное клиническое значение в диагностике и лечении.`;
 }
 
-function buildLectureSections(
-  question: string,
-  answer: string,
-  explanation: string,
-  lang: "ru" | "uz"
-): LectureSections {
-  const combined = removeDuplicateSentences(`${answer}. ${explanation}`);
-  const sentences = splitSentences(combined);
-  const listNarrative = buildNarrativeFromList(extractListItems(`${answer}\n${explanation}`), lang);
-  const concept = sentences[0] || (lang === "uz" ? "Bu holatning asosiy mazmuni klinik fikrlashda to'g'ri talqin qilishdan iborat." : "Суть этого состояния заключается в корректной клинической интерпретации.");
-  const mechanism = sentences[1] || (lang === "uz" ? "Mexanizm odatda etiologik omillar va organizm javob reaksiyasi o'rtasidagi bog'liqlik bilan tushuntiriladi." : "Механизм обычно объясняется связью между этиологическими факторами и реакцией организма.");
-  const clinical = listNarrative || sentences.slice(2, 5).join(" ");
-  const practical =
-    lang === "uz"
-      ? `Amaliyotda bu shuni anglatadiki, shifokor bemor shikoyatlari, ko'rik natijalari va laborator ma'lumotlarni birlashtirib qaror qabul qiladi. Masalan, ${question.toLowerCase()} holatida differensial tashxisni erta bosqichda aniqlash davolash samaradorligini oshiradi.`
-      : `На практике это означает, что врач объединяет жалобы пациента, данные осмотра и лабораторные результаты в единую клиническую картину. Например, при ситуации "${question}" ранняя дифференциальная оценка повышает эффективность терапии.`;
-  const conclusion =
-    lang === "uz"
-      ? "Muhim jihat shundaki, klinik qaror har doim patogenez, simptomlar va amaliy dalillar birligida qabul qilinadi."
-      : "Важно понимать, что клиническое решение всегда строится на единстве патогенеза, симптомов и практических данных.";
-
-  return { concept, mechanism, clinical, practical, conclusion };
-}
-
-function composeLecture(
-  question: string,
+/**
+ * Build content for one section, anchored to CENTRAL_TOPIC.
+ * Ensures section talks about central topic, not unrelated terms.
+ */
+function buildSectionContent(
+  sectionKey: SectionKey,
+  centralTopic: string,
   answer: string,
   explanation: string,
   lang: "ru" | "uz"
 ): string {
+  const combined = removeDuplicateSentences(`${answer}. ${explanation}`);
+  const sentences = splitSentences(combined);
+  const listNarrative = buildNarrativeFromList(extractListItems(`${answer}\n${explanation}`), lang);
+  const anchor = lang === "uz" ? `${centralTopic} bo'yicha` : `по теме ${centralTopic}`;
+
+  switch (sectionKey) {
+    case 'classification':
+      return lang === "uz"
+        ? `${centralTopic} ning tasnifi quyidagicha: ${sentences[0] || listNarrative || "tibbiy amaliyotda qabul qilingan tasnif asosida ajratiladi."}`
+        : `Классификация ${centralTopic}: ${sentences[0] || listNarrative || "принятая в клинической практике классификация позволяет выделить основные формы."}`;
+    case 'clinical':
+      return lang === "uz"
+        ? `${centralTopic} ning klinikasi va belgilari: ${listNarrative || sentences.slice(0, 3).join(" ") || "klinik ko'rinish bemor shikoyatlari va ob'ektiv tekshiruv asosida baholanadi."}`
+        : `Клиника и признаки ${centralTopic}: ${listNarrative || sentences.slice(0, 3).join(" ") || "клиническая картина оценивается по жалобам и объективному обследованию."}`;
+    case 'diagnosis':
+      return lang === "uz"
+        ? `${centralTopic} tashxisi: ${listNarrative || sentences.find(s => /tashxis|diagnostik|tekshiruv/i.test(s)) || sentences[0] || "laborator va instrumental usullar qo'llaniladi."}`
+        : `Диагностика ${centralTopic}: ${listNarrative || sentences.find(s => /диагност|обследован|анализ/i.test(s)) || sentences[0] || "применяются лабораторные и инструментальные методы."}`;
+    case 'emergency':
+      return lang === "uz"
+        ? `${centralTopic} da shoshilinch yordam: ${listNarrative || sentences.find(s => /shoshilinch|tez yordam|birinch/i.test(s)) || sentences[0] || "bemorni tinchlantirish, monitorlash va mutaxassis chaqirish zarur."}`
+        : `Неотложная помощь при ${centralTopic}: ${listNarrative || sentences.find(s => /неотложн|скорая|первая помощь/i.test(s)) || sentences[0] || "необходимы успокоение пациента, мониторинг и вызов специалиста."}`;
+    default:
+      return combined.slice(0, 300);
+  }
+}
+
+/**
+ * Compose lecture in EXACT order of keywords; every block references CENTRAL_TOPIC.
+ */
+function composeLectureOnce(
+  question: string,
+  answer: string,
+  explanation: string,
+  lang: "ru" | "uz",
+  centralTopic: string,
+  sectionOrder: SectionKey[]
+): string {
   const q = cleanQuestion(question);
   const cleanA = cleanInputText(answer);
   const cleanE = cleanInputText(explanation);
-  const sections = buildLectureSections(q, cleanA, cleanE, lang);
 
   const intro =
     lang === "uz"
@@ -199,71 +260,128 @@ function composeLecture(
 
   const framing =
     lang === "uz"
-      ? `E'tibor bering, bugungi savolning markazida "${q}" masalasi turibdi.`
-      : `Обратите внимание: в центре этого вопроса находится тема "${q}".`;
+      ? `E'tibor bering, bugungi savolning markazida ${centralTopic} masalasi turibdi.`
+      : `Обратите внимание: в центре этого вопроса находится тема ${centralTopic}.`;
 
-  const clarification =
-    lang === "uz"
-      ? `Muhim jihat shundaki, ${sections.concept}`
-      : `Ключевой момент в том, что ${sections.concept}`;
+  const blocks: string[] = [intro, framing];
 
-  const mechanism =
-    lang === "uz"
-      ? `Endi mexanizmga to'xtalamiz: ${sections.mechanism}`
-      : `Теперь разберем механизм: ${sections.mechanism}`;
+  for (const key of sectionOrder) {
+    const content = buildSectionContent(key, centralTopic, cleanA, cleanE, lang);
+    blocks.push(content);
+  }
 
-  const reasoning =
-    lang === "uz"
-      ? `Klinik fikrlashda ketma-ket yondashuv zarur. ${sections.clinical}`
-      : `В клиническом мышлении важна последовательность. ${sections.clinical}`;
-
-  const practical = sections.practical;
-
-  const conclusion =
-    lang === "uz"
-      ? `Yakuniy xulosa: ${sections.conclusion} Shuni esda tuting, bu yondashuv kelajakdagi shifokor amaliyotida hal qiluvchi ahamiyatga ega.`
-      : `Итоговый вывод: ${sections.conclusion} Запомните, этот подход имеет решающее значение в практике будущего врача.`;
-
-  const blocks = [intro, framing, clarification, mechanism, reasoning, practical, conclusion];
-
-  const explainedTerms = new Set<string>();
-  const terms = detectMedicalTerms(`${q} ${cleanA} ${cleanE}`);
-  for (const term of terms) {
-    const key = term.toLowerCase();
-    if (explainedTerms.has(key)) continue;
-    explainedTerms.add(key);
-    const explanationLine = buildTermExplanation(term, lang);
+  const explainedCentral = new Set<string>();
+  const topicLower = centralTopic.toLowerCase();
+  if (!explainedCentral.has(topicLower)) {
+    explainedCentral.add(topicLower);
+    const expl = buildTermExplanationForCentralTopic(centralTopic, lang);
     for (let i = 2; i < blocks.length; i++) {
-      const re = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+      const re = new RegExp(`\\b${centralTopic.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
       if (re.test(blocks[i])) {
-        blocks[i] = blocks[i].replace(re, `${term}. ${explanationLine}`);
+        blocks[i] = blocks[i].replace(re, `${centralTopic}. ${expl}`);
         break;
       }
     }
-    if (explainedTerms.size >= 2) break;
   }
 
   let script = removeDuplicateSentences(blocks.join("\n\n"));
 
+  const conclusionPhrase =
+    lang === "uz"
+      ? "Xulosa qilib aytganda, bu mavzuni to'g'ri tushunish va amaliyotda qo'llash kelajakdagi shifokor uchun muhimdir."
+      : "Подводя итог, правильное понимание этой темы и её применение на практике важны для будущего врача.";
+  script = ensureConclusion(script, lang, conclusionPhrase);
+
   if (script.length < 800) {
-    const extension =
+    const ext =
       lang === "uz"
-        ? "Qo'shimcha ravishda, diagnostik bosqichda klinik tafakkur izchil bo'lishi, davolashda esa etiologik va simptomatik yondashuvlar uyg'unlashishi kerak. Bu yondashuv bemor xavfsizligi va natija barqarorligini ta'minlaydi."
-        : "Дополнительно важно, чтобы на этапе диагностики клиническое мышление оставалось последовательным, а в лечении сочетались этиотропный и симптоматический подходы. Такой принцип повышает безопасность пациента и стабильность результата.";
-    script = `${script}\n\n${extension}`;
+        ? `${centralTopic} bo'yicha diagnostik va davolash qarorlarini klinik dalillar asosida qabul qilish kerak.`
+        : `По ${centralTopic} диагностические и лечебные решения должны приниматься на основе клинических данных.`;
+    script = `${script}\n\n${ext}`;
   }
 
-  if (script.length > 1200) {
-    script = script.slice(0, 1200);
+  if (script.length > 3200) {
+    script = script.slice(0, 3200);
     const cut = Math.max(script.lastIndexOf("."), script.lastIndexOf("!"), script.lastIndexOf("?"));
-    if (cut > 1000) script = script.slice(0, cut + 1);
+    if (cut > 2800) script = script.slice(0, cut + 1);
   }
 
   return normalizeSpaces(script);
 }
 
+function ensureConclusion(script: string, lang: "ru" | "uz", conclusionPhrase: string): string {
+  const uzStart = "xulosa qilib aytganda";
+  const ruStart = "подводя итог";
+  const lower = script.toLowerCase().trim();
+  if (lang === "uz" && lower.includes(uzStart)) return script;
+  if (lang === "ru" && lower.includes(ruStart)) return script;
+  return `${script}\n\n${conclusionPhrase}`;
+}
+
+/** Completeness: script must mention classification, clinical, diagnosis, emergency if required. */
+function hasRequiredContent(script: string, requiredSections: SectionKey[]): boolean {
+  const lower = script.toLowerCase();
+  const has = {
+    classification: /tasnif|klassifikatsiya|классификаци/i.test(lower),
+    clinical: /klinik|belgi|simptom|клиник|признак|симптом/i.test(lower),
+    diagnosis: /tashxis|diagnostik|диагност|обследован/i.test(lower),
+    emergency: /shoshilinch|tez yordam|неотложн|скорая|первая помощь/i.test(lower),
+  };
+  return requiredSections.every((k) => has[k]);
+}
+
+/** Structural: intro + at least 4 thematic blocks + conclusion. */
+function hasStructure(script: string, lang: "ru" | "uz"): boolean {
+  const parts = script.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  if (parts.length < 4) return false;
+  const hasIntro =
+    lang === "uz"
+      ? /keling.*tahlil|e'tibor bering/i.test(parts[0] + parts[1])
+      : /давайте разберём|обратите внимание/i.test(parts[0] + parts[1]);
+  const hasConclusion =
+    lang === "uz"
+      ? /xulosa qilib aytganda|shuni esda tuting/i.test(script)
+      : /подводя итог|запомните/i.test(script);
+  return hasIntro && hasConclusion;
+}
+
 export function generateAudioScript(input: GenerateScriptInput): GenerateScriptOutput {
   const actualLang = detectLang(input.question);
-  const script = composeLecture(input.question, input.correctAnswer, input.aiExplanation, actualLang);
-  return { script, actualLang };
+  const centralTopic = extractCentralTopic(input.question);
+  const sectionOrder = parseQuestionKeywords(input.question);
+
+  const requiredSections = sectionOrder.length ? sectionOrder : (['classification', 'clinical', 'diagnosis'] as SectionKey[]);
+  const order = sectionOrder.length ? sectionOrder : (['classification', 'clinical', 'diagnosis'] as SectionKey[]);
+
+  let script = composeLectureOnce(
+    input.question,
+    input.correctAnswer,
+    input.aiExplanation,
+    actualLang,
+    centralTopic || input.question.slice(0, 50),
+    order
+  );
+
+  const conclusionPhrase =
+    actualLang === "uz"
+      ? "Xulosa qilib aytganda, bu mavzuni to'g'ri tushunish va amaliyotda qo'llash kelajakdagi shifokor uchun muhimdir."
+      : "Подводя итог, правильное понимание этой темы и её применение на практике важны для будущего врача.";
+  script = ensureConclusion(script, actualLang, conclusionPhrase);
+
+  const complete = hasRequiredContent(script, requiredSections);
+  const structured = hasStructure(script, actualLang);
+
+  if (!complete || !structured) {
+    script = composeLectureOnce(
+      input.question,
+      input.correctAnswer,
+      input.aiExplanation,
+      actualLang,
+      centralTopic || input.question.slice(0, 50),
+      requiredSections
+    );
+    script = ensureConclusion(script, actualLang, conclusionPhrase);
+  }
+
+  return { script: normalizeSpaces(script), actualLang };
 }
