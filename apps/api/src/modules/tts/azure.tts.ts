@@ -98,24 +98,50 @@ function enhanceScriptWithSSML(script: string, lang: 'ru' | 'uz'): string {
     sentence = processed;
 
     // Mark comma positions for breaks (after emphasis tags are inserted)
+    // IMPORTANT: Check that comma is NOT inside any SSML tag
     const commaPositions: number[] = [];
     let searchIdx = sentence.length - 1;
+    
     while (searchIdx >= 0) {
       const commaIdx = sentence.lastIndexOf(',', searchIdx);
       if (commaIdx === -1) break;
-      // Check if comma is inside an emphasis tag
-      const beforeComma = sentence.substring(Math.max(0, commaIdx - 100), commaIdx);
-      const openTags = (beforeComma.match(/<emphasis[^>]*>/g) || []).length;
-      const closeTags = (beforeComma.match(/<\/emphasis>/g) || []).length;
-      if (openTags === closeTags) {
+      
+      // Check if comma is inside any SSML tag (emphasis, break, etc.)
+      const beforeComma = sentence.substring(0, commaIdx);
+      const afterComma = sentence.substring(commaIdx + 1);
+      
+      // Count all open/close tags before comma
+      const openEmphasis = (beforeComma.match(/<emphasis[^>]*>/g) || []).length;
+      const closeEmphasis = (beforeComma.match(/<\/emphasis>/g) || []).length;
+      const openBreak = (beforeComma.match(/<break[^>]*>/g) || []).length;
+      const closeBreak = (beforeComma.match(/<\/break>/g) || []).length;
+      
+      // Check if there's already a break tag right after this comma
+      const hasBreakAfter = /^\s*<break[^>]*>/i.test(afterComma);
+      
+      // Only add break if: not inside any tag AND no break already exists
+      if (openEmphasis === closeEmphasis && openBreak === closeBreak && !hasBreakAfter) {
         commaPositions.push(commaIdx);
       }
+      
       searchIdx = commaIdx - 1;
     }
 
-    // Insert break tags after commas (from end to start)
-    for (const pos of commaPositions.reverse()) {
-      sentence = sentence.slice(0, pos + 1) + '<break time="400ms"/> ' + sentence.slice(pos + 1).replace(/^\s+/, '');
+    // Insert break tags after commas (from end to start to preserve positions)
+    // IMPORTANT: Work backwards to preserve indices
+    for (let i = commaPositions.length - 1; i >= 0; i--) {
+      const pos = commaPositions[i];
+      const beforeComma = sentence.substring(0, pos + 1);
+      const afterComma = sentence.substring(pos + 1);
+      
+      // Skip if already has break tag immediately after comma
+      if (/^\s*<break[^>]*>/i.test(afterComma.trim())) {
+        continue;
+      }
+      
+      // Insert break tag
+      const trimmedAfter = afterComma.trim();
+      sentence = beforeComma + '<break time="400ms"/>' + (trimmedAfter ? ' ' + trimmedAfter : '');
     }
 
     enhanced.push(sentence);
@@ -196,14 +222,54 @@ function buildSSML(script: string, lang: 'ru' | 'uz', options: TtsOptions = {}):
     throw new Error('SSML contains only break tags, no text content');
   }
   
+  // Validate: check for broken/malformed break tags
+  const brokenBreakTags = finalContent.match(/<break[^>]*<break/g);
+  if (brokenBreakTags) {
+    console.error('[Azure TTS] ERROR: Found broken break tags:', brokenBreakTags);
+    throw new Error('SSML contains broken break tags');
+  }
+  
+  // Validate: check for unclosed tags
+  const openBreaks = (finalContent.match(/<break[^>]*>/g) || []).length;
+  const closeBreaks = (finalContent.match(/<\/break>/g) || []).length;
+  if (openBreaks !== closeBreaks) {
+    console.warn('[Azure TTS] Warning: Break tag mismatch:', { openBreaks, closeBreaks });
+  }
+  
+  // Remove any stray numbers that might have been inserted (like "0", "1", "2" etc.)
+  // Also remove numbers that appear between break tags
+  let cleanedContent = finalContent
+    .replace(/\s+(\d+)\s*(?=<break)/g, ' ') // Remove numbers before break tags
+    .replace(/(<\/break>)\s*(\d+)\s*(?=<break)/g, '$1 ') // Remove numbers between break tags
+    .replace(/(<\/break>)\s*(\d+)([А-Яа-яA-Za-zЎўҚқҒғҲҳ])/g, '$1 $3') // Remove numbers before text after break
+    .replace(/([.!?])\s*(\d+)\s*(?=<break)/g, '$1 '); // Remove numbers after punctuation before break
+  
   const ssml = `<speak xmlns="http://www.w3.org/2001/10/synthesis" version="1.0" xml:lang="${lang === 'ru' ? 'ru-RU' : 'uz-UZ'}">
   <voice name="${voiceName}">
     <prosody rate="${ratePercent}" pitch="${pitchValue}">
       <break time="500ms"/>
-      ${finalContent}
+      ${cleanedContent}
     </prosody>
   </voice>
 </speak>`;
+  
+  // Validate XML structure before returning
+  try {
+    // Basic XML validation: check for balanced tags
+    const openTags = ssml.match(/<[^/!][^>]*>/g) || [];
+    const closeTags = ssml.match(/<\/[^>]+>/g) || [];
+    const selfClosing = ssml.match(/<[^>]+\/>/g) || [];
+    
+    // Self-closing tags count as both open and close
+    const totalOpen = openTags.length;
+    const totalClose = closeTags.length + selfClosing.length;
+    
+    if (Math.abs(totalOpen - totalClose) > 2) { // Allow some margin for speak/voice/prosody
+      console.error('[Azure TTS] XML structure warning:', { totalOpen, totalClose });
+    }
+  } catch (e) {
+    console.error('[Azure TTS] XML validation error:', e);
+  }
   
   // Log SSML for debugging (first 500 chars)
   console.log('[Azure TTS] Generated SSML (first 500 chars):', ssml.slice(0, 500));
