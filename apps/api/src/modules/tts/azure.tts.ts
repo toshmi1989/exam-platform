@@ -89,7 +89,8 @@ function applyPhonemes(text: string, lang: 'ru' | 'uz'): string {
  */
 function detectTerms(text: string): string[] {
   const endings = /\b[\p{L}]+(?:itis|osis|oma|logiya|grafiya|skopiya)\b/giu;
-  const words = text.match(/\b[\p{L}][\p{L}-']{2,}\b/gu) || [];
+  // Match words: letter followed by letters, hyphens, or apostrophes
+  const words = text.match(/\b\p{L}[\p{L}\-']{2,}\b/gu) || [];
   const out: string[] = [];
   for (const w of words) {
     const norm = w.replace(/[-']/g, '');

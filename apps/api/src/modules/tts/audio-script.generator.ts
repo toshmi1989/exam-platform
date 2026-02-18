@@ -88,7 +88,8 @@ function parseListItems(text: string): string[] {
 function detectTerms(text: string): string[] {
   const raw = text;
   const endings = /\b[\p{L}]+(?:itis|osis|oma|logiya|grafiya|skopiya)\b/giu;
-  const words = raw.match(/\b[\p{L}][\p{L}-']{2,}\b/gu) || [];
+  // Match words: letter followed by letters, hyphens, or apostrophes
+  const words = raw.match(/\b\p{L}[\p{L}\-']{2,}\b/gu) || [];
   const out: string[] = [];
 
   for (const w of words) {
