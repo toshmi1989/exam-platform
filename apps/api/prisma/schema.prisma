@@ -97,6 +97,8 @@ model Question {
   options       QuestionOption[]
   oralAnswer    OralAnswer?
   aiExplanations QuestionAIExplanation[]
+  audioScripts  QuestionAudioScript[]
+  audios        QuestionAudio[]
 
   @@index([examId])
 }
@@ -110,6 +112,41 @@ model QuestionAIExplanation {
   createdAt  DateTime @default(now())
 
   Question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+model QuestionAudioScript {
+  id         String   @id @default(uuid())
+  questionId String
+  lang       String
+  content    String   @db.Text
+  hash       String
+  createdAt  DateTime @default(now())
+
+  Question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, lang])
+  @@index([questionId])
+}
+
+model QuestionAudio {
+  id         String   @id @default(uuid())
+  questionId String
+  lang       String
+  audioPath  String
+  createdAt  DateTime @default(now())
+
+  Question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, lang])
+  @@index([questionId])
+}
+
+model TtsSettings {
+  id          String   @id @default(cuid())
+  rate        Int      @default(0)
+  pauseMs     Int      @default(500)
+  ssmlTemplate String  @db.Text
+  updatedAt   DateTime @default(now()) @updatedAt
 }
 
 model QuestionOption {

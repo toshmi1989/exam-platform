@@ -14,6 +14,7 @@ import paymentsRouter from './modules/payments/payments.routes';
 import aiRouter from './modules/ai/ai.routes';
 import oralRouter from './modules/ai/oral.routes';
 import botRouter from './modules/bot/bot.routes';
+import ttsRouter from './modules/tts/tts.routes';
 import { attachUserFromHeader } from './middlewares/attachUser.middleware';
 import { requireAcceptedTerms } from './middlewares/requireAcceptedTerms.middleware';
 import {
@@ -323,6 +324,7 @@ app.use('/attempts', attemptsRouter);
 app.use('/ai', aiRouter);
 app.use('/oral', oralRouter);
 app.use('/bot', botRouter);
+app.use('/tts', ttsRouter);
 app.use('/admin', adminRouter);
 app.use('/chat', chatRouter);
 app.use('/broadcasts', broadcastsRouter);

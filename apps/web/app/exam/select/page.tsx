@@ -28,6 +28,7 @@ interface DirectionOption {
 }
 
 type OrderModeKey = 'random' | 'order';
+type OralModeKey = 'preparation' | 'exam';
 
 interface OralDirectionGroup {
   direction: string;
@@ -56,6 +57,7 @@ function ExamSelectClient() {
   const [direction, setDirection] = useState<DirectionOption | null>(null);
   const [directions, setDirections] = useState<DirectionOption[]>([]);
   const [orderMode, setOrderMode] = useState<OrderModeKey | null>(null);
+  const [oralMode, setOralMode] = useState<OralModeKey | null>(null);
   const [oralDirections, setOralDirections] = useState<OralDirectionGroup[]>([]);
   const [selectedDirection, setSelectedDirection] = useState<string | null>(null);
   const [selectedOralExam, setSelectedOralExam] = useState<OralExamOption | null>(null);
@@ -326,6 +328,7 @@ function ExamSelectClient() {
   const canStartOral =
     profession &&
     examType === 'oral' &&
+    oralMode === 'preparation' &&
     orderMode &&
     examLanguage &&
     selectedDirection &&
@@ -358,17 +361,19 @@ function ExamSelectClient() {
       ref = examTypeRef as React.RefObject<HTMLDivElement>;
     } else if (profession && examType === 'test' && !mode) {
       ref = modeRef as React.RefObject<HTMLDivElement>;
-    } else if (profession && examType === 'oral' && !orderMode) {
+    } else if (profession && examType === 'oral' && !oralMode) {
+      ref = modeRef as React.RefObject<HTMLDivElement>;
+    } else if (profession && examType === 'oral' && oralMode === 'preparation' && !orderMode) {
       ref = modeRef as React.RefObject<HTMLDivElement>;
     } else if (profession && examType === 'test' && mode && !examLanguage) {
       ref = languageRef as React.RefObject<HTMLDivElement>;
-    } else if (profession && examType === 'oral' && orderMode && !examLanguage) {
+    } else if (profession && examType === 'oral' && oralMode === 'preparation' && orderMode && !examLanguage) {
       ref = languageRef as React.RefObject<HTMLDivElement>;
     } else if (profession && examType === 'test' && mode && examLanguage && !direction) {
       ref = directionRef as React.RefObject<HTMLDivElement>;
-    } else if (profession && examType === 'oral' && orderMode && examLanguage && !selectedDirection) {
+    } else if (profession && examType === 'oral' && oralMode === 'preparation' && orderMode && examLanguage && !selectedDirection) {
       ref = directionRef as React.RefObject<HTMLDivElement>;
-    } else if (profession && examType === 'oral' && orderMode && examLanguage && selectedDirection && !selectedOralExam) {
+    } else if (profession && examType === 'oral' && oralMode === 'preparation' && orderMode && examLanguage && selectedDirection && !selectedOralExam) {
       ref = categoryRef;
     } else if (canStart) {
       ref = startSectionRef;
@@ -379,7 +384,7 @@ function ExamSelectClient() {
         ref.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 100);
     }
-  }, [profession, examType, mode, orderMode, examLanguage, direction, selectedDirection, selectedOralExam, canStart]);
+  }, [profession, examType, mode, oralMode, orderMode, examLanguage, direction, selectedDirection, selectedOralExam, canStart]);
 
   return (
     <>
@@ -445,6 +450,7 @@ function ExamSelectClient() {
                     onClick={() => {
                       setExamType('oral');
                       setMode(null);
+                      setOralMode(null);
                       setOrderMode(null);
                       setExamLanguage(null);
                       setDirection(null);
@@ -460,8 +466,69 @@ function ExamSelectClient() {
               </div>
             )}
 
-            {/* Order mode (oral only) */}
-            {profession && examType === 'oral' && (
+            {/* Oral mode (oral only) */}
+            {profession && examType === 'oral' && !oralMode && (
+              <div ref={modeRef}>
+                <Card title="Режим">
+                  <div className="grid gap-3">
+                    <Button
+                      size="lg"
+                      variant={oralMode === 'exam' ? 'primary' : 'secondary'}
+                      onClick={() => {
+                        setOralMode('exam');
+                        setStartError(null);
+                      }}
+                    >
+                      🧑‍⚕️ Сдать устный
+                    </Button>
+                    <Button
+                      size="lg"
+                      variant={oralMode === 'preparation' ? 'primary' : 'secondary'}
+                      onClick={() => {
+                        setOralMode('preparation');
+                        setOrderMode(null);
+                        setExamLanguage(null);
+                        setSelectedDirection(null);
+                        setSelectedOralExam(null);
+                        setStartError(null);
+                      }}
+                    >
+                      📚 Готовиться к устному
+                    </Button>
+                  </div>
+                </Card>
+              </div>
+            )}
+
+            {/* Placeholder for "Сдать устный" mode */}
+            {profession && examType === 'oral' && oralMode === 'exam' && (
+              <div ref={modeRef}>
+                <Card>
+                  <div className="flex flex-col gap-4">
+                    <h3 className="text-lg font-semibold text-slate-800">Режим «Сдать устный»</h3>
+                    <p className="text-slate-600">
+                      Скоро будет доступно.
+                      <br />
+                      Вы сможете сдавать устный экзамен вживую,
+                      <br />
+                      а ваши ответы будут автоматически оценены.
+                    </p>
+                    <Button
+                      size="lg"
+                      onClick={() => {
+                        setOralMode(null);
+                        setStartError(null);
+                      }}
+                    >
+                      Вернуться
+                    </Button>
+                  </div>
+                </Card>
+              </div>
+            )}
+
+            {/* Order mode (oral preparation only) */}
+            {profession && examType === 'oral' && oralMode === 'preparation' && !orderMode && (
               <div ref={modeRef}>
                 <Card title={copy.orderModeTitle}>
                   <div className="grid grid-cols-2 gap-3">
@@ -531,7 +598,7 @@ function ExamSelectClient() {
             )}
 
             {/* Язык */}
-            {(profession && examType === 'test' && mode) || (profession && examType === 'oral' && orderMode) ? (
+            {(profession && examType === 'test' && mode) || (profession && examType === 'oral' && oralMode === 'preparation' && orderMode) ? (
               <div ref={languageRef}>
                 <Card title={copy.languageTitle}>
                 <div className="grid grid-cols-2 gap-3">

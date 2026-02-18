@@ -9,6 +9,8 @@ import Card from '../../../../components/Card';
 import PageHeader from '../../../../components/PageHeader';
 import { readSettings, Language } from '../../../../lib/uiSettings';
 import { getOralQuestions, streamOralAnswer } from '../../../../lib/api';
+import { apiFetch } from '../../../../lib/api/client';
+import { API_BASE_URL } from '../../../../lib/api/config';
 import { readTelegramUser } from '../../../../lib/telegramUser';
 import { getOpenInTelegramAppUrl } from '../../../../lib/telegram';
 import ReactMarkdown from 'react-markdown';
@@ -72,6 +74,9 @@ export default function OralExamPage() {
   const [answerLimitReached, setAnswerLimitReached] = useState(false);
   const [iframeUrl, setIframeUrl] = useState<string | null>(null);
   const [isGuest, setIsGuest] = useState(false);
+  const [audioUrl, setAudioUrl] = useState<Record<string, string>>({});
+  const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
+  const [audioError, setAudioError] = useState<string | null>(null);
 
   const orderedQuestions = useMemo(() => {
     if (orderMode === 'random' && questions.length > 0) {
@@ -150,14 +155,68 @@ export default function OralExamPage() {
     }
   }, [language]);
 
+  const playAudio = useCallback(async (questionId: string) => {
+    // If audio already exists, play it
+    if (audioUrl[questionId]) {
+      const audio = new Audio(audioUrl[questionId]);
+      audio.play().catch(() => {
+        setAudioError('Failed to play audio');
+      });
+      return;
+    }
+
+    // Generate audio
+    if (loadingAudioId === questionId) return;
+    setLoadingAudioId(questionId);
+    setAudioError(null);
+
+    try {
+      const lang = language === 'Узбекский' ? 'uz' : 'ru';
+      const { response, data } = await apiFetch('/tts/speak', {
+        method: 'POST',
+        json: { questionId, lang },
+        timeoutMs: 60000,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate audio');
+      }
+
+      const result = data as { ok?: boolean; audioUrl?: string };
+      if (result.ok && result.audioUrl) {
+        // Prepend API base URL if audioUrl is relative
+        const fullUrl = result.audioUrl.startsWith('http') ? result.audioUrl : `${API_BASE_URL}${result.audioUrl}`;
+        setAudioUrl((prev) => ({ ...prev, [questionId]: fullUrl }));
+        const audio = new Audio(fullUrl);
+        audio.play().catch(() => {
+          setAudioError('Failed to play audio');
+        });
+      } else {
+        throw new Error('Invalid response');
+      }
+    } catch (err) {
+      setAudioError(
+        language === 'Узбекский'
+          ? "Audio yuklab bo'lmadi."
+          : language === 'Английский'
+            ? 'Failed to load audio.'
+            : 'Не удалось загрузить аудио.'
+      );
+    } finally {
+      setLoadingAudioId(null);
+    }
+  }, [language, audioUrl, loadingAudioId]);
+
   const copy = useMemo(() => {
     if (language === 'Английский') {
       return {
         title: 'Oral exam',
         subtitle: 'Study questions and reveal answers.',
         showAnswer: 'Show answer',
+        playAudio: 'Listen to answer',
         loading: 'Loading...',
         loadingSearch: 'Ziyoda is searching for the answer…',
+        loadingAudio: 'Generating audio...',
         prev: 'Previous',
         next: 'Next',
         questionNum: (n: number, t: number) => `Question ${n} of ${t}`,
@@ -177,8 +236,10 @@ export default function OralExamPage() {
         title: "Og'zaki imtihon",
         subtitle: "Savollarni o'rganing va javoblarni ko'ring.",
         showAnswer: "Javobni ko'rsatish",
+        playAudio: "Javobni tinglash",
         loading: 'Yuklanmoqda...',
         loadingSearch: "Ziyoda javob qidirmoqda…",
+        loadingAudio: "Audio yaratilmoqda...",
         prev: 'Oldingi',
         next: 'Keyingi',
         questionNum: (n: number, t: number) => `${n} / ${t} savol`,
@@ -196,9 +257,11 @@ export default function OralExamPage() {
     return {
       title: 'Устный экзамен',
       subtitle: 'Изучайте вопросы и открывайте ответы.',
-      showAnswer: 'Показать ответ',
-      loading: 'Загрузка...',
-      loadingSearch: 'Зиёда ищет ответ…',
+        showAnswer: 'Показать ответ',
+        playAudio: 'Послушать ответ',
+        loading: 'Загрузка...',
+        loadingSearch: 'Зиёда ищет ответ…',
+        loadingAudio: 'Генерация аудио...',
       prev: 'Назад',
       next: 'Далее',
       questionNum: (n: number, t: number) => `Вопрос ${n} из ${t}`,
@@ -285,7 +348,7 @@ export default function OralExamPage() {
 
           <Card>
             <p className="whitespace-pre-wrap text-slate-800">{current.prompt}</p>
-            <div className="mt-4">
+            <div className="mt-4 flex gap-2">
               <Button
                 type="button"
                 onClick={() => showAnswer(current.id)}
@@ -293,7 +356,20 @@ export default function OralExamPage() {
               >
                 {copy.showAnswer}
               </Button>
+              {answerCache[current.id] && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => playAudio(current.id)}
+                  disabled={loadingAudioId === current.id}
+                >
+                  🔊 {loadingAudioId === current.id ? copy.loadingAudio : copy.playAudio}
+                </Button>
+              )}
             </div>
+            {audioError && (
+              <p className="mt-2 text-sm text-rose-600">{audioError}</p>
+            )}
             {loadingAnswerId === current.id && (
               <div className="mt-3">
                 <AiLoadingDots text={copy.loadingSearch} />
