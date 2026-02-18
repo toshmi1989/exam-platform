@@ -46,6 +46,8 @@ export default function AdminTtsPage() {
   const [selectedDirectionId, setSelectedDirectionId] = useState('');
   const [isClearingDirection, setIsClearingDirection] = useState(false);
   const [clearDirectionConfirm, setClearDirectionConfirm] = useState(false);
+  const [directionTypeFilter, setDirectionTypeFilter] = useState<'TEST' | 'ORAL' | ''>('');
+  const [directionProfessionFilter, setDirectionProfessionFilter] = useState<'DOCTOR' | 'NURSE' | ''>('');
 
   useEffect(() => {
     const update = () => setLanguage(readSettings().language);
@@ -65,10 +67,16 @@ export default function AdminTtsPage() {
     getAdminTtsStats()
       .then(setStats)
       .catch(() => setStats(null));
-    getAdminTtsDirections()
+  }, []);
+
+  useEffect(() => {
+    getAdminTtsDirections({
+      ...(directionTypeFilter && { type: directionTypeFilter }),
+      ...(directionProfessionFilter && { profession: directionProfessionFilter }),
+    })
       .then(setDirections)
       .catch(() => setDirections([]));
-  }, []);
+  }, [directionTypeFilter, directionProfessionFilter]);
 
   const copy = useMemo(() => {
     if (language === 'Английский') {
@@ -93,6 +101,13 @@ export default function AdminTtsPage() {
         directionLabel: 'Direction',
         clearThisDirection: 'Clear TTS for this direction',
         clearDirectionConfirm: 'Delete scripts and audio for this direction only?',
+        filterProfession: 'Profession',
+        filterType: 'Type',
+        filterAll: 'All',
+        filterDoctor: 'Doctor',
+        filterNurse: 'Nurse',
+        filterTest: 'Test',
+        filterOral: 'Oral',
       };
     }
     if (language === 'Узбекский') {
@@ -117,6 +132,13 @@ export default function AdminTtsPage() {
         directionLabel: 'Yo\'nalish',
         clearThisDirection: 'Shu yo\'nalish uchun TTS ni tozalash',
         clearDirectionConfirm: 'Faqat shu yo\'nalish uchun skriptlar va audiolar o\'chirilsinmi?',
+        filterProfession: 'Kasb',
+        filterType: 'Turi',
+        filterAll: 'Barchasi',
+        filterDoctor: 'Shifokor',
+        filterNurse: 'Hamshira',
+        filterTest: 'Test',
+        filterOral: 'Og\'zaki',
       };
     }
     return {
@@ -140,6 +162,13 @@ export default function AdminTtsPage() {
       directionLabel: 'Направление',
       clearThisDirection: 'Очистить TTS для этого направления',
       clearDirectionConfirm: 'Удалить скрипты и аудио только по выбранному направлению?',
+      filterProfession: 'Профессия',
+      filterType: 'Тип',
+      filterAll: 'Все',
+      filterDoctor: 'Врачи',
+      filterNurse: 'Медсёстры',
+      filterTest: 'Тест',
+      filterOral: 'Устный',
     };
   }, [language]);
 
@@ -278,6 +307,32 @@ export default function AdminTtsPage() {
             </Button>
 
             <Card title={copy.clearByDirection}>
+              <div className="mb-3 grid grid-cols-2 gap-2">
+                <div>
+                  <p className="mb-1 text-xs text-slate-500">{copy.filterProfession}</p>
+                  <select
+                    value={directionProfessionFilter}
+                    onChange={(e) => setDirectionProfessionFilter((e.target.value || '') as 'DOCTOR' | 'NURSE' | '')}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2AABEE]"
+                  >
+                    <option value="">{copy.filterAll}</option>
+                    <option value="DOCTOR">{copy.filterDoctor}</option>
+                    <option value="NURSE">{copy.filterNurse}</option>
+                  </select>
+                </div>
+                <div>
+                  <p className="mb-1 text-xs text-slate-500">{copy.filterType}</p>
+                  <select
+                    value={directionTypeFilter}
+                    onChange={(e) => setDirectionTypeFilter((e.target.value || '') as 'TEST' | 'ORAL' | '')}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2AABEE]"
+                  >
+                    <option value="">{copy.filterAll}</option>
+                    <option value="TEST">{copy.filterTest}</option>
+                    <option value="ORAL">{copy.filterOral}</option>
+                  </select>
+                </div>
+              </div>
               <p className="mb-2 text-xs text-slate-500">
                 {copy.directionLabel}
               </p>

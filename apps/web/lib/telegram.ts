@@ -73,3 +73,13 @@ export function openPaymentLink(url: string): void {
     window.location.href = url;
   }
 }
+
+/**
+ * Отключает сворачивание Mini App при вертикальном свайпе, чтобы прокрутка контента
+ * не уводила приложение в трей. Вызывать после ready() при открытии в Telegram.
+ */
+export function disableVerticalSwipes(): void {
+  if (typeof window === 'undefined') return;
+  const tg = (window as { Telegram?: { WebApp?: { disableVerticalSwipes?: () => void } } }).Telegram;
+  tg?.WebApp?.disableVerticalSwipes?.();
+}

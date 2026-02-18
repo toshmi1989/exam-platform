@@ -831,8 +831,12 @@ export interface TtsDirectionItem {
   audioCount?: number;
 }
 
-export async function getAdminTtsDirections(): Promise<TtsDirectionItem[]> {
-  const { response, data } = await apiFetch('/admin/tts/directions');
+export async function getAdminTtsDirections(filters?: { type?: 'TEST' | 'ORAL'; profession?: 'DOCTOR' | 'NURSE' }): Promise<TtsDirectionItem[]> {
+  const params = new URLSearchParams();
+  if (filters?.type) params.set('type', filters.type);
+  if (filters?.profession) params.set('profession', filters.profession);
+  const url = params.toString() ? `/admin/tts/directions?${params.toString()}` : '/admin/tts/directions';
+  const { response, data } = await apiFetch(url);
   if (!response.ok) throw (data as ApiError) ?? new Error('Failed to load directions');
   const payload = data as { items?: TtsDirectionItem[] } | null;
   return payload?.items ?? [];

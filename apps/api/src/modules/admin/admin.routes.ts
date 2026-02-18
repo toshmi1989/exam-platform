@@ -517,8 +517,10 @@ router.post('/users/:telegramId/one-time/revoke', async (req, res) => {
 router.get('/exams', async (req, res) => {
   const search = String(req.query.search ?? '').trim();
   const typeFilter = req.query.type === 'ORAL' ? 'ORAL' : req.query.type === 'TEST' ? 'TEST' : undefined;
+  const professionFilter = req.query.profession === 'DOCTOR' ? 'DOCTOR' : req.query.profession === 'NURSE' ? 'NURSE' : undefined;
   const where: Prisma.ExamWhereInput = {};
   if (typeFilter) where.type = typeFilter;
+  if (professionFilter) where.profession = professionFilter;
   if (search) {
     where.OR = [
       { title: { contains: search, mode: Prisma.QueryMode.insensitive } },
@@ -1231,10 +1233,16 @@ router.get('/tts/stats', async (_req, res) => {
   }
 });
 
-/** List direction groups for TTS clear-by-direction: label with type (oral/test), languages (RU/UZ), audio count. */
-router.get('/tts/directions', async (_req, res) => {
+/** List direction groups for TTS clear-by-direction: label with type (oral/test), languages (RU/UZ), audio count. Optional filters: type (ORAL/TEST), profession (DOCTOR/NURSE). */
+router.get('/tts/directions', async (req, res) => {
   try {
+    const typeFilter = req.query.type === 'ORAL' ? 'ORAL' : req.query.type === 'TEST' ? 'TEST' : undefined;
+    const professionFilter = req.query.profession === 'DOCTOR' ? 'DOCTOR' : req.query.profession === 'NURSE' ? 'NURSE' : undefined;
+    const where: Prisma.ExamWhereInput = {};
+    if (typeFilter) where.type = typeFilter;
+    if (professionFilter) where.profession = professionFilter;
     const exams = await prisma.exam.findMany({
+      where: Object.keys(where).length > 0 ? where : undefined,
       select: { id: true, directionGroupId: true, direction: true, type: true, language: true },
       orderBy: [{ type: 'asc' }, { language: 'asc' }, { direction: 'asc' }],
     });

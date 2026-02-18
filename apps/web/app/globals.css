@@ -35,6 +35,14 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
+/* Чтобы при прокрутке контента WebView не сворачивался в трей: скролл только у main */
+html {
+  height: 100%;
+}
+body {
+  height: 100%;
+}
+
 html {
   font-size: var(--app-font-size);
 }

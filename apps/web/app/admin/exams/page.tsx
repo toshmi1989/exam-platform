@@ -44,6 +44,8 @@ type ExamDetail = {
 export default function AdminExamsPage() {
   const [language, setLanguage] = useState<Language>(readSettings().language);
   const [query, setQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'TEST' | 'ORAL' | ''>('');
+  const [professionFilter, setProfessionFilter] = useState<'DOCTOR' | 'NURSE' | ''>('');
   const [exams, setExams] = useState<ExamSummary[]>([]);
   const [selectedExamId, setSelectedExamId] = useState<string>('');
   const [selectedExam, setSelectedExam] = useState<ExamDetail | null>(null);
@@ -123,16 +125,30 @@ export default function AdminExamsPage() {
     };
   }, [language]);
 
+  const copyFilters = useMemo(() => {
+    if (language === 'Английский') {
+      return { profession: 'Profession', all: 'All', doctor: 'Doctor', nurse: 'Nurse', type: 'Type', test: 'Test', oral: 'Oral' };
+    }
+    if (language === 'Узбекский') {
+      return { profession: 'Kasb', all: 'Barchasi', doctor: 'Shifokor', nurse: 'Hamshira', type: 'Turi', test: 'Test', oral: 'Og\'zaki' };
+    }
+    return { profession: 'Профессия', all: 'Все', doctor: 'Врачи', nurse: 'Медсёстры', type: 'Тип', test: 'Тест', oral: 'Устный' };
+  }, [language]);
+
   useEffect(() => {
     const timeout = setTimeout(() => {
       void loadExams();
     }, 250);
     return () => clearTimeout(timeout);
-  }, [query]);
+  }, [query, typeFilter, professionFilter]);
 
   async function loadExams() {
+    const params = new URLSearchParams();
+    if (query) params.set('search', query);
+    if (typeFilter) params.set('type', typeFilter);
+    if (professionFilter) params.set('profession', professionFilter);
     const { response, data } = await apiFetch(
-      `/admin/exams?search=${encodeURIComponent(query)}`
+      `/admin/exams?${params.toString()}`
     );
     if (!response.ok) return;
     const payload = data as { items?: ExamSummary[] } | null;
@@ -254,6 +270,33 @@ export default function AdminExamsPage() {
           <AdminGuard>
             <PageHeader title={copy.title} subtitle={copy.subtitle} />
             <AdminNav />
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="mb-1 text-xs text-slate-500">{copyFilters.profession}</p>
+                <select
+                  value={professionFilter}
+                  onChange={(e) => setProfessionFilter((e.target.value || '') as 'DOCTOR' | 'NURSE' | '')}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2AABEE]"
+                >
+                  <option value="">{copyFilters.all}</option>
+                  <option value="DOCTOR">{copyFilters.doctor}</option>
+                  <option value="NURSE">{copyFilters.nurse}</option>
+                </select>
+              </div>
+              <div>
+                <p className="mb-1 text-xs text-slate-500">{copyFilters.type}</p>
+                <select
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter((e.target.value || '') as 'TEST' | 'ORAL' | '')}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-[#2AABEE]"
+                >
+                  <option value="">{copyFilters.all}</option>
+                  <option value="TEST">{copyFilters.test}</option>
+                  <option value="ORAL">{copyFilters.oral}</option>
+                </select>
+              </div>
+            </div>
 
             <div ref={searchContainerRef} className="relative">
               <input
