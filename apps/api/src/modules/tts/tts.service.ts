@@ -19,6 +19,38 @@ import { getOrCreateExplanation } from '../ai/ai.service';
 const AUDIO_BASE_URL = process.env.AUDIO_BASE_URL ?? '/audio';
 
 /**
+ * Clear all TTS data: scripts and audio files.
+ * Returns count of deleted records and files.
+ */
+export async function clearAllTtsData(): Promise<{ scriptsDeleted: number; audioDeleted: number; filesDeleted: number }> {
+  // 1. Get all audio records to delete files
+  const audioRecords = await prisma.questionAudio.findMany();
+  let filesDeleted = 0;
+  
+  // 2. Delete physical audio files
+  for (const record of audioRecords) {
+    try {
+      if (fs.existsSync(record.audioPath)) {
+        fs.unlinkSync(record.audioPath);
+        filesDeleted++;
+      }
+    } catch (error) {
+      console.error(`[TTS Cleanup] Failed to delete file ${record.audioPath}:`, error);
+    }
+  }
+  
+  // 3. Delete database records
+  const scriptsResult = await prisma.questionAudioScript.deleteMany();
+  const audioResult = await prisma.questionAudio.deleteMany();
+  
+  return {
+    scriptsDeleted: scriptsResult.count,
+    audioDeleted: audioResult.count,
+    filesDeleted,
+  };
+}
+
+/**
  * Calculate hash for script regeneration check.
  */
 function calculateHash(questionText: string, aiExplanation: string, lang: string): string {

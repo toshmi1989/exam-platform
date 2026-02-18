@@ -41,6 +41,7 @@ import {
 import { getZiyodaPrompts, setZiyodaPrompts } from '../ai/ziyoda-prompts.service';
 import { sendBroadcastToUsers } from '../../services/broadcastSender.service';
 import serverOpsRouter from './serverOps.routes';
+import { clearAllTtsData } from '../tts/tts.service';
 
 const router = Router();
 
@@ -1158,6 +1159,22 @@ router.put('/ziyoda-prompts', async (req, res) => {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[admin/ziyoda-prompts PUT]', err);
+    res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+// TTS cleanup endpoint
+router.delete('/tts/clear-all', async (_req, res) => {
+  try {
+    const result = await clearAllTtsData();
+    res.json({
+      ok: true,
+      message: 'TTS data cleared successfully',
+      ...result,
+    });
+  } catch (err) {
+    console.error('[admin/tts/clear-all]', err);
+    const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ ok: false, error: msg });
   }
 });
