@@ -1,6 +1,7 @@
 /**
  * Azure Text-to-Speech module.
  * Premium teacher mode with female voice only.
+ * Natural paragraph-based pauses.
  */
 
 import * as fs from 'fs';
@@ -40,8 +41,8 @@ function sanitizeForSSML(text: string): string {
  */
 function emphasizeKeywords(text: string, lang: 'ru' | 'uz'): string {
   const keywords = lang === 'ru'
-    ? ['важно', 'основное', 'главное', 'ключевой', 'обратите внимание', 'запомните', 'это']
-    : ['muhim', 'asosiy', 'eng muhim', 'e\'tibor bering', 'esda tuting', 'bu'];
+    ? ['важно', 'основное', 'главное', 'ключевой', 'обратите внимание', 'запомните', 'это', 'необходимо']
+    : ['muhim', 'asosiy', 'eng muhim', 'e\'tibor bering', 'esda tuting', 'bu', 'kerak'];
   
   let result = text;
   
@@ -57,26 +58,38 @@ function emphasizeKeywords(text: string, lang: 'ru' | 'uz'): string {
 }
 
 /**
- * Add natural breaks between sentences (400ms, not slow).
+ * Add paragraph-based breaks (700ms between paragraphs).
+ * Add short breaks after commas (300ms).
  */
-function addBreaks(text: string): string {
-  const sentences = text
-    .split(/(?<=[.!?])/)
-    .map(s => s.trim())
-    .filter(Boolean);
+function addParagraphBreaks(text: string): string {
+  // Split by paragraph breaks (double newlines)
+  const paragraphs = text.split('\n\n').filter(p => p.trim().length > 0);
   
-  return sentences
-    .map(s => `${s} <break time="400ms"/>`)
+  const processedParagraphs = paragraphs.map(paragraph => {
+    // Within paragraph: add short breaks after commas
+    let withCommaBreaks = paragraph.replace(/,\s*/g, ', <break time="300ms"/> ');
+    
+    // Ensure paragraph ends with punctuation
+    if (!/[.!?]$/.test(withCommaBreaks.trim())) {
+      withCommaBreaks = withCommaBreaks.trim() + '.';
+    }
+    
+    return withCommaBreaks.trim();
+  });
+  
+  // Join paragraphs with longer breaks
+  return processedParagraphs
+    .map(p => `${p} <break time="700ms"/>`)
     .join('\n');
 }
 
 /**
- * Build premium SSML with female voice and natural speed.
+ * Build premium SSML with teacher style and natural pauses.
  */
 function buildSSML(text: string, lang: 'ru' | 'uz'): string {
   const clean = sanitizeForSSML(text);
   const emphasized = emphasizeKeywords(clean, lang);
-  const withBreaks = addBreaks(emphasized);
+  const withParagraphBreaks = addParagraphBreaks(emphasized);
   
   // FEMALE VOICES ONLY
   const voice = lang === 'ru' 
@@ -92,9 +105,9 @@ function buildSSML(text: string, lang: 'ru' | 'uz'): string {
  xmlns:mstts="http://www.w3.org/2001/mstts"
  xml:lang="${xmlLang}">
   <voice name="${voice}">
-    <mstts:express-as style="assistant" styledegree="1.3">
-      <prosody rate="+2%" pitch="+2%">
-        ${withBreaks}
+    <mstts:express-as style="teacher" styledegree="1.6">
+      <prosody rate="+3%" pitch="+2%">
+        ${withParagraphBreaks}
       </prosody>
     </mstts:express-as>
   </voice>
@@ -136,6 +149,31 @@ async function synthesizeSpeechWithSSML(ssml: string, outputPath: string): Promi
       // ignore
     }
     
+    // If SSML invalid, try regenerating without emphasis
+    if (errorText.includes('SSML') || errorText.includes('xml') || response.status === 400) {
+      console.warn('[Azure TTS] SSML validation error, attempting fallback without emphasis');
+      // Fallback: regenerate without emphasis tags
+      const fallbackSSML = ssml.replace(/<emphasis[^>]*>|<\/emphasis>/g, '');
+      const fallbackResponse = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Ocp-Apim-Subscription-Key': AZURE_SPEECH_KEY,
+          'Content-Type': 'application/ssml+xml',
+          'X-Microsoft-OutputFormat': AZURE_OUTPUT_FORMAT,
+          'User-Agent': 'ZiyoMed-TTS/1.0',
+        },
+        body: fallbackSSML,
+      });
+      
+      if (fallbackResponse.ok) {
+        const audioBuffer = await fallbackResponse.arrayBuffer();
+        const audioDir = path.dirname(outputPath);
+        fs.mkdirSync(audioDir, { recursive: true });
+        fs.writeFileSync(outputPath, Buffer.from(audioBuffer));
+        return outputPath;
+      }
+    }
+    
     throw new Error(`Azure TTS failed: ${response.status} - ${errorMsg}`);
   }
   
@@ -163,14 +201,20 @@ export async function synthesizeSpeech(
     throw new Error(`Script is too short or empty: "${trimmedScript}"`);
   }
   
-  // Build SSML (rate is fixed at +2%, not configurable)
+  // Build SSML (rate is fixed at +3%, not configurable)
   const ssml = buildSSML(trimmedScript, lang);
   
   // Log SSML for debugging (first 500 chars)
   console.log('[Azure TTS] Generated SSML (first 500 chars):', ssml.slice(0, 500));
   
-  // Synthesize
-  return synthesizeSpeechWithSSML(ssml, outputPath);
+  // Synthesize (with error handling)
+  try {
+    return await synthesizeSpeechWithSSML(ssml, outputPath);
+  } catch (error) {
+    console.error('[Azure TTS] Synthesis failed:', error);
+    // Log error but don't break exam flow
+    throw error;
+  }
 }
 
 /**
