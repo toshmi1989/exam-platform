@@ -41,7 +41,8 @@ import {
 import { getZiyodaPrompts, setZiyodaPrompts } from '../ai/ziyoda-prompts.service';
 import { sendBroadcastToUsers } from '../../services/broadcastSender.service';
 import serverOpsRouter from './serverOps.routes';
-import { clearAllTtsData } from '../tts/tts.service';
+import { clearAllTtsData, clearTtsDataByDirectionGroup } from '../tts/tts.service';
+import { getTtsSettingsDto, updateTtsSettings } from '../tts/tts-settings.service';
 
 const router = Router();
 
@@ -1159,6 +1160,94 @@ router.put('/ziyoda-prompts', async (req, res) => {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[admin/ziyoda-prompts PUT]', err);
+    res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+// TTS settings and stats
+router.get('/tts/settings', async (_req, res) => {
+  try {
+    const settings = await getTtsSettingsDto();
+    res.json(settings);
+  } catch (err) {
+    console.error('[admin/tts/settings GET]', err);
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+router.patch('/tts/settings', async (req, res) => {
+  try {
+    const body = req.body as { enabled?: boolean; voiceRu?: string; voiceUz?: string };
+    const settings = await updateTtsSettings({
+      ...(typeof body.enabled === 'boolean' && { enabled: body.enabled }),
+      ...(typeof body.voiceRu === 'string' && { voiceRu: body.voiceRu.trim() || undefined }),
+      ...(typeof body.voiceUz === 'string' && { voiceUz: body.voiceUz.trim() || undefined }),
+    });
+    res.json(settings);
+  } catch (err) {
+    console.error('[admin/tts/settings PATCH]', err);
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+router.get('/tts/stats', async (_req, res) => {
+  try {
+    const [scriptsCount, audioCount] = await Promise.all([
+      prisma.questionAudioScript.count(),
+      prisma.questionAudio.count(),
+    ]);
+    res.json({ scriptsCount, audioCount });
+  } catch (err) {
+    console.error('[admin/tts/stats]', err);
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+/** List direction groups for TTS clear-by-direction (unique directionGroupId with label). */
+router.get('/tts/directions', async (_req, res) => {
+  try {
+    const exams = await prisma.exam.findMany({
+      where: { directionGroupId: { not: null } },
+      select: { directionGroupId: true, direction: true },
+      orderBy: { direction: 'asc' },
+    });
+    const byGroup = new Map<string, string>();
+    for (const e of exams) {
+      if (e.directionGroupId && !byGroup.has(e.directionGroupId)) {
+        byGroup.set(e.directionGroupId, e.direction);
+      }
+    }
+    const items = Array.from(byGroup.entries()).map(([directionGroupId, label]) => ({
+      directionGroupId,
+      label,
+    }));
+    res.json({ items });
+  } catch (err) {
+    console.error('[admin/tts/directions]', err);
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ ok: false, error: msg });
+  }
+});
+
+/** Clear TTS data (scripts + audio) for questions of exams in the given direction group. */
+router.delete('/tts/clear-by-direction', async (req, res) => {
+  try {
+    const directionGroupId = String(req.body?.directionGroupId ?? req.query?.directionGroupId ?? '').trim();
+    if (!directionGroupId) {
+      return res.status(400).json({ ok: false, error: 'directionGroupId is required' });
+    }
+    const result = await clearTtsDataByDirectionGroup(directionGroupId);
+    res.json({
+      ok: true,
+      message: 'TTS data cleared for direction',
+      ...result,
+    });
+  } catch (err) {
+    console.error('[admin/tts/clear-by-direction]', err);
+    const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ ok: false, error: msg });
   }
 });

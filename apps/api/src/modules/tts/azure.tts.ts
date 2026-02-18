@@ -26,6 +26,8 @@ try {
 export interface TtsOptions {
   rate?: number;
   pauseMs?: number;
+  voiceRu?: string;
+  voiceUz?: string;
 }
 
 /**
@@ -167,18 +169,21 @@ function addSemanticPacing(text: string, lang: 'ru' | 'uz'): string {
 /**
  * Build premium SSML with teacher style and natural pauses.
  */
-function buildSSML(text: string, lang: 'ru' | 'uz'): string {
+const DEFAULT_VOICE_RU = 'ru-RU-SvetlanaNeural';
+const DEFAULT_VOICE_UZ = 'uz-UZ-MadinaNeural';
+
+function buildSSML(text: string, lang: 'ru' | 'uz', voiceOverrides?: { voiceRu?: string; voiceUz?: string }): string {
   const clean = sanitizeForSSML(removeDuplicateSentences(text));
   const withTermProsody = slowDownFirstTermMentions(clean, lang);
   const emphasized = emphasizeKeywords(withTermProsody, lang);
   const withPacing = addSemanticPacing(emphasized, lang);
-  
-  // FEMALE VOICES ONLY
-  const voice = lang === 'ru' 
-    ? 'ru-RU-SvetlanaNeural'
-    : 'uz-UZ-MadinaNeural';
-  
-  const xmlLang = lang === 'ru' 
+
+  const voice =
+    lang === 'ru'
+      ? (voiceOverrides?.voiceRu ?? DEFAULT_VOICE_RU)
+      : (voiceOverrides?.voiceUz ?? DEFAULT_VOICE_UZ);
+
+  const xmlLang = lang === 'ru'
     ? 'ru-RU'
     : 'uz-UZ';
   
@@ -300,10 +305,13 @@ export async function synthesizeSpeech(
     throw new Error(`Script is too short or empty: "${trimmedScript}"`);
   }
 
-  const chunks = splitScriptIntoChunks(trimmedScript, MAX_CHARS_PER_REQUEST);
+  const voiceOverrides = {
+    ...(options.voiceRu && { voiceRu: options.voiceRu }),
+    ...(options.voiceUz && { voiceUz: options.voiceUz }),
+  };
 
   if (chunks.length === 1) {
-    const ssml = buildSSML(trimmedScript, lang);
+    const ssml = buildSSML(trimmedScript, lang, Object.keys(voiceOverrides).length ? voiceOverrides : undefined);
     console.log('[Azure TTS] Single segment, SSML length:', ssml.length);
     try {
       return await synthesizeSpeechWithSSML(ssml, outputPath);
@@ -317,7 +325,7 @@ export async function synthesizeSpeech(
   fs.mkdirSync(dir, { recursive: true });
   const buffers: Buffer[] = [];
   for (let i = 0; i < chunks.length; i++) {
-    const ssml = buildSSML(chunks[i], lang);
+    const ssml = buildSSML(chunks[i], lang, Object.keys(voiceOverrides).length ? voiceOverrides : undefined);
     console.log(`[Azure TTS] Segment ${i + 1}/${chunks.length}, SSML length:`, ssml.length);
     const arrayBuffer = await requestAudioForSSML(ssml);
     buffers.push(Buffer.from(arrayBuffer));

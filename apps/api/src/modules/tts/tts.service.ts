@@ -10,6 +10,7 @@ import { prisma } from '../../db/prisma';
 import { generateAudioScript } from './audio-script.generator';
 import { synthesizeSpeech, getAudioPath } from './azure.tts';
 import { getOrCreateExplanation } from '../ai/ai.service';
+import { getTtsSettingsForPipeline } from './tts-settings.service';
 
 const AUDIO_BASE_URL = process.env.AUDIO_BASE_URL ?? '/audio';
 
@@ -46,6 +47,61 @@ export async function clearAllTtsData(): Promise<{ scriptsDeleted: number; audio
 }
 
 /**
+ * Clear TTS data (scripts and audio) for all questions belonging to exams with the given directionGroupId.
+ * Returns counts of deleted records and files.
+ */
+export async function clearTtsDataByDirectionGroup(
+  directionGroupId: string
+): Promise<{ scriptsDeleted: number; audioDeleted: number; filesDeleted: number }> {
+  const exams = await prisma.exam.findMany({
+    where: { directionGroupId },
+    select: { id: true },
+  });
+  const examIds = exams.map((e) => e.id);
+  if (examIds.length === 0) {
+    return { scriptsDeleted: 0, audioDeleted: 0, filesDeleted: 0 };
+  }
+
+  const questionIds = await prisma.question.findMany({
+    where: { examId: { in: examIds } },
+    select: { id: true },
+  }).then((rows) => rows.map((r) => r.id));
+
+  if (questionIds.length === 0) {
+    return { scriptsDeleted: 0, audioDeleted: 0, filesDeleted: 0 };
+  }
+
+  const audioRecords = await prisma.questionAudio.findMany({
+    where: { questionId: { in: questionIds } },
+  });
+
+  let filesDeleted = 0;
+  for (const record of audioRecords) {
+    try {
+      if (fs.existsSync(record.audioPath)) {
+        fs.unlinkSync(record.audioPath);
+        filesDeleted++;
+      }
+    } catch (error) {
+      console.error(`[TTS Cleanup] Failed to delete file ${record.audioPath}:`, error);
+    }
+  }
+
+  const scriptsResult = await prisma.questionAudioScript.deleteMany({
+    where: { questionId: { in: questionIds } },
+  });
+  const audioResult = await prisma.questionAudio.deleteMany({
+    where: { questionId: { in: questionIds } },
+  });
+
+  return {
+    scriptsDeleted: scriptsResult.count,
+    audioDeleted: audioResult.count,
+    filesDeleted,
+  };
+}
+
+/**
  * Calculate hash for script regeneration check.
  */
 function calculateHash(questionText: string, aiExplanation: string, lang: string): string {
@@ -62,6 +118,11 @@ export async function getOrCreateAudio(
   questionId: string,
   lang: 'ru' | 'uz' // Requested lang (ignored, we use question-based detection)
 ): Promise<{ audioUrl: string }> {
+  const ttsSettings = await getTtsSettingsForPipeline();
+  if (!ttsSettings.enabled) {
+    throw new Error('TTS is disabled in admin settings');
+  }
+
   // 1. Load question first to determine language
   const question = await prisma.question.findUnique({
     where: { id: questionId },
@@ -168,7 +229,10 @@ export async function getOrCreateAudio(
   // 5. Generate audio using language derived from question text.
   const audioPath = getAudioPath(questionId, generationLang);
   try {
-    await synthesizeSpeech(script.content, generationLang, audioPath);
+    await synthesizeSpeech(script.content, generationLang, audioPath, {
+      voiceRu: ttsSettings.voiceRu,
+      voiceUz: ttsSettings.voiceUz,
+    });
   } catch (error) {
     // Do not break exam flow when generation fails and old audio exists.
     const fallback = await prisma.questionAudio.findUnique({

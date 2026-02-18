@@ -142,11 +142,14 @@ model QuestionAudio {
 }
 
 model TtsSettings {
-  id          String   @id @default(cuid())
-  rate        Int      @default(0)
-  pauseMs     Int      @default(500)
-  ssmlTemplate String  @db.Text
-  updatedAt   DateTime @default(now()) @updatedAt
+  id           String   @id @default(cuid())
+  rate         Int      @default(0)
+  pauseMs      Int      @default(500)
+  ssmlTemplate String   @db.Text
+  enabled      Boolean  @default(true)
+  voiceRu      String?  // e.g. ru-RU-SvetlanaNeural
+  voiceUz      String?  // e.g. uz-UZ-MadinaNeural
+  updatedAt    DateTime @default(now()) @updatedAt
 }
 
 model QuestionOption {

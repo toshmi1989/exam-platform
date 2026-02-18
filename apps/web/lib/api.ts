@@ -760,6 +760,104 @@ export async function clearZiyodaBotCache(): Promise<{ cleared: number }> {
   return { cleared: payload?.cleared ?? 0 };
 }
 
+// ——— Admin: Azure TTS ———
+
+export interface AdminTtsSettings {
+  enabled: boolean;
+  voiceRu: string;
+  voiceUz: string;
+  regionConfigured: boolean;
+  keyConfigured: boolean;
+}
+
+export async function getAdminTtsSettings(): Promise<AdminTtsSettings> {
+  const { response, data } = await apiFetch('/admin/tts/settings');
+  if (!response.ok) throw (data as ApiError) ?? new Error('Failed to load TTS settings');
+  return data as AdminTtsSettings;
+}
+
+export async function updateAdminTtsSettings(update: {
+  enabled?: boolean;
+  voiceRu?: string;
+  voiceUz?: string;
+}): Promise<AdminTtsSettings> {
+  const { response, data } = await apiFetch('/admin/tts/settings', {
+    method: 'PATCH',
+    json: update,
+  });
+  if (!response.ok) throw (data as ApiError) ?? new Error('Failed to save TTS settings');
+  return data as AdminTtsSettings;
+}
+
+export async function getAdminTtsStats(): Promise<{ scriptsCount: number; audioCount: number }> {
+  const { response, data } = await apiFetch('/admin/tts/stats');
+  if (!response.ok) throw (data as ApiError) ?? new Error('Failed to load TTS stats');
+  const payload = data as { scriptsCount?: number; audioCount?: number } | null;
+  return {
+    scriptsCount: payload?.scriptsCount ?? 0,
+    audioCount: payload?.audioCount ?? 0,
+  };
+}
+
+export async function clearAllTtsData(): Promise<{
+  ok: boolean;
+  scriptsDeleted: number;
+  audioDeleted: number;
+  filesDeleted: number;
+}> {
+  const { response, data } = await apiFetch('/admin/tts/clear-all', { method: 'DELETE' });
+  if (!response.ok) throw (data as ApiError) ?? new Error('Failed to clear TTS data');
+  const payload = data as {
+    ok?: boolean;
+    scriptsDeleted?: number;
+    audioDeleted?: number;
+    filesDeleted?: number;
+  } | null;
+  return {
+    ok: payload?.ok ?? true,
+    scriptsDeleted: payload?.scriptsDeleted ?? 0,
+    audioDeleted: payload?.audioDeleted ?? 0,
+    filesDeleted: payload?.filesDeleted ?? 0,
+  };
+}
+
+export interface TtsDirectionItem {
+  directionGroupId: string;
+  label: string;
+}
+
+export async function getAdminTtsDirections(): Promise<TtsDirectionItem[]> {
+  const { response, data } = await apiFetch('/admin/tts/directions');
+  if (!response.ok) throw (data as ApiError) ?? new Error('Failed to load directions');
+  const payload = data as { items?: TtsDirectionItem[] } | null;
+  return payload?.items ?? [];
+}
+
+export async function clearTtsDataByDirection(directionGroupId: string): Promise<{
+  ok: boolean;
+  scriptsDeleted: number;
+  audioDeleted: number;
+  filesDeleted: number;
+}> {
+  const { response, data } = await apiFetch('/admin/tts/clear-by-direction', {
+    method: 'DELETE',
+    json: { directionGroupId },
+  });
+  if (!response.ok) throw (data as ApiError) ?? new Error('Failed to clear TTS by direction');
+  const payload = data as {
+    ok?: boolean;
+    scriptsDeleted?: number;
+    audioDeleted?: number;
+    filesDeleted?: number;
+  } | null;
+  return {
+    ok: payload?.ok ?? true,
+    scriptsDeleted: payload?.scriptsDeleted ?? 0,
+    audioDeleted: payload?.audioDeleted ?? 0,
+    filesDeleted: payload?.filesDeleted ?? 0,
+  };
+}
+
 export type UnansweredQuestionItem = {
   id: string;
   questionText: string;
