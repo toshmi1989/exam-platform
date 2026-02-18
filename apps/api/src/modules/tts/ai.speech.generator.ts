@@ -29,6 +29,7 @@ function systemPrompt(): string {
 Rewrite the provided medical explanation into a natural academic oral lecture.
 
 Rules:
+- The user will specify the required output language. Use ONLY that language (Russian = Cyrillic, Uzbek = Latin). Do not mix languages.
 - Do NOT repeat the question.
 - Do NOT define secondary words outside the main topic.
 - Focus strictly on the central medical condition.
@@ -42,16 +43,18 @@ Rules:
 - Produce continuous speech-ready text.
 - Finish with a strong academic conclusion.
 
-Language rule:
-- If question contains Cyrillic -> respond in Russian.
-- Otherwise -> respond in Uzbek (Latin).
-
 Target length:
 800-1200 characters.`;
 }
 
 function userPrompt(input: SpeechRewriteInput): string {
-  return `Question:
+  const langInstruction =
+    input.lang === 'ru'
+      ? 'Your entire response MUST be in Russian only. Use Cyrillic script. Do not use Uzbek or Latin.'
+      : 'Your entire response MUST be in Uzbek only. Use Latin script. Do not use Russian or Cyrillic.';
+  return `${langInstruction}
+
+Question:
 ${input.question}
 
 AI explanation:
