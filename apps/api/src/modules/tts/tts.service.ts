@@ -91,12 +91,32 @@ export async function getOrCreateAudio(
     });
 
     // Clean text: remove invalid UTF-16 surrogates and normalize
-    // Also remove any control characters except newlines and tabs
-    const cleanContent = scriptContent
+    // More aggressive cleaning for Prisma compatibility
+    let cleanContent = scriptContent
       .replace(/[\uD800-\uDFFF]/g, '') // Remove invalid surrogates
-      .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '') // Remove control chars except \n, \t
+      .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g, '') // Remove all control chars
+      .replace(/[\uFEFF]/g, '') // Remove BOM
       .normalize('NFC') // Normalize Unicode
       .trim();
+    
+    // Additional safety: ensure valid UTF-8
+    try {
+      // Try to encode/decode to validate UTF-8
+      Buffer.from(cleanContent, 'utf8').toString('utf8');
+    } catch {
+      // If invalid, remove problematic characters more aggressively
+      cleanContent = cleanContent
+        .split('')
+        .filter((char) => {
+          try {
+            Buffer.from(char, 'utf8').toString('utf8');
+            return true;
+          } catch {
+            return false;
+          }
+        })
+        .join('');
+    }
 
     script = await prisma.questionAudioScript.upsert({
       where: { questionId_lang: { questionId, lang } },
