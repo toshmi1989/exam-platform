@@ -22,6 +22,7 @@ export interface ExamResult {
   score: number;
   maxScore: number;
   mode?: 'exam' | 'practice';
+  examId?: string;
   details?: {
     questionId: string;
     correctOptionId: string;

@@ -181,12 +181,9 @@ router.get('/analytics', async (_req, res) => {
   const examTypeMap = Object.fromEntries(examTypes.map((e) => [e.id, e.type]));
 
   const byExam: Record<string, number> = {};
-  const byExamOral: Record<string, number> = {};
   for (const a of attempts) {
     const type = examTypeMap[a.examId];
-    if (type === 'ORAL') {
-      byExamOral[a.examId] = (byExamOral[a.examId] ?? 0) + 1;
-    } else {
+    if (type !== 'ORAL') {
       byExam[a.examId] = (byExam[a.examId] ?? 0) + 1;
     }
   }
@@ -194,31 +191,14 @@ router.get('/analytics', async (_req, res) => {
     .sort(([, a], [, b]) => b - a)
     .slice(0, 10)
     .map(([id]) => id);
-  const oralExamIds = Object.entries(byExamOral)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 10)
-    .map(([id]) => id);
-  const [exams, oralExams] = await Promise.all([
-    examIds.length
-      ? prisma.exam.findMany({
+  const exams =
+    examIds.length > 0
+      ? await prisma.exam.findMany({
           where: { id: { in: examIds } },
           select: { id: true, title: true },
         })
-      : [],
-    oralExamIds.length
-      ? prisma.exam.findMany({
-          where: { id: { in: oralExamIds } },
-          select: { id: true, title: true, category: { select: { name: true } } },
-        })
-      : [],
-  ]);
+      : [];
   const examMap = Object.fromEntries(exams.map((e) => [e.id, e.title]));
-  const oralExamMap = Object.fromEntries(
-    oralExams.map((e) => [
-      e.id,
-      { title: e.title, category: e.category?.name },
-    ])
-  );
   const topExams = Object.entries(byExam)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 10)
@@ -227,6 +207,40 @@ router.get('/analytics', async (_req, res) => {
       title: examMap[examId] ?? examId,
       attemptCount,
     }));
+
+  // Top oral: count "direction launches" from OralAccessLog (question views per exam in period)
+  const oralExamsList = await prisma.exam.findMany({
+    where: { type: 'ORAL' },
+    select: { id: true, title: true, category: { select: { name: true } } },
+  });
+  const oralExamIdSet = new Set(oralExamsList.map((e) => e.id));
+  const oralQuestionIds = await prisma.question.findMany({
+    where: { examId: { in: Array.from(oralExamIdSet) } },
+    select: { id: true, examId: true },
+  });
+  const questionToExam = Object.fromEntries(oralQuestionIds.map((q) => [q.id, q.examId]));
+  const oralLogs = await prisma.oralAccessLog.findMany({
+    where: {
+      questionId: { in: oralQuestionIds.map((q) => q.id) },
+      createdAt: { gte: start },
+    },
+    select: { questionId: true },
+  });
+  const byExamOral: Record<string, number> = {};
+  for (const log of oralLogs) {
+    if (log.questionId) {
+      const examId = questionToExam[log.questionId];
+      if (examId) {
+        byExamOral[examId] = (byExamOral[examId] ?? 0) + 1;
+      }
+    }
+  }
+  const oralExamMap = Object.fromEntries(
+    oralExamsList.map((e) => [
+      e.id,
+      { title: e.title, category: e.category?.name },
+    ])
+  );
   const topOralExams = Object.entries(byExamOral)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 10)

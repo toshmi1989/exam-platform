@@ -9,6 +9,8 @@ import PageHeader from '../../../../components/PageHeader';
 import { getResult, getReview, streamExplainQuestion } from '../../../../lib/api';
 import type { ExamResult, ApiError, ExamReview } from '../../../../lib/types';
 import { readSettings, Language } from '../../../../lib/uiSettings';
+import { readTelegramUser } from '../../../../lib/telegramUser';
+import { getOpenInTelegramAppUrl } from '../../../../lib/telegram';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import AiLoadingDots from '../../../../components/AiLoadingDots';
@@ -26,6 +28,12 @@ export default function AttemptResultPage() {
   const [ziyodaLoadingId, setZiyodaLoadingId] = useState<string | null>(null);
   const [ziyodaErrorForId, setZiyodaErrorForId] = useState<string | null>(null);
   const [ziyodaAvatarError, setZiyodaAvatarError] = useState(false);
+  const [isGuest, setIsGuest] = useState(false);
+
+  useEffect(() => {
+    const user = readTelegramUser();
+    setIsGuest(!user?.telegramId || user.telegramId.startsWith('guest-'));
+  }, []);
 
   function localizeReason(reasonCode?: string) {
     if (!reasonCode) return null;
@@ -88,7 +96,11 @@ export default function AttemptResultPage() {
         notAvailableTitle: 'Answers not available',
         notAvailableMessage:
           'To view correct answers and explanations after the test, you need an active subscription.',
+        notAvailableMessageGuest:
+          'Answers are available only after you buy one-time access and complete this test, or open in Telegram and get a subscription.',
         subscribeCta: 'Get subscription',
+        buyOneTimeCta: 'Buy one-time access',
+        openInTelegramCta: 'Open in Telegram',
         reviewError: 'Unable to load review.',
         reviewLoading: 'Loading answers...',
         back: 'Back to exams',
@@ -113,7 +125,11 @@ export default function AttemptResultPage() {
         notAvailableTitle: 'Javoblar mavjud emas',
         notAvailableMessage:
           'Testdan keyin to‘g‘ri javoblar va tushuntirishlarni ko‘rish uchun faol obuna kerak.',
+        notAvailableMessageGuest:
+          'Javoblar faqat shu test uchun bir martalik to‘lov qilib testni tugatgandan keyin yoki Telegramda ochib obuna olgandan keyin ko‘rinadi.',
         subscribeCta: 'Obuna olish',
+        buyOneTimeCta: 'Bir martalik kirish',
+        openInTelegramCta: "Telegramda ochish",
         reviewError: 'Tekshiruvni yuklab bo‘lmadi.',
         reviewLoading: 'Javoblar yuklanmoqda...',
         back: 'Imtihonlarga qaytish',
@@ -137,7 +153,11 @@ export default function AttemptResultPage() {
       notAvailableTitle: 'Ответы недоступны',
       notAvailableMessage:
         'Чтобы смотреть правильные ответы и пояснения после теста, нужна активная подписка.',
+      notAvailableMessageGuest:
+        'Ответы доступны только после покупки разового доступа и завершения этого теста или после авторизации в Telegram и оформления подписки.',
       subscribeCta: 'Оформить подписку',
+      buyOneTimeCta: 'Купить разовый доступ',
+      openInTelegramCta: 'Открыть в Telegram',
       reviewError: 'Не удалось загрузить ответы.',
       reviewLoading: 'Загружаем ответы...',
       back: 'Назад к экзаменам',
@@ -413,15 +433,37 @@ export default function AttemptResultPage() {
                         {copy.notAvailableTitle}
                       </p>
                       <p className="mt-1 text-sm text-slate-600">
-                        {copy.notAvailableMessage}
+                        {isGuest ? copy.notAvailableMessageGuest : copy.notAvailableMessage}
                       </p>
-                      <Button
-                        href="/cabinet/subscribe"
-                        size="md"
-                        className="mt-3 w-full sm:w-auto"
-                      >
-                        {copy.subscribeCta}
-                      </Button>
+                      {isGuest ? (
+                        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                          {result.examId ? (
+                            <Button
+                              href={`/cabinet/pay-one-time?examId=${encodeURIComponent(result.examId)}&mode=exam`}
+                              size="md"
+                              className="w-full sm:w-auto"
+                            >
+                              {copy.buyOneTimeCta}
+                            </Button>
+                          ) : null}
+                          <Button
+                            href={getOpenInTelegramAppUrl()}
+                            size="md"
+                            variant="secondary"
+                            className="w-full sm:w-auto"
+                          >
+                            {copy.openInTelegramCta}
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          href="/cabinet/subscribe"
+                          size="md"
+                          className="mt-3 w-full sm:w-auto"
+                        >
+                          {copy.subscribeCta}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>

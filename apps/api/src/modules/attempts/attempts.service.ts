@@ -385,7 +385,7 @@ export async function getAttemptResult(
     return { success: false, reasonCode: 'EXAM_NOT_FOUND' };
   }
 
-  return { success: true, result: { ...result, mode: attempt.mode } };
+  return { success: true, result: { ...result, mode: attempt.mode, examId: attempt.examId } };
 }
 
 export async function getAttemptReview(

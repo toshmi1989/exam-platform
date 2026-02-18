@@ -82,30 +82,35 @@ export default function AdminAnalyticsPage() {
                 {loading ? (
                   <p className="text-sm text-slate-500">{copy.loading}</p>
                 ) : data?.attemptsByDay.length ? (
-                  <div className="space-y-1">
-                    <div className="flex max-h-32 flex-wrap items-end gap-0.5">
-                      {data.attemptsByDay.map(({ date, count }) => {
-                        const max = Math.max(
-                          ...data.attemptsByDay.map((d) => d.count),
-                          1
-                        );
-                        const h = max > 0 ? (count / max) * 80 : 0;
-                        return (
-                          <div
-                            key={date}
-                            className="flex flex-col items-center gap-0.5"
-                            title={`${date}: ${count}`}
-                          >
-                            <span
-                              className="w-3 min-w-[12px] rounded-t bg-[#2AABEE]"
-                              style={{ height: `${h}px` }}
-                            />
-                            <span className="text-[10px] text-slate-500">
-                              {count}
-                            </span>
-                          </div>
-                        );
-                      })}
+                  <div className="space-y-1 overflow-hidden">
+                    <div className="overflow-x-auto -mx-1 px-1 overscroll-x-contain">
+                      <div
+                        className="flex items-end gap-0.5 pb-0.5"
+                        style={{ minWidth: `${Math.max(data.attemptsByDay.length * 14, 120)}px` }}
+                      >
+                        {data.attemptsByDay.map(({ date, count }) => {
+                          const max = Math.max(
+                            ...data.attemptsByDay.map((d) => d.count),
+                            1
+                          );
+                          const h = max > 0 ? (count / max) * 80 : 0;
+                          return (
+                            <div
+                              key={date}
+                              className="flex shrink-0 flex-col items-center gap-0.5"
+                              title={`${date}: ${count}`}
+                            >
+                              <span
+                                className="w-2.5 min-w-[10px] rounded-t bg-[#2AABEE]"
+                                style={{ height: `${h}px` }}
+                              />
+                              <span className="text-[10px] text-slate-500">
+                                {count}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                     <p className="mt-2 text-xs text-slate-500">
                       {data.attemptsByDay[0]?.date} —{' '}
