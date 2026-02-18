@@ -1,6 +1,6 @@
 /**
  * Azure Text-to-Speech module.
- * Generates audio from script using Azure Cognitive Services Speech SDK.
+ * Premium teacher mode with female voice only.
  */
 
 import * as fs from 'fs';
@@ -18,6 +18,11 @@ try {
   // ignore
 }
 
+export interface TtsOptions {
+  rate?: number;
+  pauseMs?: number;
+}
+
 /**
  * Sanitize text for SSML: normalize Unicode and escape XML.
  */
@@ -31,7 +36,28 @@ function sanitizeForSSML(text: string): string {
 }
 
 /**
- * Add natural breaks between sentences.
+ * Emphasize important keywords with SSML emphasis tags.
+ */
+function emphasizeKeywords(text: string, lang: 'ru' | 'uz'): string {
+  const keywords = lang === 'ru'
+    ? ['важно', 'основное', 'главное', 'ключевой', 'обратите внимание', 'запомните', 'это']
+    : ['muhim', 'asosiy', 'eng muhim', 'e\'tibor bering', 'esda tuting', 'bu'];
+  
+  let result = text;
+  
+  // Wrap keywords with emphasis (work backwards to preserve positions)
+  for (const keyword of keywords) {
+    const regex = new RegExp(`\\b${keyword}\\b`, 'gi');
+    result = result.replace(regex, (match) => {
+      return `<emphasis level="moderate">${match}</emphasis>`;
+    });
+  }
+  
+  return result;
+}
+
+/**
+ * Add natural breaks between sentences (400ms, not slow).
  */
 function addBreaks(text: string): string {
   const sentences = text
@@ -45,15 +71,17 @@ function addBreaks(text: string): string {
 }
 
 /**
- * Build realistic SSML with teacher-style voice.
+ * Build premium SSML with female voice and natural speed.
  */
-function buildSSML(text: string, lang: 'ru' | 'uz', rate: number = -5): string {
+function buildSSML(text: string, lang: 'ru' | 'uz'): string {
   const clean = sanitizeForSSML(text);
-  const withBreaks = addBreaks(clean);
+  const emphasized = emphasizeKeywords(clean, lang);
+  const withBreaks = addBreaks(emphasized);
   
+  // FEMALE VOICES ONLY
   const voice = lang === 'ru' 
-    ? 'ru-RU-DmitryNeural'
-    : 'uz-UZ-SardorNeural';
+    ? 'ru-RU-SvetlanaNeural'
+    : 'uz-UZ-MadinaNeural';
   
   const xmlLang = lang === 'ru' 
     ? 'ru-RU'
@@ -64,8 +92,8 @@ function buildSSML(text: string, lang: 'ru' | 'uz', rate: number = -5): string {
  xmlns:mstts="http://www.w3.org/2001/mstts"
  xml:lang="${xmlLang}">
   <voice name="${voice}">
-    <mstts:express-as style="assistant" styledegree="1.2">
-      <prosody rate="${rate}%" pitch="+2%">
+    <mstts:express-as style="assistant" styledegree="1.3">
+      <prosody rate="+2%" pitch="+2%">
         ${withBreaks}
       </prosody>
     </mstts:express-as>
@@ -119,11 +147,6 @@ async function synthesizeSpeechWithSSML(ssml: string, outputPath: string): Promi
   return outputPath;
 }
 
-export interface TtsOptions {
-  rate?: number;
-  pauseMs?: number;
-}
-
 /**
  * Generate audio file from script.
  * Returns path to generated WAV file.
@@ -140,9 +163,8 @@ export async function synthesizeSpeech(
     throw new Error(`Script is too short or empty: "${trimmedScript}"`);
   }
   
-  // Build SSML
-  const rate = options.rate ?? -5;
-  const ssml = buildSSML(trimmedScript, lang, rate);
+  // Build SSML (rate is fixed at +2%, not configurable)
+  const ssml = buildSSML(trimmedScript, lang);
   
   // Log SSML for debugging (first 500 chars)
   console.log('[Azure TTS] Generated SSML (first 500 chars):', ssml.slice(0, 500));
