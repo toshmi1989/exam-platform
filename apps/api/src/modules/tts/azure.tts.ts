@@ -18,11 +18,6 @@ try {
   // ignore
 }
 
-interface TtsOptions {
-  rate?: number; // -20 to +20 percent
-  pauseMs?: number; // pause duration in ms
-}
-
 /**
  * Sanitize text for SSML: normalize Unicode and escape XML.
  */
