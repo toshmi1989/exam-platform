@@ -135,14 +135,23 @@ function enhanceScriptWithSSML(script: string, lang: 'ru' | 'uz'): string {
       const afterComma = sentence.substring(pos + 1);
       
       // Skip if already has break tag immediately after comma
-      if (/^\s*<break[^>]*>/i.test(afterComma.trim())) {
+      const trimmedAfter = afterComma.trim();
+      if (/^<break[^>]*>/i.test(trimmedAfter)) {
         continue;
       }
       
-      // Insert break tag
-      const trimmedAfter = afterComma.trim();
+      // Check if there's a partial break tag (broken) - skip insertion
+      if (/<break/i.test(trimmedAfter.slice(0, 50))) {
+        console.warn('[Azure TTS] Warning: Found partial break tag, skipping insertion');
+        continue;
+      }
+      
+      // Insert break tag safely
       sentence = beforeComma + '<break time="400ms"/>' + (trimmedAfter ? ' ' + trimmedAfter : '');
     }
+    
+    // Clean up any duplicate break tags that might have been created
+    sentence = sentence.replace(/(<break[^>]*>)\s*<break[^>]*>/g, '$1');
 
     enhanced.push(sentence);
 
@@ -238,11 +247,20 @@ function buildSSML(script: string, lang: 'ru' | 'uz', options: TtsOptions = {}):
   
   // Remove any stray numbers that might have been inserted (like "0", "1", "2" etc.)
   // Also remove numbers that appear between break tags
+  // Remove duplicate break tags
+  // Fix broken break tags like <break ti<break time="400ms"/> me="400ms"/>
   let cleanedContent = finalContent
+    // First, fix broken/nested break tags (most critical)
+    .replace(/<break[^>]*<break[^>]*>/g, '<break time="400ms"/>') // Fix nested/broken break tags
+    .replace(/<break\s+ti<break[^>]*>\s*me="[^"]*"\/>/g, '<break time="400ms"/>') // Fix specific broken pattern
+    .replace(/<break[^>]*>\s*<break[^>]*>/g, '<break time="400ms"/>') // Remove duplicate consecutive break tags
+    // Then remove stray numbers
     .replace(/\s+(\d+)\s*(?=<break)/g, ' ') // Remove numbers before break tags
     .replace(/(<\/break>)\s*(\d+)\s*(?=<break)/g, '$1 ') // Remove numbers between break tags
     .replace(/(<\/break>)\s*(\d+)([А-Яа-яA-Za-zЎўҚқҒғҲҳ])/g, '$1 $3') // Remove numbers before text after break
-    .replace(/([.!?])\s*(\d+)\s*(?=<break)/g, '$1 '); // Remove numbers after punctuation before break
+    .replace(/([.!?])\s*(\d+)\s*(?=<break)/g, '$1 ') // Remove numbers after punctuation before break
+    // Final cleanup: remove any remaining duplicate breaks
+    .replace(/(<break[^>]*>)\s*<break[^>]*>/g, '$1');
   
   const ssml = `<speak xmlns="http://www.w3.org/2001/10/synthesis" version="1.0" xml:lang="${lang === 'ru' ? 'ru-RU' : 'uz-UZ'}">
   <voice name="${voiceName}">

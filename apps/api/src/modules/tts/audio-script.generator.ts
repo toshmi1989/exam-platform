@@ -71,7 +71,8 @@ export function generateAudioScript(input: GenerateScriptInput): string {
 
   // Clean AI explanation: remove markdown, emojis, lists
   let clean = aiExplanation
-    .replace(/^#+\s+/gm, '') // headers
+    .replace(/^#+\s+/gm, '') // headers (including ##, ###, etc.)
+    .replace(/#{2,}\s*/g, '') // any multiple # symbols
     .replace(/\*\*(.+?)\*\*/g, '$1') // bold
     .replace(/\*(.+?)\*/g, '$1') // italic
     .replace(/^[-*+]\s+/gm, '') // list bullets
@@ -83,7 +84,7 @@ export function generateAudioScript(input: GenerateScriptInput): string {
     .replace(/\n{3,}/g, '\n\n') // multiple newlines
     .trim();
 
-  // Remove language-specific headers and footers
+  // Remove language-specific headers and footers (more aggressive)
   clean = clean
     .replace(/Ziyoda tushuntiradi/gi, '')
     .replace(/Savol qisqacha mazmuni/gi, '')
@@ -91,28 +92,62 @@ export function generateAudioScript(input: GenerateScriptInput): string {
     .replace(/Tibbiy tushuntirish/gi, '')
     .replace(/🤖 Зиёда объясняет/gi, '')
     .replace(/🤖 Ziyoda tushuntiradi/gi, '')
+    .replace(/Зиёда объясняет/gi, '')
+    .replace(/Краткий смысл/gi, '')
+    .replace(/Правильный ответ/gi, '')
+    .replace(/Медицинское объяснение/gi, '')
+    .replace(/##\s*/g, '') // remove markdown headers
+    .replace(/#\s*/g, '') // remove single # headers
     .trim();
 
   // Filter by target language - STRICT: Azure TTS doesn't support mixed languages
   const filtered = filterByLanguage(clean, lang);
   
-  // If filtered result is too short, check if original has mixed languages
+  // STRICT: If filtered is empty or too short, check if original has mixed languages
   let finalExplanation = filtered;
+  
   if (filtered.length < 50) {
     // Check if original has mixed languages
     const hasMixedLang = lang === 'ru' 
       ? (uzbekCyrillic.test(clean) || uzbekLatinWords.test(clean))
       : (!uzbekCyrillic.test(clean) && !uzbekLatinWords.test(clean) && /[А-Яа-яЁё]/.test(clean));
     
-    if (hasMixedLang) {
-      // Original has mixed languages - use filtered only, even if short
-      console.warn('[Audio Script] Warning: explanation has mixed languages, using filtered only:', {
+    if (hasMixedLang || filtered.length === 0) {
+      // Original has mixed languages OR filtered is empty - STRICT: reject
+      console.error('[Audio Script] ERROR: Cannot generate script - mixed languages detected:', {
         originalLength: clean.length,
         filteredLength: filtered.length,
         lang,
-        preview: filtered.slice(0, 100),
+        originalPreview: clean.slice(0, 200),
+        filteredPreview: filtered.slice(0, 100),
       });
-      finalExplanation = filtered;
+      
+      // Try one more aggressive filter pass
+      const sentences = clean.split(/[.!?]\s+/).filter(Boolean);
+      const strictFiltered = sentences
+        .filter((s) => {
+          const trimmed = s.trim();
+          if (trimmed.length < 10) return false;
+          
+          if (lang === 'ru') {
+            const hasCyrillic = /[А-Яа-яЁё]/.test(trimmed);
+            const hasUzbek = uzbekCyrillic.test(trimmed) || uzbekLatinWords.test(trimmed);
+            return hasCyrillic && !hasUzbek;
+          } else {
+            const hasUzbek = uzbekCyrillic.test(trimmed) || uzbekLatinWords.test(trimmed);
+            const hasOnlyRussian = /[А-Яа-яЁё]/.test(trimmed) && !uzbekCyrillic.test(trimmed);
+            return hasUzbek || (hasOnlyRussian && !/[А-Яа-яЁё]/.test(trimmed.replace(/[ЎўҚқҒғҲҳ]/g, '')));
+          }
+        })
+        .join('. ') + '.';
+      
+      if (strictFiltered.length > 50) {
+        finalExplanation = strictFiltered;
+        console.warn('[Audio Script] Using strict filtered result:', strictFiltered.slice(0, 100));
+      } else {
+        // Still too short - throw error
+        throw new Error(`Cannot generate audio script: explanation contains mixed languages and filtering resulted in empty/short text (${strictFiltered.length} chars)`);
+      }
     } else {
       // No mixed languages, safe to use original
       finalExplanation = clean;
@@ -124,7 +159,7 @@ export function generateAudioScript(input: GenerateScriptInput): string {
     const hasUzbek = uzbekCyrillic.test(finalExplanation) || uzbekLatinWords.test(finalExplanation);
     if (hasUzbek) {
       console.error('[Audio Script] ERROR: Final explanation still contains Uzbek text for Russian SSML!');
-      // Remove Uzbek sentences
+      // Remove Uzbek sentences one more time
       const sentences = finalExplanation.split(/[.!?]\s+/).filter(Boolean);
       finalExplanation = sentences
         .filter((s) => {
@@ -132,6 +167,11 @@ export function generateAudioScript(input: GenerateScriptInput): string {
           return !uzbekCyrillic.test(trimmed) && !uzbekLatinWords.test(trimmed);
         })
         .join('. ') + '.';
+      
+      // If still has Uzbek after filtering, throw error
+      if (uzbekCyrillic.test(finalExplanation) || uzbekLatinWords.test(finalExplanation)) {
+        throw new Error('Cannot generate Russian audio script: explanation contains Uzbek text that cannot be filtered out');
+      }
     }
   }
 
