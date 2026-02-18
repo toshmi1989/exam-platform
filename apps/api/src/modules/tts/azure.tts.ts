@@ -1,7 +1,7 @@
 /**
  * Azure Text-to-Speech module.
  * Premium teacher mode with female voice only.
- * Natural paragraph-based pauses.
+ * Natural paragraph-based pauses + academic intonation.
  */
 
 import * as fs from 'fs';
@@ -36,6 +36,15 @@ function sanitizeForSSML(text: string): string {
     .replace(/>/g, '&gt;');
 }
 
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function applyOutsideTags(input: string, fn: (text: string) => string): string {
+  const parts = input.split(/(<[^>]+>)/g);
+  return parts.map((p) => (p.startsWith('<') && p.endsWith('>') ? p : fn(p))).join('');
+}
+
 /**
  * Emphasize important keywords with SSML emphasis tags.
  */
@@ -58,29 +67,128 @@ function emphasizeKeywords(text: string, lang: 'ru' | 'uz'): string {
 }
 
 /**
- * Add paragraph-based breaks (700ms between paragraphs).
- * Add short breaks after commas (300ms).
+ * Known phoneme corrections (IPA).
  */
-function addParagraphBreaks(text: string): string {
-  // Split by paragraph breaks (double newlines)
-  const paragraphs = text.split('\n\n').filter(p => p.trim().length > 0);
-  
-  const processedParagraphs = paragraphs.map(paragraph => {
-    // Within paragraph: add short breaks after commas
-    let withCommaBreaks = paragraph.replace(/,\s*/g, ', <break time="300ms"/> ');
-    
-    // Ensure paragraph ends with punctuation
-    if (!/[.!?]$/.test(withCommaBreaks.trim())) {
-      withCommaBreaks = withCommaBreaks.trim() + '.';
+const PHONEMES_RU: Record<string, string> = {
+  'томография': 'təməˈɡrafʲɪjə',
+  'рентгеноскопия': 'rentɡenɔˈskopʲɪjə',
+};
+
+function applyPhonemes(text: string, lang: 'ru' | 'uz'): string {
+  if (lang !== 'ru') return text;
+  let out = text;
+  for (const [term, ipa] of Object.entries(PHONEMES_RU)) {
+    const re = new RegExp(`\\b${escapeRegExp(term)}\\b`, 'gi');
+    out = out.replace(re, (match) => `<mstts:phoneme alphabet="ipa" ph="${ipa}">${match}</mstts:phoneme>`);
+  }
+  return out;
+}
+
+/**
+ * Detect complex medical terms.
+ */
+function detectTerms(text: string): string[] {
+  const endings = /\b[\p{L}]+(?:itis|osis|oma|logiya|grafiya|skopiya)\b/giu;
+  const words = text.match(/\b[\p{L}][\p{L}-']{2,}\b/gu) || [];
+  const out: string[] = [];
+  for (const w of words) {
+    const norm = w.replace(/[-']/g, '');
+    if (norm.length > 9) out.push(w);
+    if (/^[A-ZА-ЯЁ]/.test(w) && norm.length > 6) out.push(w);
+  }
+  out.push(...(text.match(endings) || []));
+  return Array.from(new Set(out.map((t) => t.trim()))).slice(0, 8);
+}
+
+/**
+ * Slow down complex Latin/medical terms without slowing the whole speech.
+ */
+function slowDownTerms(text: string): string {
+  const terms = detectTerms(text);
+  if (!terms.length) return text;
+  return applyOutsideTags(text, (chunk) => {
+    let out = chunk;
+    for (const term of terms) {
+      const re = new RegExp(`\\b${escapeRegExp(term)}\\b`, 'g');
+      out = out.replace(re, (m) => `<prosody rate="-15%" pitch="+1%">${m}</prosody>`);
     }
-    
-    return withCommaBreaks.trim();
+    return out;
   });
-  
-  // Join paragraphs with longer breaks
-  return processedParagraphs
-    .map(p => `${p} <break time="700ms"/>`)
-    .join('\n');
+}
+
+/**
+ * Intelligent enumeration SSML intonation.
+ * Supports numbered lists and dash lists.
+ */
+function intonateEnumerations(text: string, lang: 'ru' | 'uz'): string {
+  const lines = text.split('\n');
+  const out: string[] = [];
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    const m = line.trim().match(/^(\d+)\.\s+(.*)$/) || line.trim().match(/^[-–—]\s+(.*)$/);
+    if (!m) {
+      out.push(line);
+      i++;
+      continue;
+    }
+
+    // Collect consecutive list items
+    const items: string[] = [];
+    let j = i;
+    while (j < lines.length) {
+      const l = lines[j].trim();
+      const mm = l.match(/^(\d+)\.\s+(.*)$/);
+      const md = l.match(/^[-–—]\s+(.*)$/);
+      if (mm) items.push(mm[2].trim());
+      else if (md) items.push(md[1].trim());
+      else break;
+      j++;
+    }
+
+    if (items.length >= 2) {
+      const rendered = items.map((it, idx) => {
+        const pitch = idx === 0 ? '+3%' : idx === items.length - 1 ? '+6%' : '+4%';
+        if (idx === items.length - 1) {
+          const lead = lang === 'ru' ? 'и самое важное — ' : 'eng muhimi — ';
+          return `<prosody pitch="${pitch}">${lead}${it}</prosody>`;
+        }
+        return `<prosody pitch="${pitch}">${it}</prosody>, <break time="300ms"/>`;
+      });
+      out.push(rendered.join(' '));
+    } else {
+      out.push(line);
+    }
+
+    i = j;
+  }
+
+  return out.join('\n');
+}
+
+/**
+ * Add paragraph-based breaks:
+ * - 700ms between semantic blocks
+ * - 250ms after commas
+ * - 400ms after term explanation sentence
+ */
+function addParagraphBreaks(text: string, lang: 'ru' | 'uz'): string {
+  const paragraphs = text.split('\n\n').filter((p) => p.trim().length > 0);
+  const processed = paragraphs.map((p) => {
+    let chunk = p.trim();
+    // After commas: 250ms
+    chunk = applyOutsideTags(chunk, (c) => c.replace(/,\s*/g, ', <break time="250ms"/> '));
+    // After term explanations: 400ms
+    if (lang === 'ru') {
+      chunk = chunk.replace(/(\.)(\s*)(Это термин, обозначающий)/g, `.$2 <break time="400ms"/> $3`);
+    } else {
+      chunk = chunk.replace(/(\.)(\s*)(Bu atama)/g, `.$2 <break time="400ms"/> $3`);
+    }
+    if (!/[.!?]$/.test(chunk)) chunk += '.';
+    return chunk;
+  });
+  return processed.map((p) => `${p} <break time="700ms"/>`).join('\n');
 }
 
 /**
@@ -88,8 +196,11 @@ function addParagraphBreaks(text: string): string {
  */
 function buildSSML(text: string, lang: 'ru' | 'uz'): string {
   const clean = sanitizeForSSML(text);
-  const emphasized = emphasizeKeywords(clean, lang);
-  const withParagraphBreaks = addParagraphBreaks(emphasized);
+  const withPhonemes = applyPhonemes(clean, lang);
+  const withSlowedTerms = slowDownTerms(withPhonemes);
+  const withListIntonation = intonateEnumerations(withSlowedTerms, lang);
+  const emphasized = emphasizeKeywords(withListIntonation, lang);
+  const withParagraphBreaks = addParagraphBreaks(emphasized, lang);
   
   // FEMALE VOICES ONLY
   const voice = lang === 'ru' 
@@ -105,7 +216,7 @@ function buildSSML(text: string, lang: 'ru' | 'uz'): string {
  xmlns:mstts="http://www.w3.org/2001/mstts"
  xml:lang="${xmlLang}">
   <voice name="${voice}">
-    <mstts:express-as style="teacher" styledegree="1.6">
+    <mstts:express-as style="teacher" styledegree="1.7">
       <prosody rate="+3%" pitch="+2%">
         ${withParagraphBreaks}
       </prosody>
@@ -121,68 +232,54 @@ function buildSSML(text: string, lang: 'ru' | 'uz'): string {
 async function synthesizeSpeechWithSSML(ssml: string, outputPath: string): Promise<string> {
   const url = `https://${AZURE_SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`;
   
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Ocp-Apim-Subscription-Key': AZURE_SPEECH_KEY,
-      'Content-Type': 'application/ssml+xml',
-      'X-Microsoft-OutputFormat': AZURE_OUTPUT_FORMAT,
-      'User-Agent': 'ZiyoMed-TTS/1.0',
-    },
-    body: ssml,
-  });
-  
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => 'Unknown error');
-    console.error('[Azure TTS] SSML length:', ssml.length);
-    console.error('[Azure TTS] SSML (first 500 chars):', ssml.slice(0, 500));
-    console.error('[Azure TTS] Error response:', response.status, errorText.slice(0, 500));
-    
-    // Try to parse error if it's XML
-    let errorMsg = errorText.slice(0, 500);
-    try {
-      const errorMatch = errorText.match(/<Message>(.*?)<\/Message>/i);
-      if (errorMatch) {
-        errorMsg = errorMatch[1];
-      }
-    } catch {
-      // ignore
-    }
-    
-    // If SSML invalid, try regenerating without emphasis
-    if (errorText.includes('SSML') || errorText.includes('xml') || response.status === 400) {
-      console.warn('[Azure TTS] SSML validation error, attempting fallback without emphasis');
-      // Fallback: regenerate without emphasis tags
-      const fallbackSSML = ssml.replace(/<emphasis[^>]*>|<\/emphasis>/g, '');
-      const fallbackResponse = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Ocp-Apim-Subscription-Key': AZURE_SPEECH_KEY,
-          'Content-Type': 'application/ssml+xml',
-          'X-Microsoft-OutputFormat': AZURE_OUTPUT_FORMAT,
-          'User-Agent': 'ZiyoMed-TTS/1.0',
-        },
-        body: fallbackSSML,
-      });
-      
-      if (fallbackResponse.ok) {
-        const audioBuffer = await fallbackResponse.arrayBuffer();
-        const audioDir = path.dirname(outputPath);
-        fs.mkdirSync(audioDir, { recursive: true });
-        fs.writeFileSync(outputPath, Buffer.from(audioBuffer));
-        return outputPath;
-      }
-    }
-    
-    throw new Error(`Azure TTS failed: ${response.status} - ${errorMsg}`);
+  async function post(body: string) {
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Ocp-Apim-Subscription-Key': AZURE_SPEECH_KEY,
+        'Content-Type': 'application/ssml+xml',
+        'X-Microsoft-OutputFormat': AZURE_OUTPUT_FORMAT,
+        'User-Agent': 'ZiyoMed-TTS/1.0',
+      },
+      body,
+    });
   }
-  
-  const audioBuffer = await response.arrayBuffer();
-  const audioDir = path.dirname(outputPath);
-  fs.mkdirSync(audioDir, { recursive: true });
-  fs.writeFileSync(outputPath, Buffer.from(audioBuffer));
-  
-  return outputPath;
+
+  const attempts: Array<{ label: string; body: string }> = [
+    { label: 'original', body: ssml },
+    { label: 'no-phoneme', body: ssml.replace(/<mstts:phoneme[^>]*>|<\/mstts:phoneme>/g, '') },
+    { label: 'no-emphasis', body: ssml.replace(/<mstts:phoneme[^>]*>|<\/mstts:phoneme>/g, '').replace(/<emphasis[^>]*>|<\/emphasis>/g, '') },
+  ];
+
+  let lastStatus = 0;
+  let lastErrorText = '';
+  for (const attempt of attempts) {
+    const response = await post(attempt.body);
+    if (response.ok) {
+      const audioBuffer = await response.arrayBuffer();
+      const audioDir = path.dirname(outputPath);
+      fs.mkdirSync(audioDir, { recursive: true });
+      fs.writeFileSync(outputPath, Buffer.from(audioBuffer));
+      return outputPath;
+    }
+
+    lastStatus = response.status;
+    lastErrorText = await response.text().catch(() => 'Unknown error');
+    console.error('[Azure TTS] Attempt failed:', attempt.label);
+    console.error('[Azure TTS] SSML length:', attempt.body.length);
+    console.error('[Azure TTS] SSML (first 500 chars):', attempt.body.slice(0, 500));
+    console.error('[Azure TTS] Error response:', lastStatus, lastErrorText.slice(0, 500));
+  }
+
+  let errorMsg = lastErrorText.slice(0, 500);
+  try {
+    const errorMatch = lastErrorText.match(/<Message>(.*?)<\/Message>/i);
+    if (errorMatch) errorMsg = errorMatch[1];
+  } catch {
+    // ignore
+  }
+
+  throw new Error(`Azure TTS failed: ${lastStatus} - ${errorMsg}`);
 }
 
 /**

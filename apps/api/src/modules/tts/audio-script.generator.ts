@@ -1,14 +1,13 @@
 /**
- * Generates premium professor-style audio script from question and answer.
- * Based on QUESTION (primary) + ANSWER (key points) + explanation (support).
- * Minimum 500 chars, structured in 4-6 blocks.
+ * Premium academic-level TTS script generator.
+ * Output is plain TEXT with paragraph breaks.
  */
 
 interface GenerateScriptInput {
   question: string;
   correctAnswer: string;
   aiExplanation: string;
-  lang: 'ru' | 'uz';
+  lang: 'ru' | 'uz'; // ignored (lang is derived from question)
 }
 
 interface GenerateScriptOutput {
@@ -16,347 +15,222 @@ interface GenerateScriptOutput {
   actualLang: 'ru' | 'uz';
 }
 
-/**
- * Deterministic language detection based on QUESTION.
- * Cyrillic → RU, Latin → UZ.
- */
 function detectLang(question: string): 'ru' | 'uz' {
   const cyrillic = /[А-Яа-яЁё]/;
   return cyrillic.test(question) ? 'ru' : 'uz';
 }
 
-/**
- * Remove duplicate sentences from text.
- */
 function removeDuplicateSentences(text: string): string {
   const seen = new Set<string>();
   return text
     .split(/(?<=[.!?])/)
-    .map(s => s.trim())
-    .filter(s => {
-      if (!s || s.length < 10) return false;
-      const normalized = s.toLowerCase().replace(/\s+/g, ' ');
-      if (seen.has(normalized)) return false;
-      seen.add(normalized);
+    .map((s) => s.trim())
+    .filter((s) => {
+      if (!s) return false;
+      const key = s.toLowerCase().replace(/\s+/g, ' ');
+      if (seen.has(key)) return false;
+      seen.add(key);
       return true;
     })
     .join(' ');
 }
 
-/**
- * Clean text: remove markdown, emojis, lists.
- */
 function cleanText(text: string): string {
   return text
-    .replace(/^#+\s+/gm, '') // headers
-    .replace(/#{2,}\s*/g, '') // multiple # symbols
-    .replace(/\*\*(.+?)\*\*/g, '$1') // bold
-    .replace(/\*(.+?)\*/g, '$1') // italic
-    .replace(/^[-*+]\s+/gm, '') // list bullets
-    .replace(/^\d+\.\s+/gm, '') // numbered lists
-    .replace(/```[\s\S]*?```/g, '') // code blocks
-    .replace(/`([^`]+)`/g, '$1') // inline code
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // links
-    .replace(/[🤖🟢🔴📌💡✅❌]/g, '') // emojis
-    .replace(/\n{3,}/g, '\n\n') // multiple newlines
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/^#+\s+/gm, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/[🤖🟢🔴📌💡✅❌]/g, '')
     .replace(/Ziyoda tushuntiradi/gi, '')
     .replace(/Savol qisqacha mazmuni/gi, '')
     .replace(/To'g'ri javob/gi, '')
     .replace(/Tibbiy tushuntirish/gi, '')
-    .replace(/🤖 Зиёда объясняет/gi, '')
-    .replace(/🤖 Ziyoda tushuntiradi/gi, '')
     .replace(/Зиёда объясняет/gi, '')
     .replace(/Краткий смысл/gi, '')
     .replace(/Правильный ответ/gi, '')
     .replace(/Медицинское объяснение/gi, '')
-    .replace(/##\s*/g, '')
-    .replace(/#\s*/g, '')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
-/**
- * Detect medical terms in text (capitalized nouns or long words).
- */
-function detectMedicalTerms(text: string, lang: 'ru' | 'uz'): string[] {
-  const terms: string[] = [];
-  
-  // Russian medical terms pattern
-  if (lang === 'ru') {
-    // Capitalized words (likely medical terms)
-    const capitalized = text.match(/\b[А-ЯЁ][а-яё]{8,}\b/g) || [];
-    // Long words (>10 chars)
-    const longWords = text.match(/\b[А-Яа-яЁё]{11,}\b/g) || [];
-    
-    terms.push(...capitalized);
-    terms.push(...longWords.filter(w => !terms.includes(w)));
-  } else {
-    // Uzbek medical terms pattern
-    const capitalized = text.match(/\b[A-Z][a-z]{8,}\b/g) || [];
-    const longWords = text.match(/\b[A-Za-z]{11,}\b/g) || [];
-    
-    terms.push(...capitalized);
-    terms.push(...longWords.filter(w => !terms.includes(w)));
+function parseListItems(text: string): string[] {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const items: string[] = [];
+
+  for (const line of lines) {
+    const m1 = line.match(/^(\d+)\.\s+(.*)$/);
+    if (m1) {
+      items.push(m1[2].trim());
+      continue;
+    }
+    const m2 = line.match(/^[-–—]\s+(.*)$/);
+    if (m2) {
+      items.push(m2[1].trim());
+      continue;
+    }
   }
-  
-  // Remove duplicates and common words
-  const commonWords = lang === 'ru' 
-    ? ['это', 'этот', 'этого', 'этом', 'который', 'которого', 'котором', 'которые']
-    : ['bu', 'bu', 'shu', 'qaysi', 'qanday'];
-  
-  return [...new Set(terms)]
-    .filter(term => !commonWords.includes(term.toLowerCase()))
-    .slice(0, 5); // Limit to 5 terms
+
+  if (items.length >= 2) return items;
+
+  // Comma-separated list heuristic
+  const single = text.replace(/\n+/g, ' ').trim();
+  const parts = single.split(',').map((p) => p.trim()).filter(Boolean);
+  if (parts.length >= 4 && parts.length <= 10) {
+    const shortish = parts.every((p) => p.split(/\s+/).length <= 6);
+    if (shortish) return parts;
+  }
+  return [];
 }
 
-/**
- * Expand medical terms with explanations.
- */
-function expandTerms(text: string, lang: 'ru' | 'uz'): string {
-  const terms = detectMedicalTerms(text, lang);
-  if (terms.length === 0) return text;
-  
-  let expanded = text;
-  const explained = new Set<string>();
-  
+function detectTerms(text: string): string[] {
+  const raw = text;
+  const endings = /\b[\p{L}]+(?:itis|osis|oma|logiya|grafiya|skopiya)\b/giu;
+  const words = raw.match(/\b[\p{L}][\p{L}-']{2,}\b/gu) || [];
+  const out: string[] = [];
+
+  for (const w of words) {
+    const norm = w.replace(/[-']/g, '');
+    if (norm.length > 9) out.push(w);
+    if ((/^[A-ZА-ЯЁ]/.test(w) && norm.length > 6) || endings.test(w)) out.push(w);
+  }
+  out.push(...(raw.match(endings) || []));
+
+  const stop = new Set(['вопрос', 'ответ', 'важно', 'главное', 'основное', 'muhim', 'asosiy', 'savol', 'javob', 'bu', 'это']);
+  const uniq = new Set<string>();
+  for (const t of out) {
+    const key = t.toLowerCase();
+    if (stop.has(key)) continue;
+    uniq.add(t);
+  }
+  return Array.from(uniq).slice(0, 5);
+}
+
+function insertTermExplanations(text: string, lang: 'ru' | 'uz'): string {
+  const terms = detectTerms(text);
+  if (!terms.length) return text;
+
+  let out = text;
+  let inserted = 0;
   for (const term of terms) {
-    if (explained.has(term.toLowerCase())) continue;
-    explained.add(term.toLowerCase());
-    
-    // Find first occurrence
-    const regex = new RegExp(`\\b${term}\\b`, 'i');
-    const match = expanded.match(regex);
-    if (!match) continue;
-    
-    const index = match.index!;
-    const before = expanded.slice(0, index + term.length);
-    const after = expanded.slice(index + term.length);
-    
-    // Add explanation
-    let explanation = '';
-    if (lang === 'ru') {
-      explanation = ` ${term} — это метод диагностики, который позволяет получить детальную информацию о состоянии органов и тканей.`;
-    } else {
-      explanation = ` ${term} — bu diagnostika usuli bo'lib, u organlar va to'qimalar holatini batafsil ko'rsatadi.`;
-    }
-    
-    expanded = before + explanation + after;
+    if (inserted >= 3) break;
+    const re = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+    const m = out.match(re);
+    if (!m || m.index == null) continue;
+
+    const idx = m.index + m[0].length;
+    const before = out.slice(0, idx);
+    const after = out.slice(idx);
+
+    const expl =
+      lang === 'ru'
+        ? ` ${term}. Это термин, обозначающий важное медицинское понятие.`
+        : ` ${term}. Bu atama muhim tibbiy tushunchani bildiradi.`;
+
+    out = before + expl + after;
+    inserted++;
   }
-  
-  return expanded;
+  return out;
 }
 
-/**
- * Extract key points from text.
- */
-function extractKeyPoints(text: string, lang: 'ru' | 'uz'): string[] {
-  const cleaned = cleanText(text);
-  if (!cleaned) return [];
-  
-  // Remove duplicates first
-  const deduplicated = removeDuplicateSentences(cleaned);
-  
-  // Split into sentences and filter meaningful ones
-  const sentences = deduplicated
-    .split(/[.!?]\s+/)
-    .map(s => s.trim())
-    .filter(s => s.length > 20 && s.length < 250)
-    .slice(0, 8); // Take up to 8 key sentences
-  
-  return sentences;
-}
+function buildScript(question: string, answer: string, explanation: string, lang: 'ru' | 'uz'): string {
+  const q = question.trim().replace(/[.!?]+$/, '');
+  const answerClean = cleanText(answer);
+  const explanationClean = cleanText(explanation);
 
-/**
- * Build Russian professor-style script (4-6 blocks).
- */
-function buildRussianScript(question: string, correctAnswer: string, explanation: string): string {
+  const dedupAnswer = removeDuplicateSentences(answerClean);
+  const dedupExplanation = removeDuplicateSentences(explanationClean);
+
+  const listItems = parseListItems(answerClean);
+
   const blocks: string[] = [];
-  
-  // Block 1: Premium intro
-  blocks.push('Давайте внимательно разберём этот вопрос.');
-  
-  // Block 2: What the question asks
-  const questionClean = question.trim().replace(/[.!?]+$/, '');
-  if (questionClean.length > 0 && questionClean.length < 200) {
-    blocks.push(`Вопрос звучит следующим образом: ${questionClean}.`);
-  }
-  
-  // Block 3: Core concept explanation
-  const explanationPoints = extractKeyPoints(explanation, 'ru');
-  const answerPoints = extractKeyPoints(correctAnswer, 'ru');
-  
-  if (explanationPoints.length > 0 || answerPoints.length > 0) {
-    blocks.push('Обратите внимание на ключевые аспекты этого вопроса.');
-    
-    // Combine and deduplicate points
-    const allPoints = [...answerPoints, ...explanationPoints];
-    const uniquePoints = removeDuplicateSentences(allPoints.join('. '))
-      .split(/[.!?]\s+/)
-      .map(s => s.trim())
-      .filter(s => s.length > 15)
-      .slice(0, 6);
-    
-    if (uniquePoints.length > 0) {
-      blocks.push(...uniquePoints.map((point, i) => {
-        const p = point.endsWith('.') ? point : point + '.';
-        if (i === 0) {
-          return `Во-первых, ${p.toLowerCase()}`;
-        } else if (i === uniquePoints.length - 1) {
-          return `И наконец, ${p.toLowerCase()}`;
-        }
-        return p;
-      }));
-    }
-  }
-  
-  // Block 4: Expand terms
-  const combinedText = [correctAnswer, explanation].join(' ');
-  const withTerms = expandTerms(combinedText, 'ru');
-  if (withTerms !== combinedText) {
-    // Extract new sentences from expanded text
-    const newSentences = withTerms
-      .split(/[.!?]\s+/)
-      .map(s => s.trim())
-      .filter(s => s.length > 30 && !blocks.some(b => b.includes(s.slice(0, 50))))
-      .slice(0, 2);
-    
-    if (newSentences.length > 0) {
-      blocks.push(...newSentences.map(s => s.endsWith('.') ? s : s + '.'));
-    }
-  }
-  
-  // Block 5: Final emphasis
-  if (correctAnswer && correctAnswer.trim().length > 0) {
-    const shortAnswer = correctAnswer.trim().slice(0, 120);
-    blocks.push(`Запомните — это ключевой принцип: ${shortAnswer}.`);
-  } else {
-    blocks.push('Запомните — это ключевой принцип, который необходимо усвоить.');
-  }
-  
-  // Join blocks with paragraph breaks
-  let script = blocks.join('\n\n');
-  
-  // Ensure minimum length (500 chars)
-  if (script.length < 500) {
-    const additional = 'Это важный вопрос, который требует детального изучения. Необходимо понимать все нюансы и особенности данного медицинского понятия.';
-    script = blocks[0] + '\n\n' + additional + '\n\n' + blocks.slice(1).join('\n\n');
-  }
-  
-  return script.trim();
-}
 
-/**
- * Build Uzbek professor-style script (4-6 blocks).
- */
-function buildUzbekScript(question: string, correctAnswer: string, explanation: string): string {
-  const blocks: string[] = [];
-  
-  // Block 1: Premium intro
-  blocks.push('Keling, bu savolni bosqichma-bosqich tahlil qilamiz.');
-  
-  // Block 2: What the question asks
-  const questionClean = question.trim().replace(/[.!?]+$/, '');
-  if (questionClean.length > 0 && questionClean.length < 200) {
-    blocks.push(`Savol quyidagicha: ${questionClean}.`);
-  }
-  
-  // Block 3: Core concept explanation
-  const explanationPoints = extractKeyPoints(explanation, 'uz');
-  const answerPoints = extractKeyPoints(correctAnswer, 'uz');
-  
-  if (explanationPoints.length > 0 || answerPoints.length > 0) {
-    blocks.push('Bu savolning asosiy nuqtalariga e\'tibor bering.');
-    
-    // Combine and deduplicate points
-    const allPoints = [...answerPoints, ...explanationPoints];
-    const uniquePoints = removeDuplicateSentences(allPoints.join('. '))
-      .split(/[.!?]\s+/)
-      .map(s => s.trim())
-      .filter(s => s.length > 15)
-      .slice(0, 6);
-    
-    if (uniquePoints.length > 0) {
-      blocks.push(...uniquePoints.map((point, i) => {
-        const p = point.endsWith('.') ? point : point + '.';
-        if (i === 0) {
-          return `Birinchidan, ${p.toLowerCase()}`;
-        } else if (i === uniquePoints.length - 1) {
-          return `Va nihoyat, ${p.toLowerCase()}`;
-        }
-        return p;
-      }));
-    }
-  }
-  
-  // Block 4: Expand terms
-  const combinedText = [correctAnswer, explanation].join(' ');
-  const withTerms = expandTerms(combinedText, 'uz');
-  if (withTerms !== combinedText) {
-    // Extract new sentences from expanded text
-    const newSentences = withTerms
-      .split(/[.!?]\s+/)
-      .map(s => s.trim())
-      .filter(s => s.length > 30 && !blocks.some(b => b.includes(s.slice(0, 50))))
-      .slice(0, 2);
-    
-    if (newSentences.length > 0) {
-      blocks.push(...newSentences.map(s => s.endsWith('.') ? s : s + '.'));
-    }
-  }
-  
-  // Block 5: Final emphasis
-  if (correctAnswer && correctAnswer.trim().length > 0) {
-    const shortAnswer = correctAnswer.trim().slice(0, 120);
-    blocks.push(`Shuni esda tuting — bu asosiy tamoyil: ${shortAnswer}.`);
+  // 1) Intro
+  blocks.push(
+    lang === 'ru'
+      ? 'Давайте внимательно разберём этот вопрос.'
+      : "Keling, bu savolni bosqichma-bosqich tahlil qilamiz."
+  );
+
+  // 2) Clarify question
+  blocks.push(
+    lang === 'ru'
+      ? `Что именно спрашивают: ${q}.`
+      : `Savol nimani so'raydi: ${q}.`
+  );
+
+  // 3) Core concept explanation (use explanation support)
+  const core = (dedupExplanation || '').split(/\n+/).join(' ').trim();
+  if (core) {
+    blocks.push(
+      lang === 'ru'
+        ? `Суть понятия в этом вопросе следующая: ${core}`
+        : `Bu savolda asosiy tushuncha quyidagicha: ${core}`
+    );
   } else {
-    blocks.push('Shuni esda tuting — bu asosiy tamoyil, uni o\'zlashtirish kerak.');
+    blocks.push(
+      lang === 'ru'
+        ? 'Сначала вспомним базовый механизм и определение, а затем перейдём к признакам и деталям.'
+        : "Avval asosiy mexanizm va ta'rifni eslaymiz, keyin esa belgilarga o'tamiz."
+    );
   }
-  
-  // Join blocks with paragraph breaks
-  let script = blocks.join('\n\n');
-  
-  // Ensure minimum length (500 chars)
+
+  // 4) Key answer points expanded (preserve list)
+  if (listItems.length >= 2) {
+    const title = lang === 'ru' ? 'Ключевые пункты ответа:' : 'Javobning asosiy bandlari:';
+    const formatted = listItems.slice(0, 6).map((it, i) => `${i + 1}. ${it.replace(/[.!?]+$/, '')}.`).join('\n');
+    blocks.push(`${title}\n${formatted}`);
+  } else if (dedupAnswer) {
+    blocks.push(
+      lang === 'ru'
+        ? `Теперь разберём ключевые элементы ответа: ${dedupAnswer}`
+        : `Endi javobning asosiy jihatlarini ko'rib chiqamiz: ${dedupAnswer}`
+    );
+  }
+
+  // 5) Term clarification (insert immediately after first appearance)
+  const joined = blocks.join('\n\n');
+  const withTerms = insertTermExplanations(joined, lang);
+  const termBlock =
+    lang === 'ru'
+      ? 'Если встречаются сложные термины, важно понимать их смысл — это помогает выбрать правильную тактику рассуждения.'
+      : "Murakkab atamalar uchrasa, ularning ma'nosini tushunish muhim — bu to'g'ri xulosa chiqarishga yordam beradi.";
+  blocks.push(termBlock);
+
+  // 6) Final emphasis
+  blocks.push(
+    lang === 'ru'
+      ? 'Запомните — это ключевой принцип.'
+      : 'Shuni esda tuting — bu asosiy tamoyil.'
+  );
+
+  let script = withTerms;
+
+  // Minimum length 500 chars: expand with example/comparison if needed
   if (script.length < 500) {
-    const additional = 'Bu muhim savol bo\'lib, batafsil o\'rganishni talab qiladi. Bu tibbiy tushunchaning barcha nuanslari va xususiyatlarini tushunish kerak.';
-    script = blocks[0] + '\n\n' + additional + '\n\n' + blocks.slice(1).join('\n\n');
+    const extra =
+      lang === 'ru'
+        ? 'Пример: сравните два близких состояния и спросите себя, какой признак действительно отличает их. Такая проверка помогает отвечать уверенно и системно.'
+        : "Masalan: yaqin tushunchalarni solishtirib, qaysi belgi ularni ajratishini o'zingizdan so'rang. Bu usul javobni tizimli qiladi.";
+    script = script + '\n\n' + extra;
   }
-  
+
+  // Keep within 500–900 chars
+  if (script.length > 900) {
+    // remove the core-concept paragraph if it's too long
+    const parts = script.split('\n\n');
+    const compact = [parts[0], parts[1], parts[3], parts[parts.length - 2], parts[parts.length - 1]].filter(Boolean).join('\n\n');
+    script = compact.length <= 900 ? compact : compact.slice(0, 880).trimEnd() + '…';
+  }
+
   return script.trim();
 }
 
 export function generateAudioScript(input: GenerateScriptInput): GenerateScriptOutput {
   const { question, correctAnswer, aiExplanation } = input;
-  
-  // DETERMINISTIC: Detect language from QUESTION only
-  const detectedLang = detectLang(question);
-  
-  // Remove duplicates from explanation before processing
-  const cleanedExplanation = removeDuplicateSentences(cleanText(aiExplanation));
-  const cleanedAnswer = removeDuplicateSentences(cleanText(correctAnswer));
-  
-  // Build professor-style script based on QUESTION + ANSWER + explanation
-  let script: string;
-  if (detectedLang === 'ru') {
-    script = buildRussianScript(question, cleanedAnswer, cleanedExplanation);
-  } else {
-    script = buildUzbekScript(question, cleanedAnswer, cleanedExplanation);
-  }
-  
-  // Final validation: ensure minimum length
-  if (script.length < 500) {
-    const fallback = detectedLang === 'ru'
-      ? 'Это важный вопрос, который требует детального изучения. Необходимо понимать все нюансы и особенности данного медицинского понятия. Рассмотрим основные аспекты более подробно.'
-      : 'Bu muhim savol bo\'lib, batafsil o\'rganishni talab qiladi. Bu tibbiy tushunchaning barcha nuanslari va xususiyatlarini tushunish kerak. Asosiy jihatlarni batafsil ko\'rib chiqamiz.';
-    script = script + '\n\n' + fallback;
-  }
-  
-  // Limit maximum length
-  if (script.length > 2000) {
-    script = script.slice(0, 2000);
-    const lastPeriod = script.lastIndexOf('.');
-    if (lastPeriod > 1800) {
-      script = script.slice(0, lastPeriod + 1);
-    }
-  }
-  
-  return { script, actualLang: detectedLang };
+  const lang = detectLang(question);
+  const script = buildScript(question, correctAnswer, aiExplanation, lang);
+  return { script, actualLang: lang };
 }
