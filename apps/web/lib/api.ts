@@ -237,6 +237,7 @@ export async function getAdminChatsUnreadCount(): Promise<number> {
 
 export interface AdminStats {
   totalUsers: number;
+  onlineTodayUsers: number;
   activeSubscriptions: number;
   attemptsToday: number;
   conversion: number;
@@ -253,6 +254,7 @@ export async function getAdminStats(): Promise<AdminStats> {
   return (
     payload ?? {
       totalUsers: 0,
+      onlineTodayUsers: 0,
       activeSubscriptions: 0,
       attemptsToday: 0,
       conversion: 0,
@@ -824,6 +826,9 @@ export async function clearAllTtsData(): Promise<{
 export interface TtsDirectionItem {
   directionGroupId: string;
   label: string;
+  type?: string;
+  languages?: string[];
+  audioCount?: number;
 }
 
 export async function getAdminTtsDirections(): Promise<TtsDirectionItem[]> {

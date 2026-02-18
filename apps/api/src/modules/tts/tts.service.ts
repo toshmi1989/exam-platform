@@ -48,13 +48,18 @@ export async function clearAllTtsData(): Promise<{ scriptsDeleted: number; audio
 
 /**
  * Clear TTS data (scripts and audio) for all questions belonging to exams with the given directionGroupId.
- * Returns counts of deleted records and files.
+ * If directionGroupId is an exam id (single exam without group), clears that exam only.
  */
 export async function clearTtsDataByDirectionGroup(
   directionGroupId: string
 ): Promise<{ scriptsDeleted: number; audioDeleted: number; filesDeleted: number }> {
   const exams = await prisma.exam.findMany({
-    where: { directionGroupId },
+    where: {
+      OR: [
+        { directionGroupId },
+        { id: directionGroupId },
+      ],
+    },
     select: { id: true },
   });
   const examIds = exams.map((e) => e.id);

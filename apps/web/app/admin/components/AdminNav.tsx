@@ -48,6 +48,7 @@ export default function AdminNav() {
     if (language === 'Английский') {
       return [
         { href: '/admin', label: 'Dashboard' },
+        { href: '/admin/analytics', label: 'Analytics' },
         { href: '/admin/users', label: 'Users' },
         { href: '/admin/blacklist', label: 'Blacklist' },
         { href: '/admin/chats', label: 'Chats' },
@@ -57,13 +58,13 @@ export default function AdminNav() {
         { href: '/admin/import', label: 'Import' },
         { href: '/admin/ai', label: 'AI' },
         { href: '/admin/tts', label: 'TTS' },
-        { href: '/admin/analytics', label: 'Analytics' },
         { href: '/admin/server', label: 'Server' },
       ];
     }
     if (language === 'Узбекский') {
       return [
         { href: '/admin', label: 'Bosh sahifa' },
+        { href: '/admin/analytics', label: 'Analitika' },
         { href: '/admin/users', label: 'Foydalanuvchilar' },
         { href: '/admin/blacklist', label: 'Qora ro’yxat' },
         { href: '/admin/chats', label: 'Chatlar' },
@@ -73,12 +74,12 @@ export default function AdminNav() {
         { href: '/admin/import', label: 'Import' },
         { href: '/admin/ai', label: 'AI' },
         { href: '/admin/tts', label: 'TTS' },
-        { href: '/admin/analytics', label: 'Analitika' },
         { href: '/admin/server', label: 'Server' },
       ];
     }
     return [
       { href: '/admin', label: 'Сводка' },
+      { href: '/admin/analytics', label: 'Аналитика' },
       { href: '/admin/users', label: 'Пользователи' },
       { href: '/admin/blacklist', label: 'Черный список' },
       { href: '/admin/chats', label: 'Чаты' },
@@ -88,7 +89,6 @@ export default function AdminNav() {
       { href: '/admin/import', label: 'Импорт' },
       { href: '/admin/ai', label: 'AI' },
       { href: '/admin/tts', label: 'Озвучка (TTS)' },
-      { href: '/admin/analytics', label: 'Аналитика' },
       { href: '/admin/server', label: 'Сервер' },
     ];
   }, [language]);

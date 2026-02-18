@@ -72,6 +72,9 @@ router.get('/stats', async (_req, res) => {
     totalAttempts,
     subscriptionsToday,
     subscriptionsThisMonth,
+    attemptUsersToday,
+    oralUsersToday,
+    botUsersToday,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.userSubscription.count({
@@ -96,6 +99,21 @@ router.get('/stats', async (_req, res) => {
     prisma.userSubscription.count({
       where: { createdAt: { gte: startOfMonth, lt: endOfMonth } },
     }),
+    prisma.examAttempt.findMany({
+      where: { createdAt: { gte: startOfToday, lt: endOfToday } },
+      distinct: ['userId'],
+      select: { userId: true },
+    }),
+    prisma.oralAccessLog.findMany({
+      where: { createdAt: { gte: startOfToday, lt: endOfToday } },
+      distinct: ['userId'],
+      select: { userId: true },
+    }),
+    prisma.botAiRequestLog.findMany({
+      where: { createdAt: { gte: startOfToday, lt: endOfToday } },
+      distinct: ['userId'],
+      select: { userId: true },
+    }),
   ]);
 
   const conversion =
@@ -103,8 +121,15 @@ router.get('/stats', async (_req, res) => {
       ? Math.round((activeSubscriptions / Math.max(totalUsers, 1)) * 100)
       : 0;
 
+  const onlineTodayUsers = new Set<string>([
+    ...attemptUsersToday.map((r) => r.userId),
+    ...oralUsersToday.map((r) => r.userId),
+    ...botUsersToday.map((r) => r.userId),
+  ]).size;
+
   res.json({
     totalUsers,
+    onlineTodayUsers,
     activeSubscriptions,
     attemptsToday,
     conversion,
@@ -1206,24 +1231,73 @@ router.get('/tts/stats', async (_req, res) => {
   }
 });
 
-/** List direction groups for TTS clear-by-direction (unique directionGroupId with label). */
+/** List direction groups for TTS clear-by-direction: label with type (oral/test), languages (RU/UZ), audio count. */
 router.get('/tts/directions', async (_req, res) => {
   try {
     const exams = await prisma.exam.findMany({
-      where: { directionGroupId: { not: null } },
-      select: { directionGroupId: true, direction: true },
-      orderBy: { direction: 'asc' },
+      select: { id: true, directionGroupId: true, direction: true, type: true, language: true },
+      orderBy: [{ type: 'asc' }, { language: 'asc' }, { direction: 'asc' }],
     });
-    const byGroup = new Map<string, string>();
+
+    const byGroup = new Map<string, { direction: string; type: string; languages: string[]; examIds: string[] }>();
     for (const e of exams) {
-      if (e.directionGroupId && !byGroup.has(e.directionGroupId)) {
-        byGroup.set(e.directionGroupId, e.direction);
+      const groupId = e.directionGroupId ?? e.id;
+      const lang = e.language === 'RU' ? 'RU' : 'UZ';
+      const typeLabel = e.type === 'ORAL' ? 'устный' : 'тест';
+      const existing = byGroup.get(groupId);
+      if (!existing) {
+        byGroup.set(groupId, {
+          direction: e.direction,
+          type: typeLabel,
+          languages: [lang],
+          examIds: [e.id],
+        });
+      } else {
+        if (!existing.languages.includes(lang)) existing.languages.push(lang);
+        existing.examIds.push(e.id);
       }
     }
-    const items = Array.from(byGroup.entries()).map(([directionGroupId, label]) => ({
-      directionGroupId,
-      label,
-    }));
+
+    const questionIdsByGroup = new Map<string, string[]>();
+    for (const [groupId, meta] of byGroup.entries()) {
+      const questions = await prisma.question.findMany({
+        where: { examId: { in: meta.examIds } },
+        select: { id: true },
+      });
+      questionIdsByGroup.set(groupId, questions.map((q) => q.id));
+    }
+
+    const audioCountByGroup = new Map<string, number>();
+    for (const [groupId, qIds] of questionIdsByGroup.entries()) {
+      if (qIds.length === 0) {
+        audioCountByGroup.set(groupId, 0);
+        continue;
+      }
+      const count = await prisma.questionAudio.count({
+        where: { questionId: { in: qIds } },
+      });
+      audioCountByGroup.set(groupId, count);
+    }
+
+    const items = Array.from(byGroup.entries())
+      .map(([directionGroupId, meta]) => {
+        const langPart = meta.languages.sort().join('+');
+        const label = `${meta.direction} (${meta.type}, ${langPart})`;
+        const audioCount = audioCountByGroup.get(directionGroupId) ?? 0;
+        return {
+          directionGroupId,
+          label,
+          type: meta.type,
+          languages: meta.languages,
+          audioCount,
+        };
+      })
+      .sort((a, b) => {
+        const typeOrder = (a.type === 'устный' ? 0 : 1) - (b.type === 'устный' ? 0 : 1);
+        if (typeOrder !== 0) return typeOrder;
+        return a.label.localeCompare(b.label);
+      });
+
     res.json({ items });
   } catch (err) {
     console.error('[admin/tts/directions]', err);

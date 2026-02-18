@@ -289,7 +289,7 @@ export default function AdminTtsPage() {
                 <option value="">—</option>
                 {directions.map((d) => (
                   <option key={d.directionGroupId} value={d.directionGroupId}>
-                    {d.label}
+                    {d.label} — {d.audioCount ?? 0} {language === 'Английский' ? 'audio' : language === 'Узбекский' ? 'audio' : 'аудио'}
                   </option>
                 ))}
               </select>
