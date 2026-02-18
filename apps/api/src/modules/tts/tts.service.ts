@@ -80,8 +80,18 @@ export async function getOrCreateAudio(
 
   if (!script || script.hash !== expectedHash) {
     // Generate new script
+    // For oral questions, there might be no correct option - use empty string or extract from explanation
     const correctOption = question.options.find((opt) => opt.isCorrect);
-    const correctAnswer = correctOption?.label ?? '';
+    let correctAnswer = correctOption?.label ?? '';
+    
+    // If no correct answer found and it's an oral question, try to extract key concept from explanation
+    if (!correctAnswer && question.type === 'ORAL') {
+      // Extract first sentence or key phrase from explanation as "answer"
+      const firstSentence = explanationRecord.content.split(/[.!?]/)[0]?.trim();
+      if (firstSentence && firstSentence.length > 10 && firstSentence.length < 100) {
+        correctAnswer = firstSentence;
+      }
+    }
 
     const scriptContent = generateAudioScript({
       question: question.prompt,

@@ -113,13 +113,23 @@ function buildRussianScript(question: string, correctAnswer: string, explanation
     }
   }
 
-  // Natural closing with emphasis on key concept
-  const closings = [
-    `Итак, ключевой момент здесь — это ${correctAnswer}.`,
-    `Таким образом, главное, что нужно запомнить — ${correctAnswer}.`,
-    `Подводя итог, важно понимать, что ${correctAnswer} — это основное в данном вопросе.`,
-  ];
-  parts.push(closings[Math.floor(Math.random() * closings.length)]);
+  // Natural closing with emphasis on key concept (only if we have an answer)
+  if (correctAnswer && correctAnswer.trim().length > 0) {
+    const closings = [
+      `Итак, ключевой момент здесь — это ${correctAnswer}.`,
+      `Таким образом, главное, что нужно запомнить — ${correctAnswer}.`,
+      `Подводя итог, важно понимать, что ${correctAnswer} — это основное в данном вопросе.`,
+    ];
+    parts.push(closings[Math.floor(Math.random() * closings.length)]);
+  } else {
+    // If no specific answer, use generic closing
+    const closings = [
+      'Итак, это основные моменты, которые важно запомнить.',
+      'Таким образом, мы разобрали ключевые аспекты этого вопроса.',
+      'Подводя итог, важно понимать основные принципы, о которых мы говорили.',
+    ];
+    parts.push(closings[Math.floor(Math.random() * closings.length)]);
+  }
 
   let script = parts.join(' ').replace(/\s+/g, ' ').trim();
 

@@ -37,70 +37,76 @@ function enhanceScriptWithSSML(script: string, lang: 'ru' | 'uz'): string {
     .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g, '') // Remove control chars
     .normalize('NFC');
 
-  // Split into sentences more carefully
-  const parts: string[] = [];
-  let current = '';
-  
-  for (let i = 0; i < clean.length; i++) {
-    const char = clean[i];
-    current += char;
-    if (char.match(/[.!?]/) && (i === clean.length - 1 || clean[i + 1] === ' ')) {
-      const sentence = current.trim();
-      if (sentence.length > 3) {
-        parts.push(sentence);
-      }
-      current = '';
-    }
-  }
-  if (current.trim().length > 3) {
-    parts.push(current.trim());
-  }
-
+  // Split into sentences
+  const sentences = clean.split(/([.!?]\s+)/).filter((s) => s.trim().length > 3);
   const enhanced: string[] = [];
 
-  for (let i = 0; i < parts.length; i++) {
-    let sentence = parts[i];
+  for (let i = 0; i < sentences.length; i++) {
+    let sentence = sentences[i].trim();
     if (!sentence || sentence.length < 3) continue;
 
-    // Add emphasis on key words
+    // Add emphasis on key words (mark positions, don't insert tags yet)
+    const emphasisWords: Array<{ word: string; start: number; end: number }> = [];
+    
     if (lang === 'ru') {
-      sentence = sentence.replace(
-        /\b(важно|ключевой|главное|основное|главный|основной|нужно|необходимо|следует|помнить)\b/gi,
-        (match) => `<emphasis level="strong">${match}</emphasis>`
-      );
-      sentence = sentence.replace(/(\d+[%°]?)/g, (match) => `<emphasis level="moderate">${match}</emphasis>`);
+      const regex = /\b(важно|ключевой|главное|основное|главный|основной|нужно|необходимо|следует|помнить)\b/gi;
+      let match;
+      while ((match = regex.exec(sentence)) !== null) {
+        emphasisWords.push({ word: match[0], start: match.index, end: match.index + match[0].length });
+      }
+      // Numbers
+      const numRegex = /(\d+[%°]?)/g;
+      while ((match = numRegex.exec(sentence)) !== null) {
+        emphasisWords.push({ word: match[0], start: match.index, end: match.index + match[0].length });
+      }
     } else {
-      sentence = sentence.replace(
-        /\b(muhim|asosiy|bosh|eng|kerak|zarur|eslab)\b/gi,
-        (match) => `<emphasis level="strong">${match}</emphasis>`
-      );
-      sentence = sentence.replace(/(\d+[%°]?)/g, (match) => `<emphasis level="moderate">${match}</emphasis>`);
+      const regex = /\b(muhim|asosiy|bosh|eng|kerak|zarur|eslab)\b/gi;
+      let match;
+      while ((match = regex.exec(sentence)) !== null) {
+        emphasisWords.push({ word: match[0], start: match.index, end: match.index + match[0].length });
+      }
+      const numRegex = /(\d+[%°]?)/g;
+      while ((match = numRegex.exec(sentence)) !== null) {
+        emphasisWords.push({ word: match[0], start: match.index, end: match.index + match[0].length });
+      }
     }
 
-    // Add pauses after commas (careful not to break inside tags)
-    // Process from end to start to avoid breaking tags
+    // Sort by position (descending) to insert from end
+    emphasisWords.sort((a, b) => b.start - a.start);
+    
+    // Insert emphasis tags from end to start
     let processed = sentence;
-    const commaMatches: Array<{ index: number; before: string }> = [];
-    let searchIndex = processed.length - 1;
-    while (searchIndex >= 0) {
-      const commaIdx = processed.lastIndexOf(',', searchIndex);
-      if (commaIdx === -1) break;
-      const before = processed.substring(Math.max(0, commaIdx - 50), commaIdx);
-      if (!before.includes('<emphasis') || before.lastIndexOf('</emphasis>') > before.lastIndexOf('<emphasis')) {
-        commaMatches.push({ index: commaIdx, before });
-      }
-      searchIndex = commaIdx - 1;
-    }
-    // Insert breaks from end to start
-    for (const { index } of commaMatches.reverse()) {
-      processed = processed.slice(0, index + 1) + '<break time="400ms"/> ' + processed.slice(index + 1).replace(/^\s+/, '');
+    for (const { word, start, end } of emphasisWords) {
+      const level = /\d/.test(word) ? 'moderate' : 'strong';
+      processed = processed.slice(0, start) + `<emphasis level="${level}">${word}</emphasis>` + processed.slice(end);
     }
     sentence = processed;
 
+    // Mark comma positions for breaks (after emphasis tags are inserted)
+    const commaPositions: number[] = [];
+    let searchIdx = sentence.length - 1;
+    while (searchIdx >= 0) {
+      const commaIdx = sentence.lastIndexOf(',', searchIdx);
+      if (commaIdx === -1) break;
+      // Check if comma is inside an emphasis tag
+      const beforeComma = sentence.substring(Math.max(0, commaIdx - 100), commaIdx);
+      const openTags = (beforeComma.match(/<emphasis[^>]*>/g) || []).length;
+      const closeTags = (beforeComma.match(/<\/emphasis>/g) || []).length;
+      if (openTags === closeTags) {
+        commaPositions.push(commaIdx);
+      }
+      searchIdx = commaIdx - 1;
+    }
+
+    // Insert break tags after commas (from end to start)
+    for (const pos of commaPositions.reverse()) {
+      sentence = sentence.slice(0, pos + 1) + '<break time="400ms"/> ' + sentence.slice(pos + 1).replace(/^\s+/, '');
+    }
+
     enhanced.push(sentence);
 
-    // Add longer pause after sentences (except last)
-    if (sentence.match(/[.!?]$/) && i < parts.length - 1) {
+    // Add longer pause after sentences
+    if (sentence.match(/[.!?]$/) && i < sentences.length - 2) {
       enhanced.push('<break time="700ms"/>');
     }
   }
@@ -121,47 +127,33 @@ function buildSSML(script: string, lang: 'ru' | 'uz', options: TtsOptions = {}):
   // Enhance script with SSML tags
   const enhancedScript = enhanceScriptWithSSML(script, lang);
 
-  // Escape XML - preserve SSML tags by temporarily replacing them
-  // Use a more robust approach: extract all SSML tags first
+  // Escape XML - preserve SSML tags by using placeholders
+  // Use unique placeholders that won't conflict with text
+  const placeholderPrefix = `__SSML_PLACEHOLDER_${Date.now()}_`;
+  const placeholders: Map<string, string> = new Map();
+  let placeholderCounter = 0;
+  
+  // Replace SSML tags with unique placeholders
   const ssmlTagPattern = /<\/?(?:break|emphasis)[^>]*>/g;
-  const tags: Array<{ placeholder: string; tag: string }> = [];
-  let tagIndex = 0;
+  let textWithPlaceholders = enhancedScript.replace(ssmlTagPattern, (match) => {
+    const key = `${placeholderPrefix}${placeholderCounter++}`;
+    placeholders.set(key, match);
+    return key;
+  });
   
-  // Extract all SSML tags with their positions
-  const tagMatches: Array<{ index: number; tag: string }> = [];
-  let match;
-  const regex = new RegExp(ssmlTagPattern.source, 'g');
-  while ((match = regex.exec(enhancedScript)) !== null) {
-    tagMatches.push({ index: match.index, tag: match[0] });
-  }
+  // Escape XML in text content (placeholders are safe - they don't contain XML chars)
+  let escaped = textWithPlaceholders
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
   
-  // Build escaped text by processing character by character, skipping SSML tags
-  let escaped = '';
-  let lastIndex = 0;
-  for (const { index, tag } of tagMatches) {
-    // Escape text before this tag
-    const beforeTag = enhancedScript.substring(lastIndex, index);
-    escaped += beforeTag
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&apos;');
-    
-    // Add the SSML tag as-is (it's already valid XML)
-    escaped += tag;
-    lastIndex = index + tag.length;
-  }
-  
-  // Escape remaining text after last tag
-  if (lastIndex < enhancedScript.length) {
-    const remaining = enhancedScript.substring(lastIndex);
-    escaped += remaining
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&apos;');
+  // Restore SSML tags (they're valid XML, don't need escaping)
+  for (const [key, tag] of placeholders.entries()) {
+    // Escape the placeholder key for regex
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    escaped = escaped.replace(new RegExp(escapedKey, 'g'), tag);
   }
 
   // Validate pitch value (Azure accepts -50% to +50%)
