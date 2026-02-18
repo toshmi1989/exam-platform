@@ -90,16 +90,24 @@ export async function getOrCreateAudio(
       lang,
     });
 
+    // Clean text: remove invalid UTF-16 surrogates and normalize
+    // Also remove any control characters except newlines and tabs
+    const cleanContent = scriptContent
+      .replace(/[\uD800-\uDFFF]/g, '') // Remove invalid surrogates
+      .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '') // Remove control chars except \n, \t
+      .normalize('NFC') // Normalize Unicode
+      .trim();
+
     script = await prisma.questionAudioScript.upsert({
       where: { questionId_lang: { questionId, lang } },
       create: {
         questionId,
         lang,
-        content: scriptContent,
+        content: cleanContent,
         hash: expectedHash,
       },
       update: {
-        content: scriptContent,
+        content: cleanContent,
         hash: expectedHash,
       },
     });
@@ -107,7 +115,12 @@ export async function getOrCreateAudio(
 
   // 5. Generate audio
   const audioPath = getAudioPath(questionId, lang);
-  await synthesizeSpeech(script.content, lang, audioPath);
+  const cleanScriptContent = script.content
+    .replace(/[\uD800-\uDFFF]/g, '') // Remove invalid surrogates
+    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '') // Remove control chars
+    .normalize('NFC')
+    .trim();
+  await synthesizeSpeech(cleanScriptContent, lang, audioPath);
 
   // 6. Save audio record
   await prisma.questionAudio.upsert({
