@@ -300,134 +300,134 @@ function buildUzbekLectureScript(question: string, answer: string, explanation: 
 
 /**
  * Build Russian lecture-style script (8 blocks).
-+ */
+ */
 function buildRussianLectureScript(question: string, answer: string, explanation: string): string {
-+  const blocks: string[] = [];
-+  const explainedTerms = new Set<string>();
-+  
-+  const cleanQ = cleanQuestion(question);
-+  const cleanA = cleanAnswer(answer, 'ru');
-+  const cleanE = cleanAnswer(explanation, 'ru');
-+  
-+  const dedupA = removeDuplicateSentences(cleanA);
-+  const dedupE = removeDuplicateSentences(cleanE);
-+  
-+  // Extract sections (Russian patterns)
-+  const sections: Record<string, string> = {};
-+  const patterns = [
-+    { key: 'definition', regex: /(?:Определение|Суть|Что такое)\s*:?\s*(.+?)(?=\n|Причина|Симптом|$)/is },
-+    { key: 'pathogenesis', regex: /(?:Причина|Механизм|Патогенез)\s*:?\s*(.+?)(?=\n|Симптом|Диагностика|$)/is },
-+    { key: 'clinical', regex: /(?:Симптом|Клиническая картина)\s*:?\s*(.+?)(?=\n|Диагностика|Лечение|$)/is },
-+    { key: 'diagnosis', regex: /(?:Диагностика|Диагноз)\s*:?\s*(.+?)(?=\n|Лечение|Профилактика|$)/is },
-+    { key: 'treatment', regex: /(?:Лечение|Терапия)\s*:?\s*(.+?)(?=\n|Профилактика|$)/is },
-+    { key: 'prevention', regex: /(?:Профилактика)\s*:?\s*(.+?)$/is },
-+  ];
-+  
-+  for (const { key, regex } of patterns) {
-+    const match = dedupA.match(regex);
-+    if (match && match[1]) sections[key] = match[1].trim();
-+  }
-+  
-+  // Block 1: Introduction
-+  blocks.push('Давайте разберём этот вопрос детально.');
-+  
-+  // Block 2: Definition
-+  if (sections.definition) {
-+    blocks.push(`Сначала определим суть понятия. ${sections.definition}`);
-+  } else if (cleanQ) {
-+    blocks.push(`Вопрос звучит так: ${cleanQ}. Для понимания этого медицинского состояния рассмотрим его основные характеристики.`);
-+  }
-+  
-+  // Block 3: Pathogenesis
-+  if (sections.pathogenesis) {
-+    blocks.push(`Теперь о причинах и механизме. ${sections.pathogenesis}`);
-+  }
-+  
-+  // Block 4: Clinical features
-+  if (sections.clinical) {
-+    blocks.push(`Клинические проявления: ${sections.clinical}`);
-+  }
-+  
-+  // Block 5: Diagnosis
-+  if (sections.diagnosis) {
-+    blocks.push(`Диагностика: ${sections.diagnosis}`);
-+  }
-+  
-+  // Block 6: Treatment
-+  if (sections.treatment) {
-+    blocks.push(`Принципы лечения: ${sections.treatment}`);
-+  }
-+  
-+  // Block 7: Prevention
-+  if (sections.prevention) {
-+    blocks.push(`Профилактика: ${sections.prevention}`);
-+  }
-+  
-+  // Block 8: Conclusion
-+  if (cleanQ) {
-+    blocks.push(`В заключение отметим, что ${cleanQ} — это важное медицинское понятие, правильное понимание и лечение которого необходимо будущим врачам.`);
-+  } else {
-+    blocks.push('Глубокое изучение этой темы и её применение на практике важно для будущих медицинских специалистов.');
-+  }
-+  
-+  let script = blocks.join('\n\n');
+  const blocks: string[] = [];
+  const explainedTerms = new Set<string>();
   
-+  // Insert term explanations (only once)
-+  const allText = [script, dedupA, dedupE].join(' ');
-+  const terms = detectTerms(allText);
-+  
-+  for (const term of terms.slice(0, 4)) {
-+    if (explainedTerms.has(term.toLowerCase())) continue;
-+    explainedTerms.add(term.toLowerCase());
-+    
-+    const regex = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-+    const match = script.match(regex);
-+    if (!match || match.index == null) continue;
-+    
-+    const idx = match.index + match[0].length;
-+    const before = script.slice(0, idx);
-+    const after = script.slice(idx);
-+    
-+    const expl = ` ${term}. Это термин, обозначающий важное медицинское понятие.`;
-+    script = before + expl + after;
-+  }
-+  
-+  // Remove duplicates
-+  const sentences = script.split(/[.!?]\s+/).filter(s => s.trim().length > 5);
-+  const uniqueSentences: string[] = [];
-+  const seen = new Set<string>();
-+  
-+  for (const s of sentences) {
-+    const key = s.toLowerCase().replace(/\s+/g, ' ').slice(0, 50);
-+    if (!seen.has(key)) {
-+      seen.add(key);
-+      uniqueSentences.push(s.trim());
-+    }
-+  }
-+  
-+  script = uniqueSentences
-+    .map(s => s.endsWith('.') || s.endsWith('!') || s.endsWith('?') ? s : s + '.')
-+    .join(' ');
-+  
-+  // Ensure minimum 700 chars
-+  if (script.length < 700) {
-+    const additional = 'При изучении этой темы важно обратить внимание на основные моменты: во-первых, понимание патофизиологических механизмов; во-вторых, правильная оценка клинических проявлений; в-третьих, применение современных методов диагностики; и в-четвёртых, выбор эффективной стратегии лечения.';
-+    script = script + '\n\n' + additional;
-+  }
-+  
-+  // Limit to 1200 chars
-+  if (script.length > 1200) {
-+    script = script.slice(0, 1200);
-+    const cut = Math.max(
-+      script.lastIndexOf('.'),
-+      script.lastIndexOf('!'),
-+      script.lastIndexOf('?')
-+    );
-+    if (cut > 1000) script = script.slice(0, cut + 1);
-+  }
-+  
-+  return script.trim();
-+}
+  const cleanQ = cleanQuestion(question);
+  const cleanA = cleanAnswer(answer, 'ru');
+  const cleanE = cleanAnswer(explanation, 'ru');
+  
+  const dedupA = removeDuplicateSentences(cleanA);
+  const dedupE = removeDuplicateSentences(cleanE);
+  
+  // Extract sections (Russian patterns)
+  const sections: Record<string, string> = {};
+  const patterns = [
+    { key: 'definition', regex: /(?:Определение|Суть|Что такое)\s*:?\s*(.+?)(?=\n|Причина|Симптом|$)/is },
+    { key: 'pathogenesis', regex: /(?:Причина|Механизм|Патогенез)\s*:?\s*(.+?)(?=\n|Симптом|Диагностика|$)/is },
+    { key: 'clinical', regex: /(?:Симптом|Клиническая картина)\s*:?\s*(.+?)(?=\n|Диагностика|Лечение|$)/is },
+    { key: 'diagnosis', regex: /(?:Диагностика|Диагноз)\s*:?\s*(.+?)(?=\n|Лечение|Профилактика|$)/is },
+    { key: 'treatment', regex: /(?:Лечение|Терапия)\s*:?\s*(.+?)(?=\n|Профилактика|$)/is },
+    { key: 'prevention', regex: /(?:Профилактика)\s*:?\s*(.+?)$/is },
+  ];
+  
+  for (const { key, regex } of patterns) {
+    const match = dedupA.match(regex);
+    if (match && match[1]) sections[key] = match[1].trim();
+  }
+  
+  // Block 1: Introduction
+  blocks.push('Давайте разберём этот вопрос детально.');
+  
+  // Block 2: Definition
+  if (sections.definition) {
+    blocks.push(`Сначала определим суть понятия. ${sections.definition}`);
+  } else if (cleanQ) {
+    blocks.push(`Вопрос звучит так: ${cleanQ}. Для понимания этого медицинского состояния рассмотрим его основные характеристики.`);
+  }
+  
+  // Block 3: Pathogenesis
+  if (sections.pathogenesis) {
+    blocks.push(`Теперь о причинах и механизме. ${sections.pathogenesis}`);
+  }
+  
+  // Block 4: Clinical features
+  if (sections.clinical) {
+    blocks.push(`Клинические проявления: ${sections.clinical}`);
+  }
+  
+  // Block 5: Diagnosis
+  if (sections.diagnosis) {
+    blocks.push(`Диагностика: ${sections.diagnosis}`);
+  }
+  
+  // Block 6: Treatment
+  if (sections.treatment) {
+    blocks.push(`Принципы лечения: ${sections.treatment}`);
+  }
+  
+  // Block 7: Prevention
+  if (sections.prevention) {
+    blocks.push(`Профилактика: ${sections.prevention}`);
+  }
+  
+  // Block 8: Conclusion
+  if (cleanQ) {
+    blocks.push(`В заключение отметим, что ${cleanQ} — это важное медицинское понятие, правильное понимание и лечение которого необходимо будущим врачам.`);
+  } else {
+    blocks.push('Глубокое изучение этой темы и её применение на практике важно для будущих медицинских специалистов.');
+  }
+  
+  let script = blocks.join('\n\n');
+  
+  // Insert term explanations (only once)
+  const allText = [script, dedupA, dedupE].join(' ');
+  const terms = detectTerms(allText);
+  
+  for (const term of terms.slice(0, 4)) {
+    if (explainedTerms.has(term.toLowerCase())) continue;
+    explainedTerms.add(term.toLowerCase());
+    
+    const regex = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    const match = script.match(regex);
+    if (!match || match.index == null) continue;
+    
+    const idx = match.index + match[0].length;
+    const before = script.slice(0, idx);
+    const after = script.slice(idx);
+    
+    const expl = ` ${term}. Это термин, обозначающий важное медицинское понятие.`;
+    script = before + expl + after;
+  }
+  
+  // Remove duplicates
+  const sentences = script.split(/[.!?]\s+/).filter(s => s.trim().length > 5);
+  const uniqueSentences: string[] = [];
+  const seen = new Set<string>();
+  
+  for (const s of sentences) {
+    const key = s.toLowerCase().replace(/\s+/g, ' ').slice(0, 50);
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueSentences.push(s.trim());
+    }
+  }
+  
+  script = uniqueSentences
+    .map(s => s.endsWith('.') || s.endsWith('!') || s.endsWith('?') ? s : s + '.')
+    .join(' ');
+  
+  // Ensure minimum 700 chars
+  if (script.length < 700) {
+    const additional = 'При изучении этой темы важно обратить внимание на основные моменты: во-первых, понимание патофизиологических механизмов; во-вторых, правильная оценка клинических проявлений; в-третьих, применение современных методов диагностики; и в-четвёртых, выбор эффективной стратегии лечения.';
+    script = script + '\n\n' + additional;
+  }
+  
+  // Limit to 1200 chars
+  if (script.length > 1200) {
+    script = script.slice(0, 1200);
+    const cut = Math.max(
+      script.lastIndexOf('.'),
+      script.lastIndexOf('!'),
+      script.lastIndexOf('?')
+    );
+    if (cut > 1000) script = script.slice(0, cut + 1);
+  }
+  
+  return script.trim();
+}
 
 export function generateAudioScript(input: GenerateScriptInput): GenerateScriptOutput {
   const { question, correctAnswer, aiExplanation } = input;

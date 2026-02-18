@@ -47,23 +47,23 @@ function applyOutsideTags(input: string, fn: (text: string) => string): string {
 
 /**
  * Emphasize important keywords with SSML emphasis tags.
-+ */
+ */
 function emphasizeKeywords(text: string, lang: 'ru' | 'uz'): string {
-+  const keywords = lang === 'ru'
-+    ? ['важно', 'основное', 'главное', 'ключевой', 'обратите внимание', 'запомните', 'необходимо']
-+    : ['muhim', 'asosiy', 'eng muhim', 'e\'tibor bering', 'esda tuting', 'kerak', 'zarur'];
-+  
-+  let result = text;
-+  
-+  for (const keyword of keywords) {
-+    const regex = new RegExp(`\\b${escapeRegExp(keyword)}\\b`, 'gi');
-+    result = result.replace(regex, (match) => {
-+      return `<emphasis level="moderate">${match}</emphasis>`;
-+    });
-+  }
-+  
-+  return result;
-+}
+  const keywords = lang === 'ru'
+    ? ['важно', 'основное', 'главное', 'ключевой', 'обратите внимание', 'запомните', 'необходимо']
+    : ['muhim', 'asosiy', 'eng muhim', 'e\'tibor bering', 'esda tuting', 'kerak', 'zarur'];
+  
+  let result = text;
+  
+  for (const keyword of keywords) {
+    const regex = new RegExp(`\\b${escapeRegExp(keyword)}\\b`, 'gi');
+    result = result.replace(regex, (match) => {
+      return `<emphasis level="moderate">${match}</emphasis>`;
+    });
+  }
+  
+  return result;
+}
 
 /**
  * Known phoneme corrections (IPA).
