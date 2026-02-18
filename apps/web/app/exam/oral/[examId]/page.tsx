@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import React from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import AnimatedPage from '../../../../components/AnimatedPage';
 import BottomNav from '../../../../components/BottomNav';
@@ -77,6 +78,8 @@ export default function OralExamPage() {
   const [audioUrl, setAudioUrl] = useState<Record<string, string>>({});
   const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
   const [audioError, setAudioError] = useState<string | null>(null);
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const orderedQuestions = useMemo(() => {
     if (orderMode === 'random' && questions.length > 0) {
@@ -155,12 +158,47 @@ export default function OralExamPage() {
     }
   }, [language]);
 
+  // Stop audio function
+  const stopAudio = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+    setPlayingAudioId(null);
+  }, []);
+
   const playAudio = useCallback(async (questionId: string) => {
+    // If audio is already playing for this question, stop it
+    if (playingAudioId === questionId) {
+      stopAudio();
+      return;
+    }
+
+    // Stop any currently playing audio
+    stopAudio();
+
     // If audio already exists, play it
     if (audioUrl[questionId]) {
       const audio = new Audio(audioUrl[questionId]);
+      audioRef.current = audio;
+      setPlayingAudioId(questionId);
+      
+      audio.addEventListener('ended', () => {
+        setPlayingAudioId(null);
+        audioRef.current = null;
+      });
+      
+      audio.addEventListener('error', () => {
+        setAudioError('Failed to play audio');
+        setPlayingAudioId(null);
+        audioRef.current = null;
+      });
+      
       audio.play().catch(() => {
         setAudioError('Failed to play audio');
+        setPlayingAudioId(null);
+        audioRef.current = null;
       });
       return;
     }
@@ -187,9 +225,26 @@ export default function OralExamPage() {
         // Prepend API base URL if audioUrl is relative
         const fullUrl = result.audioUrl.startsWith('http') ? result.audioUrl : `${API_BASE_URL}${result.audioUrl}`;
         setAudioUrl((prev) => ({ ...prev, [questionId]: fullUrl }));
+        
         const audio = new Audio(fullUrl);
+        audioRef.current = audio;
+        setPlayingAudioId(questionId);
+        
+        audio.addEventListener('ended', () => {
+          setPlayingAudioId(null);
+          audioRef.current = null;
+        });
+        
+        audio.addEventListener('error', () => {
+          setAudioError('Failed to play audio');
+          setPlayingAudioId(null);
+          audioRef.current = null;
+        });
+        
         audio.play().catch(() => {
           setAudioError('Failed to play audio');
+          setPlayingAudioId(null);
+          audioRef.current = null;
         });
       } else {
         throw new Error('Invalid response');
@@ -205,7 +260,7 @@ export default function OralExamPage() {
     } finally {
       setLoadingAudioId(null);
     }
-  }, [language, audioUrl, loadingAudioId]);
+  }, [language, audioUrl, loadingAudioId, playingAudioId, stopAudio]);
 
   const copy = useMemo(() => {
     if (language === 'Английский') {
@@ -213,7 +268,9 @@ export default function OralExamPage() {
         title: 'Oral exam',
         subtitle: 'Study questions and reveal answers.',
         showAnswer: 'Show answer',
-        playAudio: 'Listen to answer',
+        playAudio: 'Ziyoda explain!',
+        stopAudio: 'Ziyoda stop!',
+        preparing: 'Ziyoda is preparing...',
         loading: 'Loading...',
         loadingSearch: 'Ziyoda is searching for the answer…',
         loadingAudio: 'Generating audio...',
@@ -236,7 +293,9 @@ export default function OralExamPage() {
         title: "Og'zaki imtihon",
         subtitle: "Savollarni o'rganing va javoblarni ko'ring.",
         showAnswer: "Javobni ko'rsatish",
-        playAudio: "Javobni tinglash",
+        playAudio: "Ziyoda tushuntir!",
+        stopAudio: "Ziyoda to'xtat!",
+        preparing: "Ziyoda tayyorlanmoqda...",
         loading: 'Yuklanmoqda...',
         loadingSearch: "Ziyoda javob qidirmoqda…",
         loadingAudio: "Audio yaratilmoqda...",
@@ -258,7 +317,9 @@ export default function OralExamPage() {
       title: 'Устный экзамен',
       subtitle: 'Изучайте вопросы и открывайте ответы.',
         showAnswer: 'Показать ответ',
-        playAudio: 'Послушать ответ',
+        playAudio: 'Зиёда объясни!',
+        stopAudio: 'Зиёда хватит!',
+        preparing: 'Зиёда готовится...',
         loading: 'Загрузка...',
         loadingSearch: 'Зиёда ищет ответ…',
         loadingAudio: 'Генерация аудио...',
@@ -357,14 +418,27 @@ export default function OralExamPage() {
                 {copy.showAnswer}
               </Button>
               {answerCache[current.id] && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => playAudio(current.id)}
-                  disabled={loadingAudioId === current.id}
-                >
-                  🔊 {loadingAudioId === current.id ? copy.loadingAudio : copy.playAudio}
-                </Button>
+                <>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => playAudio(current.id)}
+                    disabled={loadingAudioId === current.id}
+                  >
+                    {playingAudioId === current.id ? (
+                      <>🛑 {copy.stopAudio}</>
+                    ) : loadingAudioId === current.id ? (
+                      <>🤖 {copy.preparing}</>
+                    ) : (
+                      <>🤖 {copy.playAudio}</>
+                    )}
+                  </Button>
+                  {loadingAudioId === current.id && (
+                    <div className="mt-2">
+                      <AiLoadingDots text={copy.preparing} />
+                    </div>
+                  )}
+                </>
               )}
             </div>
             {audioError && (
@@ -488,7 +562,10 @@ export default function OralExamPage() {
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => setIndex((i) => Math.max(0, i - 1))}
+                onClick={() => {
+                  stopAudio();
+                  setIndex((i) => Math.max(0, i - 1));
+                }}
                 disabled={index === 0}
               >
                 {copy.prev}
@@ -496,7 +573,10 @@ export default function OralExamPage() {
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => setIndex((i) => Math.min(total - 1, i + 1))}
+                onClick={() => {
+                  stopAudio();
+                  setIndex((i) => Math.min(total - 1, i + 1));
+                }}
                 disabled={index >= total - 1}
               >
                 {copy.next}
@@ -505,7 +585,10 @@ export default function OralExamPage() {
             <Button
               type="button"
               variant="secondary"
-              onClick={() => router.push('/exam/select')}
+              onClick={() => {
+                stopAudio();
+                router.push('/exam/select');
+              }}
             >
               {copy.finish}
             </Button>
