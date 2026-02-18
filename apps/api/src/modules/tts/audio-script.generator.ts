@@ -11,6 +11,11 @@ interface GenerateScriptInput {
   lang: 'ru' | 'uz';
 }
 
+interface GenerateScriptOutput {
+  script: string;
+  actualLang: 'ru' | 'uz'; // Actual language used for generation
+}
+
 // Uzbek-specific Cyrillic letters pattern (shared)
 const uzbekCyrillic = /[ЎўҚқҒғҲҳ]/;
 
@@ -66,6 +71,35 @@ function filterByLanguage(text: string, targetLang: 'ru' | 'uz'): string {
   return filtered.join('. ') + (filtered.length > 0 ? '.' : '');
 }
 
+/**
+ * Detect the actual language of text.
+ * Returns 'ru', 'uz', or 'mixed'.
+ */
+function detectLanguage(text: string): 'ru' | 'uz' | 'mixed' {
+  const sentences = text.split(/[.!?]\s+/).filter(Boolean);
+  let russianCount = 0;
+  let uzbekCount = 0;
+  
+  for (const sentence of sentences) {
+    const trimmed = sentence.trim();
+    if (trimmed.length < 10) continue;
+    
+    const hasCyrillic = /[А-Яа-яЁё]/.test(trimmed);
+    const hasUzbekCyrillic = uzbekCyrillic.test(trimmed);
+    const hasUzbekLatin = uzbekLatinWords.test(trimmed);
+    
+    if (hasCyrillic && !hasUzbekCyrillic && !hasUzbekLatin) {
+      russianCount++;
+    } else if (hasUzbekCyrillic || hasUzbekLatin) {
+      uzbekCount++;
+    }
+  }
+  
+  if (russianCount > 0 && uzbekCount === 0) return 'ru';
+  if (uzbekCount > 0 && russianCount === 0) return 'uz';
+  return 'mixed';
+}
+
 export function generateAudioScript(input: GenerateScriptInput): string {
   const { question, correctAnswer, aiExplanation, lang } = input;
 
@@ -100,24 +134,48 @@ export function generateAudioScript(input: GenerateScriptInput): string {
     .replace(/#\s*/g, '') // remove single # headers
     .trim();
 
+  // Detect actual language of the explanation
+  const detectedLang = detectLanguage(clean);
+  
+  // If requested language doesn't match detected language, adjust
+  let actualLang = lang;
+  if (detectedLang !== 'mixed' && detectedLang !== lang) {
+    console.warn('[Audio Script] Language mismatch detected:', {
+      requested: lang,
+      detected: detectedLang,
+      preview: clean.slice(0, 200),
+    });
+    
+    // If explanation is completely in another language (not mixed), use that language
+    if (detectedLang === 'uz' && lang === 'ru') {
+      actualLang = 'uz';
+      console.warn('[Audio Script] Switching to Uzbek language for generation');
+    } else if (detectedLang === 'ru' && lang === 'uz') {
+      actualLang = 'ru';
+      console.warn('[Audio Script] Switching to Russian language for generation');
+    }
+  }
+  
   // Filter by target language - STRICT: Azure TTS doesn't support mixed languages
-  const filtered = filterByLanguage(clean, lang);
+  const filtered = filterByLanguage(clean, actualLang);
   
   // STRICT: If filtered is empty or too short, check if original has mixed languages
   let finalExplanation = filtered;
   
   if (filtered.length < 50) {
     // Check if original has mixed languages
-    const hasMixedLang = lang === 'ru' 
+    const hasMixedLang = actualLang === 'ru' 
       ? (uzbekCyrillic.test(clean) || uzbekLatinWords.test(clean))
       : (!uzbekCyrillic.test(clean) && !uzbekLatinWords.test(clean) && /[А-Яа-яЁё]/.test(clean));
     
     if (hasMixedLang || filtered.length === 0) {
-      // Original has mixed languages OR filtered is empty - STRICT: reject
+      // Original has mixed languages OR filtered is empty
       console.error('[Audio Script] ERROR: Cannot generate script - mixed languages detected:', {
         originalLength: clean.length,
         filteredLength: filtered.length,
-        lang,
+        requestedLang: lang,
+        actualLang,
+        detectedLang,
         originalPreview: clean.slice(0, 200),
         filteredPreview: filtered.slice(0, 100),
       });
@@ -129,7 +187,7 @@ export function generateAudioScript(input: GenerateScriptInput): string {
           const trimmed = s.trim();
           if (trimmed.length < 10) return false;
           
-          if (lang === 'ru') {
+          if (actualLang === 'ru') {
             const hasCyrillic = /[А-Яа-яЁё]/.test(trimmed);
             const hasUzbek = uzbekCyrillic.test(trimmed) || uzbekLatinWords.test(trimmed);
             return hasCyrillic && !hasUzbek;
@@ -145,8 +203,8 @@ export function generateAudioScript(input: GenerateScriptInput): string {
         finalExplanation = strictFiltered;
         console.warn('[Audio Script] Using strict filtered result:', strictFiltered.slice(0, 100));
       } else {
-        // Still too short - throw error
-        throw new Error(`Cannot generate audio script: explanation contains mixed languages and filtering resulted in empty/short text (${strictFiltered.length} chars)`);
+        // Still too short - throw error with helpful message
+        throw new Error(`Cannot generate audio script: explanation is in ${detectedLang === 'mixed' ? 'mixed languages' : detectedLang === 'uz' ? 'Uzbek' : 'Russian'} but ${lang} was requested. Filtering resulted in empty/short text (${strictFiltered.length} chars)`);
       }
     } else {
       // No mixed languages, safe to use original
@@ -155,7 +213,7 @@ export function generateAudioScript(input: GenerateScriptInput): string {
   }
   
   // Final validation: ensure no mixed languages in final explanation
-  if (lang === 'ru') {
+  if (actualLang === 'ru') {
     const hasUzbek = uzbekCyrillic.test(finalExplanation) || uzbekLatinWords.test(finalExplanation);
     if (hasUzbek) {
       console.error('[Audio Script] ERROR: Final explanation still contains Uzbek text for Russian SSML!');
@@ -175,12 +233,15 @@ export function generateAudioScript(input: GenerateScriptInput): string {
     }
   }
 
-  // Build teacher-style explanation
-  if (lang === 'ru') {
-    return buildRussianScript(question, correctAnswer, finalExplanation);
+  // Build teacher-style explanation using actual language
+  let script: string;
+  if (actualLang === 'ru') {
+    script = buildRussianScript(question, correctAnswer, finalExplanation);
   } else {
-    return buildUzbekScript(question, correctAnswer, finalExplanation);
+    script = buildUzbekScript(question, correctAnswer, finalExplanation);
   }
+  
+  return { script, actualLang };
 }
 
 function buildRussianScript(question: string, correctAnswer: string, explanation: string): string {

@@ -73,6 +73,7 @@ export async function getOrCreateAudio(
   }
 
   // 4. Check if script needs regeneration
+  // Note: We'll determine actual language during generation, but use requested lang for hash/cache key
   const expectedHash = calculateHash(question.prompt, explanationRecord.content, lang);
   let script = await prisma.questionAudioScript.findUnique({
     where: { questionId_lang: { questionId, lang } },
@@ -93,12 +94,15 @@ export async function getOrCreateAudio(
       }
     }
 
-    const scriptContent = generateAudioScript({
+    const scriptResult = generateAudioScript({
       question: question.prompt,
       correctAnswer,
       aiExplanation: explanationRecord.content,
       lang,
     });
+
+    const scriptContent = scriptResult.script;
+    const actualLang = scriptResult.actualLang; // Use actual language for SSML generation
 
     // Validate script was generated
     if (!scriptContent || scriptContent.trim().length < 20) {
@@ -154,7 +158,7 @@ export async function getOrCreateAudio(
       where: { questionId_lang: { questionId, lang } },
       create: {
         questionId,
-        lang,
+        lang, // Store requested lang in DB
         content: cleanContent,
         hash: expectedHash,
       },
@@ -166,17 +170,23 @@ export async function getOrCreateAudio(
   }
 
   // 5. Generate audio
-  const audioPath = getAudioPath(questionId, lang);
+  // Determine actual language from script content (may differ from requested lang)
+  // Check script content to determine language
+  const scriptLang = script.content.match(/(Давайте разберём|Это интересный вопрос|Хороший вопрос)/) ? 'ru' 
+    : script.content.match(/(Keling|bu savolni|Yaxshi savol)/) ? 'uz'
+    : lang; // Fallback to requested lang
+  
+  const audioPath = getAudioPath(questionId, scriptLang);
   const cleanScriptContent = script.content
     .replace(/[\uD800-\uDFFF]/g, '') // Remove invalid surrogates
     .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '') // Remove control chars
     .normalize('NFC')
     .trim();
-  await synthesizeSpeech(cleanScriptContent, lang, audioPath);
+  await synthesizeSpeech(cleanScriptContent, scriptLang, audioPath);
 
-  // 6. Save audio record
+  // 6. Save audio record (use scriptLang, not requested lang)
   await prisma.questionAudio.upsert({
-    where: { questionId_lang: { questionId, lang } },
+    where: { questionId_lang: { questionId, lang: scriptLang } },
     create: {
       questionId,
       lang,
