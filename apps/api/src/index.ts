@@ -13,6 +13,7 @@ import examsRouter from './modules/exams/exams.routes';
 import paymentsRouter from './modules/payments/payments.routes';
 import aiRouter from './modules/ai/ai.routes';
 import oralRouter from './modules/ai/oral.routes';
+import oralSessionRouter from './modules/oral-session/oral.routes';
 import botRouter from './modules/bot/bot.routes';
 import ttsRouter from './modules/tts/tts.routes';
 import { attachUserFromHeader } from './middlewares/attachUser.middleware';
@@ -323,6 +324,7 @@ app.post('/auth/telegram-widget', (req, res) => {
 app.use('/attempts', attemptsRouter);
 app.use('/ai', aiRouter);
 app.use('/oral', oralRouter);
+app.use('/oral-session', oralSessionRouter);
 app.use('/bot', botRouter);
 app.use('/tts', ttsRouter);
 app.use('/admin', adminRouter);

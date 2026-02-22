@@ -53,3 +53,62 @@ export interface AttemptHistoryItem {
   status: string;
   score?: number;
 }
+
+// ─── Oral Exam Session ───────────────────────────────────────────────────────
+
+export interface OralSessionQuestion {
+  id: string;
+  text: string;
+  order: number;
+}
+
+export interface OralSession {
+  sessionId: string;
+  questions: OralSessionQuestion[];
+  expiresAt: string; // ISO date string
+}
+
+export interface OralCoverageItem {
+  topic: string;
+  status: 'full' | 'partial' | 'missing';
+}
+
+export interface OralEvaluationResult {
+  score: number;
+  maxScore: 10;
+  coverage: OralCoverageItem[];
+  missedPoints: string[];
+  summary: string;
+}
+
+export interface OralAnswerResult {
+  transcript: string;
+  score: number;
+  maxScore: 10;
+  feedback: OralEvaluationResult;
+}
+
+export interface OralSessionAnswerSummary {
+  questionId: string;
+  questionText: string;
+  transcript: string | null;
+  score: number;
+  feedback: OralEvaluationResult | null;
+}
+
+export interface OralSessionResult {
+  sessionId: string;
+  score: number;
+  maxScore: number;
+  passed: boolean;
+  passThreshold: number;
+  status: string;
+  answers: OralSessionAnswerSummary[];
+}
+
+export interface OralSessionStatus {
+  status: string;
+  ttl: number;
+  answeredCount: number;
+  totalQuestions: number;
+}

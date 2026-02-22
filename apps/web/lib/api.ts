@@ -1093,3 +1093,72 @@ export async function uploadKnowledge(file: File): Promise<{ chunksCreated: numb
 }
 
 export type { ApiError };
+
+// ─── Oral Exam Session API ───────────────────────────────────────────────────
+
+import type {
+  OralSession,
+  OralAnswerResult,
+  OralSessionResult,
+  OralSessionStatus,
+} from './types';
+
+export async function startOralSession(examId: string): Promise<OralSession> {
+  const { response, data } = await apiFetch('/oral-session/start', {
+    method: 'POST',
+    json: { examId },
+    timeoutMs: 60000,
+  });
+  if (!response.ok) throw data as ApiError;
+  return data as OralSession;
+}
+
+export async function submitOralAnswer(
+  sessionId: string,
+  questionId: string,
+  audioBlob: Blob
+): Promise<OralAnswerResult> {
+  const user = readTelegramUser();
+  const headers: Record<string, string> = {};
+  if (user?.telegramId) {
+    headers['x-telegram-id'] = user.telegramId;
+  }
+
+  const formData = new FormData();
+  formData.append('sessionId', sessionId);
+  formData.append('questionId', questionId);
+  formData.append('audio', audioBlob, 'answer.webm');
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 90000);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/oral-session/answer`, {
+      method: 'POST',
+      headers,
+      body: formData,
+      signal: controller.signal,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw data as ApiError;
+    return data as OralAnswerResult;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function finishOralSession(sessionId: string): Promise<OralSessionResult> {
+  const { response, data } = await apiFetch('/oral-session/finish', {
+    method: 'POST',
+    json: { sessionId },
+    timeoutMs: 30000,
+  });
+  if (!response.ok) throw data as ApiError;
+  return data as OralSessionResult;
+}
+
+export async function getOralSessionStatus(sessionId: string): Promise<OralSessionStatus> {
+  const { response, data } = await apiFetch(`/oral-session/${sessionId}/status`);
+  if (!response.ok) throw data as ApiError;
+  return data as OralSessionStatus;
+}

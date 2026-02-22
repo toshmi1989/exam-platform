@@ -9,7 +9,7 @@ import Button from '../../../../components/Button';
 import Card from '../../../../components/Card';
 import PageHeader from '../../../../components/PageHeader';
 import { readSettings, Language } from '../../../../lib/uiSettings';
-import { getOralQuestions, streamOralAnswer } from '../../../../lib/api';
+import { getOralQuestions, streamOralAnswer, getProfile } from '../../../../lib/api';
 import { apiFetch } from '../../../../lib/api/client';
 import { API_BASE_URL } from '../../../../lib/api/config';
 import { readTelegramUser } from '../../../../lib/telegramUser';
@@ -75,6 +75,7 @@ export default function OralExamPage() {
   const [answerLimitReached, setAnswerLimitReached] = useState(false);
   const [iframeUrl, setIframeUrl] = useState<string | null>(null);
   const [isGuest, setIsGuest] = useState(false);
+  const [isSubscriber, setIsSubscriber] = useState(false);
   const [audioUrl, setAudioUrl] = useState<Record<string, string>>({});
   const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
   const [audioError, setAudioError] = useState<string | null>(null);
@@ -95,6 +96,9 @@ export default function OralExamPage() {
     const user = readTelegramUser();
     const isGuestUser = !user?.telegramId || user.telegramId.startsWith('guest-');
     setIsGuest(isGuestUser);
+    if (!isGuestUser) {
+      getProfile().then((p) => setIsSubscriber(!!p.subscriptionActive)).catch(() => {});
+    }
   }, []);
 
   useEffect(() => {
@@ -286,6 +290,8 @@ export default function OralExamPage() {
         buySubscriptionCta: 'Get subscription',
         guestOralLimitHint: 'Limit exhausted. To continue, make a one-time payment for 1 session or buy a subscription in your Telegram account!',
         openInTelegramCta: 'Go to Telegram',
+        takeExam: 'Take oral exam',
+        takeExamHint: 'Subscribers only · 1 time per day',
       };
     }
     if (language === 'Узбекский') {
@@ -311,6 +317,8 @@ export default function OralExamPage() {
         buySubscriptionCta: 'Obuna olish',
         guestOralLimitHint: "Limit tugadi. Davom etish uchun 1 seans uchun bir martalik to'lov qiling yoki Telegramdagi shaxsiy kabinetingizda obuna oling!",
         openInTelegramCta: "Telegramga o'tish",
+        takeExam: "Og'zaki imtihon topshirish",
+        takeExamHint: "Faqat obuna uchun · Kuniga 1 marta",
       };
     }
     return {
@@ -335,6 +343,8 @@ export default function OralExamPage() {
       buySubscriptionCta: 'Купить подписку',
       guestOralLimitHint: 'Лимит закончился. Для продолжения совершите разовый платёж для 1 сеанса или купите подписку в личном кабинете с Telegram!',
       openInTelegramCta: 'Перейти в Telegram',
+      takeExam: 'Сдать устный экзамен',
+      takeExamHint: 'Только для подписчиков · 1 раз в сутки',
     };
   }, [language]);
 
@@ -406,6 +416,25 @@ export default function OralExamPage() {
             title={copy.title}
             subtitle={`${copy.questionNum(index + 1, total)}`}
           />
+
+          {/* Take oral exam button — subscribers only */}
+          {isSubscriber && !isGuest && (
+            <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
+              <p className="mb-2 text-sm font-semibold text-indigo-800">
+                🎤 {(copy as { takeExam?: string }).takeExam}
+              </p>
+              <p className="mb-3 text-xs text-indigo-600">
+                {(copy as { takeExamHint?: string }).takeExamHint}
+              </p>
+              <Button
+                href={`/exam/oral-session/${examId}`}
+                variant="primary"
+                size="md"
+              >
+                {(copy as { takeExam?: string }).takeExam}
+              </Button>
+            </div>
+          )}
 
           <Card>
             <p className="whitespace-pre-wrap text-slate-800">{current.prompt}</p>

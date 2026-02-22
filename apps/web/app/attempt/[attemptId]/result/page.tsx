@@ -90,6 +90,13 @@ export default function AttemptResultPage() {
         title: 'Attempt complete',
         subtitle: 'Take a deep breath. Here is your result.',
         score: 'Score',
+        passed: 'Passed',
+        failed: 'Not passed',
+        practiceMode: 'Practice',
+        examMode: 'Exam',
+        correctAnswers: 'correct answers',
+        passingScore: 'Passing score: 28 of 50',
+        practiceNote: 'Practice mode — results are not counted',
         review: 'See correct answers',
         reviewTitle: 'Correct answers',
         notAvailable: 'Correct answers are not available for this attempt.',
@@ -119,6 +126,13 @@ export default function AttemptResultPage() {
         title: 'Urinish yakunlandi',
         subtitle: 'Chuqur nafas oling. Bu sizning natijangiz.',
         score: 'Ball',
+        passed: 'Test topshirildi',
+        failed: 'Test topshirilmadi',
+        practiceMode: 'Amaliyot',
+        examMode: 'Imtihon',
+        correctAnswers: "to'g'ri javob",
+        passingScore: "O'tish bali: 28 / 50",
+        practiceNote: "Amaliyot rejimi — natija hisobga olinmaydi",
         review: 'To‘g‘ri javoblarni ko‘rish',
         reviewTitle: 'To‘g‘ri javoblar',
         notAvailable: 'Bu urinish uchun to‘g‘ri javoblar mavjud emas.',
@@ -147,6 +161,13 @@ export default function AttemptResultPage() {
       title: 'Попытка завершена',
       subtitle: 'Сделайте вдох. Вот ваш результат.',
       score: 'Результат',
+      passed: 'Тест сдан',
+      failed: 'Тест не сдан',
+      practiceMode: 'Учёба',
+      examMode: 'Экзамен',
+      correctAnswers: 'правильных ответов',
+      passingScore: 'Проходной балл: 28 из 50',
+      practiceNote: 'Режим учёбы — результат не учитывается',
       review: 'Посмотреть правильные ответы',
       reviewTitle: 'Правильные ответы',
       notAvailable: 'Правильные ответы недоступны для этой попытки.',
@@ -243,6 +264,10 @@ export default function AttemptResultPage() {
   const isPractice = result.mode === 'practice';
   const showReviewButton = !isPractice;
 
+  const PASS_THRESHOLD = 28;
+  const isPassed = result.score >= PASS_THRESHOLD;
+  const scorePercent = result.maxScore > 0 ? Math.round((result.score / result.maxScore) * 100) : 0;
+
   // #region agent log
   if (showReviewUI && review) {
     const sample = review.questions.slice(0, 5).map((q, i) => {
@@ -269,10 +294,48 @@ export default function AttemptResultPage() {
     <main className="flex min-h-screen flex-col gap-6 pb-8 pt-[3.75rem]">
       <PageHeader title={copy.title} subtitle={copy.subtitle} />
 
-      <div className="flex items-center justify-between text-sm text-slate-600">
-        <span className="font-semibold text-slate-900">
-          {copy.score}: {result.score} / {result.maxScore}
-        </span>
+      {/* Score card */}
+      <div className={`rounded-2xl border-2 p-5 ${isPassed ? 'border-emerald-300 bg-emerald-50' : 'border-rose-300 bg-rose-50'}`}>
+        {/* Mode badge */}
+        <div className="mb-3 flex items-center justify-between">
+          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${isPractice ? 'bg-slate-100 text-slate-600' : 'bg-white/70 text-slate-600'}`}>
+            {isPractice ? copy.practiceMode : copy.examMode}
+          </span>
+          {!isPractice && (
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-bold ${isPassed ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}`}>
+              {isPassed ? '✓' : '✗'} {isPassed ? copy.passed : copy.failed}
+            </span>
+          )}
+        </div>
+
+        {/* Big score */}
+        <div className="flex items-end justify-center gap-1 py-2">
+          <span className={`text-6xl font-extrabold leading-none ${isPassed ? 'text-emerald-700' : 'text-rose-700'}`}>
+            {result.score}
+          </span>
+          <span className="mb-1 text-2xl font-semibold text-slate-400">
+            / {result.maxScore}
+          </span>
+        </div>
+
+        <p className={`mt-1 text-center text-sm font-medium ${isPassed ? 'text-emerald-700' : 'text-rose-700'}`}>
+          {result.score} {copy.correctAnswers} — {scorePercent}%
+        </p>
+
+        {/* Progress bar */}
+        <div className="mt-4 h-3 w-full overflow-hidden rounded-full bg-white/60">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${isPassed ? 'bg-emerald-500' : 'bg-rose-400'}`}
+            style={{ width: `${scorePercent}%` }}
+          />
+        </div>
+
+        {/* Passing score hint */}
+        {!isPractice ? (
+          <p className="mt-3 text-center text-xs text-slate-500">{copy.passingScore}</p>
+        ) : (
+          <p className="mt-3 text-center text-xs text-slate-500">{copy.practiceNote}</p>
+        )}
       </div>
 
       {showReviewUI ? (
