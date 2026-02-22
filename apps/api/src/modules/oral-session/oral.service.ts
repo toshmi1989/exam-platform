@@ -137,25 +137,49 @@ export async function startSession(
     }
   }
 
-  // 2. Rate limit (1x per day for subscribers)
-  const rateCheck = await checkAndConsumeRateLimit(userId, isAdmin);
-  if (!rateCheck.allowed) {
-    return {
-      error: rateCheck.message ?? 'Превышен суточный лимит.',
-      reasonCode: 'RATE_LIMIT_EXCEEDED',
-    };
-  }
-
-  // 3. Check for existing active session
+  // 2. Check for existing active session.
+  // If user re-opens oral exam after closing browser/app, auto-close stale active session.
   const existing = await prisma.oralExamSession.findFirst({
     where: { userId, status: 'active' },
     select: { id: true },
   });
+  let hadActiveSession = false;
   if (existing) {
-    return {
-      error: 'У вас уже есть активная сессия устного экзамена. Завершите её перед началом новой.',
-      reasonCode: 'SESSION_ALREADY_ACTIVE',
-    };
+    hadActiveSession = true;
+
+    // If timer is already expired, mark as timeout; otherwise close as finished.
+    const expired = await checkAndExpireSession(existing.id);
+    if (!expired) {
+      const answers = await prisma.oralExamAnswer.findMany({
+        where: { sessionId: existing.id },
+        select: { score: true },
+      });
+      const totalScore = answers.reduce((sum, a) => sum + (a.score ?? 0), 0);
+
+      await prisma.oralExamSession.update({
+        where: { id: existing.id },
+        data: {
+          status: 'finished',
+          finishedAt: new Date(),
+          score: totalScore,
+        },
+      });
+
+      await expireSession(existing.id);
+    }
+  }
+
+  // 3. Rate limit (1x per day for subscribers).
+  // If we just auto-closed an active session, do not consume/check the limit again.
+  // The previous start already consumed today's attempt.
+  if (!hadActiveSession) {
+    const rateCheck = await checkAndConsumeRateLimit(userId, isAdmin);
+    if (!rateCheck.allowed) {
+      return {
+        error: rateCheck.message ?? 'Превышен суточный лимит.',
+        reasonCode: 'RATE_LIMIT_EXCEEDED',
+      };
+    }
   }
 
   // 4. Pick 5 random ORAL questions from the exam

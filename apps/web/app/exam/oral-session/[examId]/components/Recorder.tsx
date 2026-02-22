@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 
 export interface RecorderProps {
-  onRecordingComplete: (blob: Blob, mimeType: string) => void;
+  onRecordingComplete: (blob: Blob, mimeType: string) => void | Promise<void>;
   disabled?: boolean;
   lang?: 'ru' | 'uz' | 'en';
 }
@@ -16,6 +16,9 @@ const COPY = {
     recording: 'Запись...',
     tapToStop: 'Нажмите для остановки',
     processing: 'Обработка...',
+    listenRecord: 'Прослушайте запись перед отправкой',
+    sendRecord: 'Отправить ответ',
+    deleteRecord: 'Удалить запись',
   },
   uz: {
     permissionError: "Mikrofonga ruxsat yo'q. Brauzer sozlamalarida ruxsat bering.",
@@ -24,6 +27,9 @@ const COPY = {
     recording: 'Yozilmoqda...',
     tapToStop: 'Toʻxtatish uchun bosing',
     processing: 'Qayta ishlanmoqda...',
+    listenRecord: "Yuborishdan oldin yozuvni tinglang",
+    sendRecord: 'Javobni yuborish',
+    deleteRecord: "Yozuvni o'chirish",
   },
   en: {
     permissionError: 'Microphone access denied. Please enable it in browser settings.',
@@ -32,6 +38,9 @@ const COPY = {
     recording: 'Recording...',
     tapToStop: 'Tap to stop',
     processing: 'Processing...',
+    listenRecord: 'Listen before sending',
+    sendRecord: 'Send answer',
+    deleteRecord: 'Delete recording',
   },
 };
 
@@ -40,6 +49,9 @@ export default function Recorder({ onRecordingComplete, disabled = false, lang =
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [durationSeconds, setDurationSeconds] = useState(0);
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+  const [recordedMimeType, setRecordedMimeType] = useState<string>('');
+  const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -51,11 +63,12 @@ export default function Recorder({ onRecordingComplete, disabled = false, lang =
   useEffect(() => {
     return () => {
       stopTimer();
+      if (recordedUrl) URL.revokeObjectURL(recordedUrl);
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
       }
     };
-  }, []);
+  }, [recordedUrl]);
 
   function startTimer() {
     setDurationSeconds(0);
@@ -75,6 +88,12 @@ export default function Recorder({ onRecordingComplete, disabled = false, lang =
     if (disabled || isRecording || isProcessing) return;
     setError(null);
     chunksRef.current = [];
+    if (recordedUrl) {
+      URL.revokeObjectURL(recordedUrl);
+      setRecordedUrl(null);
+    }
+    setRecordedBlob(null);
+    setRecordedMimeType('');
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -101,10 +120,11 @@ export default function Recorder({ onRecordingComplete, disabled = false, lang =
         const blob = new Blob(chunksRef.current, { type: mimeType });
         stream.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
-        setIsProcessing(true);
         setIsRecording(false);
-        onRecordingComplete(blob, mimeType);
-        setIsProcessing(false);
+        const url = URL.createObjectURL(blob);
+        setRecordedBlob(blob);
+        setRecordedMimeType(mimeType);
+        setRecordedUrl(url);
       };
 
       recorder.start(250); // collect data every 250ms
@@ -130,6 +150,29 @@ export default function Recorder({ onRecordingComplete, disabled = false, lang =
   }
 
   const handleClick = isRecording ? stopRecording : startRecording;
+
+  const handleSend = useCallback(async () => {
+    if (!recordedBlob || !recordedMimeType || isProcessing || disabled) return;
+    setIsProcessing(true);
+    setError(null);
+    try {
+      await onRecordingComplete(recordedBlob, recordedMimeType);
+      if (recordedUrl) URL.revokeObjectURL(recordedUrl);
+      setRecordedUrl(null);
+      setRecordedBlob(null);
+      setRecordedMimeType('');
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [recordedBlob, recordedMimeType, isProcessing, disabled, onRecordingComplete, recordedUrl]);
+
+  const handleDelete = useCallback(() => {
+    if (recordedUrl) URL.revokeObjectURL(recordedUrl);
+    setRecordedUrl(null);
+    setRecordedBlob(null);
+    setRecordedMimeType('');
+    setDurationSeconds(0);
+  }, [recordedUrl]);
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -167,6 +210,16 @@ export default function Recorder({ onRecordingComplete, disabled = false, lang =
         )}
       </button>
 
+      {isRecording && (
+        <div className="flex items-end gap-1.5" aria-hidden>
+          <span className="h-3 w-1 rounded bg-rose-400 animate-pulse" />
+          <span className="h-5 w-1 rounded bg-rose-500 animate-pulse [animation-delay:120ms]" />
+          <span className="h-7 w-1 rounded bg-rose-600 animate-pulse [animation-delay:240ms]" />
+          <span className="h-4 w-1 rounded bg-rose-500 animate-pulse [animation-delay:360ms]" />
+          <span className="h-6 w-1 rounded bg-rose-400 animate-pulse [animation-delay:480ms]" />
+        </div>
+      )}
+
       <p className="text-sm font-medium text-slate-600">
         {isProcessing
           ? copy.processing
@@ -174,6 +227,31 @@ export default function Recorder({ onRecordingComplete, disabled = false, lang =
           ? `${copy.recording} ${formatDuration(durationSeconds)}`
           : copy.tapToRecord}
       </p>
+
+      {recordedBlob && recordedUrl && !isRecording && (
+        <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p className="mb-2 text-center text-xs text-slate-500">{copy.listenRecord}</p>
+          <audio controls src={recordedUrl} className="w-full" />
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={isProcessing}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+            >
+              {copy.deleteRecord}
+            </button>
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={isProcessing || disabled}
+              className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {copy.sendRecord}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
