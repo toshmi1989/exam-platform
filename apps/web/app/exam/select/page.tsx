@@ -165,19 +165,20 @@ function ExamSelectClient() {
         subtitle: 'Choose your options and start.',
         professionTitle: 'Profession',
         examTypeTitle: 'Exam type',
-        test: 'Test',
-        oral: 'Oral',
+        test: '📝 Test',
+        oral: '🎤 Oral',
         modeTitle: 'Mode',
-        modeExam: 'Submit exam',
-        modePractice: 'Practice',
+        modeExam: '🏆 Submit exam',
+        modePractice: '📖 Practice',
         languageTitle: 'Exam language',
-        languageUz: 'Uzbek',
-        languageRu: 'Russian',
+        languageUz: '🇺🇿 Uzbek',
+        languageRu: '🇷🇺 Russian',
         directionLabel: 'Direction',
         directionsLoading: 'Loading directions...',
         directionsEmpty: 'No directions found.',
         start: 'Start test',
         calmHint: 'Calm, focused practice for this direction.',
+        oralStub: 'Oral exams will be available soon.',
         paymentRequired: 'One-time access is required before starting.',
         accessDenied: 'Access denied. Please purchase access.',
         accessDeniedTitle: 'Access denied',
@@ -200,7 +201,6 @@ function ExamSelectClient() {
         categoryLabel: 'Category',
         startOral: 'Start oral',
         selectPlaceholder: 'Select',
-        oralModeTitle: 'Mode',
         oralModeExam: '🎤 Submit oral exam',
         oralModePreparation: '📚 Prepare for oral',
       };
@@ -211,22 +211,23 @@ function ExamSelectClient() {
         subtitle: 'Variantlarni tanlang va boshlang.',
         professionTitle: 'Kasb',
         examTypeTitle: 'Imtihon turi',
-        test: '📝 Test',
-        oral: '🎤 Og\'zaki',
+        test: "📝 Test",
+        oral: "🎤 Og'zaki",
         modeTitle: 'Rejim',
-        modeExam: '🏆 Imtihonni topshirish',
-        modePractice: '📖 Tayyorgarlik',
+        modeExam: "🏆 Imtihonni topshirish",
+        modePractice: "📖 Tayyorgarlik",
         languageTitle: 'Imtihon tili',
-        languageUz: '🇺🇿 O\'zbek',
+        languageUz: "🇺🇿 O'zbek",
         languageRu: '🇷🇺 Rus',
-        directionLabel: 'Yo\'nalish',
-        directionsLoading: 'Yo\'nalishlar yuklanmoqda...',
-        directionsEmpty: 'Yo\'nalishlar hozircha yo\'q.',
+        directionLabel: "Yo'nalish",
+        directionsLoading: "Yo'nalishlar yuklanmoqda...",
+        directionsEmpty: "Yo'nalishlar hozircha yo'q.",
         start: 'Testni boshlash',
-        calmHint: 'Ushbu yo\'nalish uchun sokin mashg\'ulot.',
+        calmHint: "Ushbu yo'nalish uchun sokin mashg'ulot.",
+        oralStub: "Og'zaki imtihonlar tez orada qo'shiladi.",
         paymentRequired: 'Boshlashdan oldin bir martalik kirish talab qilinadi.',
-        accessDenied: 'Ruxsat yo\'q. Avval kirish sotib oling.',
-        accessDeniedTitle: 'Ruxsat yo\'q',
+        accessDenied: "Ruxsat yo'q. Avval kirish sotib oling.",
+        accessDeniedTitle: "Ruxsat yo'q",
         accessDeniedHint: 'Bu testni topshirish uchun obuna yoki bir martalik kirish kerak.',
         dailyLimitExhaustedTitle: 'Kunlik limit tugadi',
         dailyLimitExhaustedHint: 'Bepul urinishlar bugun tugadi. Davom etish uchun obuna oling.',
@@ -246,7 +247,6 @@ function ExamSelectClient() {
         categoryLabel: 'Kategoriya',
         startOral: "Og'zaki boshlash",
         selectPlaceholder: 'Tanlang',
-        oralModeTitle: 'Rejim',
         oralModeExam: "🎤 Og'zaki topshirish",
         oralModePreparation: "📚 Og'zakiga tayyorlanish",
       };
@@ -269,6 +269,7 @@ function ExamSelectClient() {
       directionsEmpty: 'Направления пока не найдены.',
       start: 'Начать тест',
       calmHint: 'Спокойная практика для этого направления.',
+      oralStub: 'Устные экзамены будут доступны позже.',
       paymentRequired: 'Перед стартом нужен разовый доступ.',
       accessDenied: 'Доступ запрещен. Сначала оплатите доступ.',
       accessDeniedTitle: 'Доступ ограничен',
@@ -291,7 +292,6 @@ function ExamSelectClient() {
       categoryLabel: 'Категория',
       startOral: 'Начать устный',
       selectPlaceholder: 'Выберите',
-      oralModeTitle: 'Режим',
       oralModeExam: '🎤 Сдать устный',
       oralModePreparation: '📚 Готовиться к устному',
     };
@@ -373,10 +373,8 @@ function ExamSelectClient() {
     return () => clearTimeout(t);
   }, [startError]);
 
-  // Scroll newly revealed step into center
   useEffect(() => {
     let ref: React.RefObject<HTMLDivElement | null> | null = null;
-
     if (profession && !examType) {
       ref = examTypeRef as React.RefObject<HTMLDivElement>;
     } else if (profession && examType === 'test' && !mode) {
@@ -385,22 +383,21 @@ function ExamSelectClient() {
       ref = oralModeRef as React.RefObject<HTMLDivElement>;
     } else if (profession && examType === 'oral' && oralMode === 'preparation' && !orderMode) {
       ref = orderModeRef as React.RefObject<HTMLDivElement>;
-    } else if (
-      (profession && examType === 'test' && mode && !examLanguage) ||
-      (profession && examType === 'oral' && oralMode === 'preparation' && orderMode && !examLanguage) ||
-      (profession && examType === 'oral' && oralMode === 'exam' && !examLanguage)
-    ) {
+    } else if (profession && examType === 'test' && mode && !examLanguage) {
       ref = languageRef as React.RefObject<HTMLDivElement>;
-    } else if (
-      (profession && examType === 'test' && mode && examLanguage && !direction) ||
-      (profession && examType === 'oral' && oralMode === 'preparation' && orderMode && examLanguage && !selectedDirection) ||
-      (profession && examType === 'oral' && oralMode === 'exam' && examLanguage && !selectedDirection)
-    ) {
+    } else if (profession && examType === 'oral' && oralMode === 'preparation' && orderMode && !examLanguage) {
+      ref = languageRef as React.RefObject<HTMLDivElement>;
+    } else if (profession && examType === 'oral' && oralMode === 'exam' && !examLanguage) {
+      ref = languageRef as React.RefObject<HTMLDivElement>;
+    } else if (profession && examType === 'test' && mode && examLanguage && !direction) {
       ref = directionRef as React.RefObject<HTMLDivElement>;
-    } else if (
-      (profession && examType === 'oral' && oralMode === 'preparation' && orderMode && examLanguage && selectedDirection && !selectedOralExam) ||
-      (profession && examType === 'oral' && oralMode === 'exam' && examLanguage && selectedDirection && !selectedOralExam)
-    ) {
+    } else if (profession && examType === 'oral' && oralMode === 'preparation' && orderMode && examLanguage && !selectedDirection) {
+      ref = directionRef as React.RefObject<HTMLDivElement>;
+    } else if (profession && examType === 'oral' && oralMode === 'exam' && examLanguage && !selectedDirection) {
+      ref = directionRef as React.RefObject<HTMLDivElement>;
+    } else if (profession && examType === 'oral' && oralMode === 'preparation' && orderMode && examLanguage && selectedDirection && !selectedOralExam) {
+      ref = categoryRef;
+    } else if (profession && examType === 'oral' && oralMode === 'exam' && examLanguage && selectedDirection && !selectedOralExam) {
       ref = categoryRef;
     } else if (canStart) {
       ref = startSectionRef;
@@ -413,300 +410,199 @@ function ExamSelectClient() {
     }
   }, [profession, examType, mode, oralMode, orderMode, examLanguage, direction, selectedDirection, selectedOralExam, canStart]);
 
-  // ── Shared button classes ──────────────────────────────────────────────────
-  // Selected option shown as dimmed chip inside already-answered card
-  const selectedChip = (label: string) => (
-    <span className="inline-flex items-center gap-1.5 rounded-lg bg-[#2AABEE]/10 px-3 py-1 text-sm font-medium text-[#2AABEE]">
-      {label}
-    </span>
-  );
-
   return (
     <>
       <AnimatedPage>
-        <main className="flex min-h-[70vh] flex-col gap-4 pb-28 pt-[3.75rem]">
+        <main className="flex min-h-[70vh] flex-col gap-6 pb-28 pt-[3.75rem]">
           <PageHeader title={copy.title} subtitle={copy.subtitle} />
 
           <div className="flex flex-col gap-4">
-            {/* ── Профессия ── */}
+            {/* Профессия */}
             <Card title={copy.professionTitle}>
-              {profession ? (
-                <div className="flex items-center justify-between">
-                  {selectedChip(
-                    profession === 'doctors' ? professionLabels.doctors : professionLabels.nurses
-                  )}
-                  <button
-                    className="text-xs text-slate-400 hover:text-slate-600"
+              <div className="grid grid-cols-2 gap-3">
+                {Object.entries(professionLabels).map(([key, label]) => (
+                  <Button
+                    key={key}
+                    size="lg"
+                    variant={profession === key ? 'primary' : 'secondary'}
                     onClick={() => {
-                      setProfession(null);
+                      setProfession(key as ProfessionKey);
                       setExamType(null);
                       setMode(null);
                       setOralMode(null);
                       setOrderMode(null);
                       setExamLanguage(null);
                       setDirection(null);
-                      setSelectedDirection(null);
-                      setSelectedOralExam(null);
                       setStartError(null);
                     }}
                   >
-                    ✕
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  {Object.entries(professionLabels).map(([key, label]) => (
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="h-8 w-8 rounded-lg bg-white/20 p-1.5">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={key === 'doctors' ? '/icons/doctor.svg' : '/icons/nurse.svg'}
+                          alt={key === 'doctors' ? 'Doctor icon' : 'Nurse icon'}
+                          className="h-full w-full object-contain"
+                        />
+                      </span>
+                      <span>{label}</span>
+                    </div>
+                  </Button>
+                ))}
+              </div>
+            </Card>
+
+            {/* Тип экзамена */}
+            {profession && (
+              <div ref={examTypeRef}>
+                <Card title={copy.examTypeTitle}>
+                  <div className="grid grid-cols-2 gap-3">
                     <Button
-                      key={key}
                       size="lg"
-                      variant="secondary"
+                      variant={examType === 'test' ? 'primary' : 'secondary'}
                       onClick={() => {
-                        setProfession(key as ProfessionKey);
-                        setExamType(null);
+                        setExamType('test');
                         setMode(null);
+                        setOralMode(null);
+                        setOrderMode(null);
                         setExamLanguage(null);
                         setDirection(null);
                         setStartError(null);
                       }}
                     >
-                      <div className="flex flex-col items-center gap-2">
-                        <span className="h-8 w-8 rounded-lg bg-white/20 p-1.5">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={key === 'doctors' ? '/icons/doctor.svg' : '/icons/nurse.svg'}
-                            alt={key === 'doctors' ? 'Doctor icon' : 'Nurse icon'}
-                            className="h-full w-full object-contain"
-                          />
-                        </span>
-                        <span>{label}</span>
-                      </div>
+                      {copy.test}
                     </Button>
-                  ))}
-                </div>
-              )}
-            </Card>
-
-            {/* ── Тип экзамена ── */}
-            {profession && (
-              <div ref={examTypeRef}>
-                <Card title={copy.examTypeTitle}>
-                  {examType ? (
-                    <div className="flex items-center justify-between">
-                      {selectedChip(examType === 'test' ? copy.test : copy.oral)}
-                      <button
-                        className="text-xs text-slate-400 hover:text-slate-600"
-                        onClick={() => {
-                          setExamType(null);
-                          setMode(null);
-                          setOralMode(null);
-                          setOrderMode(null);
-                          setExamLanguage(null);
-                          setDirection(null);
-                          setSelectedDirection(null);
-                          setSelectedOralExam(null);
-                          setStartError(null);
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-3">
-                      <Button
-                        size="lg"
-                        variant="secondary"
-                        onClick={() => {
-                          setExamType('test');
-                          setMode(null);
-                          setExamLanguage(null);
-                          setDirection(null);
-                          setStartError(null);
-                        }}
-                      >
-                        {copy.test}
-                      </Button>
-                      <Button
-                        size="lg"
-                        variant="secondary"
-                        onClick={() => {
-                          setExamType('oral');
-                          setMode(null);
-                          setOralMode(null);
-                          setOrderMode(null);
-                          setExamLanguage(null);
-                          setDirection(null);
-                          setSelectedDirection(null);
-                          setSelectedOralExam(null);
-                          setStartError(null);
-                        }}
-                      >
-                        {copy.oral}
-                      </Button>
-                    </div>
-                  )}
+                    <Button
+                      size="lg"
+                      variant={examType === 'oral' ? 'primary' : 'secondary'}
+                      onClick={() => {
+                        setExamType('oral');
+                        setMode(null);
+                        setOralMode(null);
+                        setOrderMode(null);
+                        setExamLanguage(null);
+                        setDirection(null);
+                        setSelectedDirection(null);
+                        setSelectedOralExam(null);
+                        setStartError(null);
+                      }}
+                    >
+                      {copy.oral}
+                    </Button>
+                  </div>
                 </Card>
               </div>
             )}
 
-            {/* ── Режим (тест) ── */}
+            {/* Режим (тест) */}
             {profession && examType === 'test' && (
               <div ref={modeRef}>
                 <Card title={copy.modeTitle}>
-                  {mode ? (
-                    <div className="flex items-center justify-between">
-                      {selectedChip(mode === 'exam' ? copy.modeExam : copy.modePractice)}
-                      <button
-                        className="text-xs text-slate-400 hover:text-slate-600"
-                        onClick={() => {
-                          setMode(null);
-                          setExamLanguage(null);
-                          setDirection(null);
-                          setStartError(null);
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid gap-3">
-                      <Button
-                        size="lg"
-                        variant="secondary"
-                        onClick={() => {
-                          setMode('exam');
-                          setExamLanguage(null);
-                          setDirection(null);
-                          setStartError(null);
-                        }}
-                      >
-                        {copy.modeExam}
-                      </Button>
-                      <Button
-                        size="lg"
-                        variant="secondary"
-                        onClick={() => {
-                          setMode('practice');
-                          setExamLanguage(null);
-                          setDirection(null);
-                          setStartError(null);
-                        }}
-                      >
-                        {copy.modePractice}
-                      </Button>
-                    </div>
-                  )}
+                  <div className="grid gap-3">
+                    <Button
+                      size="lg"
+                      variant={mode === 'exam' ? 'primary' : 'secondary'}
+                      onClick={() => {
+                        setMode('exam');
+                        setExamLanguage(null);
+                        setDirection(null);
+                        setStartError(null);
+                      }}
+                    >
+                      {copy.modeExam}
+                    </Button>
+                    <Button
+                      size="lg"
+                      variant={mode === 'practice' ? 'primary' : 'secondary'}
+                      onClick={() => {
+                        setMode('practice');
+                        setExamLanguage(null);
+                        setDirection(null);
+                        setStartError(null);
+                      }}
+                    >
+                      {copy.modePractice}
+                    </Button>
+                  </div>
                 </Card>
               </div>
             )}
 
-            {/* ── Режим (устный) ── */}
+            {/* Режим (устный) — всегда показывается после выбора типа, не исчезает */}
             {profession && examType === 'oral' && (
               <div ref={oralModeRef}>
-                <Card title={copy.oralModeTitle}>
-                  {oralMode ? (
-                    <div className="flex items-center justify-between">
-                      {selectedChip(oralMode === 'exam' ? copy.oralModeExam : copy.oralModePreparation)}
-                      <button
-                        className="text-xs text-slate-400 hover:text-slate-600"
-                        onClick={() => {
-                          setOralMode(null);
-                          setOrderMode(null);
-                          setExamLanguage(null);
-                          setSelectedDirection(null);
-                          setSelectedOralExam(null);
-                          setStartError(null);
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid gap-3">
-                      <Button
-                        size="lg"
-                        variant="secondary"
-                        onClick={() => {
-                          setOralMode('exam');
-                          setStartError(null);
-                        }}
-                      >
-                        {copy.oralModeExam}
-                      </Button>
-                      <Button
-                        size="lg"
-                        variant="secondary"
-                        onClick={() => {
-                          setOralMode('preparation');
-                          setOrderMode(null);
-                          setExamLanguage(null);
-                          setSelectedDirection(null);
-                          setSelectedOralExam(null);
-                          setStartError(null);
-                        }}
-                      >
-                        {copy.oralModePreparation}
-                      </Button>
-                    </div>
-                  )}
+                <Card title={copy.modeTitle}>
+                  <div className="grid gap-3">
+                    <Button
+                      size="lg"
+                      variant={oralMode === 'exam' ? 'primary' : 'secondary'}
+                      onClick={() => {
+                        setOralMode('exam');
+                        setOrderMode(null);
+                        setExamLanguage(null);
+                        setSelectedDirection(null);
+                        setSelectedOralExam(null);
+                        setStartError(null);
+                      }}
+                    >
+                      {copy.oralModeExam}
+                    </Button>
+                    <Button
+                      size="lg"
+                      variant={oralMode === 'preparation' ? 'primary' : 'secondary'}
+                      onClick={() => {
+                        setOralMode('preparation');
+                        setOrderMode(null);
+                        setExamLanguage(null);
+                        setSelectedDirection(null);
+                        setSelectedOralExam(null);
+                        setStartError(null);
+                      }}
+                    >
+                      {copy.oralModePreparation}
+                    </Button>
+                  </div>
                 </Card>
               </div>
             )}
 
-            {/* ── Порядок вопросов (устный — подготовка) ── */}
+            {/* Порядок вопросов (устный — подготовка) */}
             {profession && examType === 'oral' && oralMode === 'preparation' && (
               <div ref={orderModeRef}>
                 <Card title={copy.orderModeTitle}>
-                  {orderMode ? (
-                    <div className="flex items-center justify-between">
-                      {selectedChip(orderMode === 'random' ? copy.orderRandom : copy.orderSequential)}
-                      <button
-                        className="text-xs text-slate-400 hover:text-slate-600"
-                        onClick={() => {
-                          setOrderMode(null);
-                          setExamLanguage(null);
-                          setSelectedDirection(null);
-                          setSelectedOralExam(null);
-                          setStartError(null);
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-3">
-                      <Button
-                        size="lg"
-                        variant="secondary"
-                        onClick={() => {
-                          setOrderMode('random');
-                          setExamLanguage(null);
-                          setSelectedDirection(null);
-                          setSelectedOralExam(null);
-                          setStartError(null);
-                        }}
-                      >
-                        {copy.orderRandom}
-                      </Button>
-                      <Button
-                        size="lg"
-                        variant="secondary"
-                        onClick={() => {
-                          setOrderMode('order');
-                          setExamLanguage(null);
-                          setSelectedDirection(null);
-                          setSelectedOralExam(null);
-                          setStartError(null);
-                        }}
-                      >
-                        {copy.orderSequential}
-                      </Button>
-                    </div>
-                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      size="lg"
+                      variant={orderMode === 'random' ? 'primary' : 'secondary'}
+                      onClick={() => {
+                        setOrderMode('random');
+                        setExamLanguage(null);
+                        setSelectedDirection(null);
+                        setSelectedOralExam(null);
+                        setStartError(null);
+                      }}
+                    >
+                      {copy.orderRandom}
+                    </Button>
+                    <Button
+                      size="lg"
+                      variant={orderMode === 'order' ? 'primary' : 'secondary'}
+                      onClick={() => {
+                        setOrderMode('order');
+                        setExamLanguage(null);
+                        setSelectedDirection(null);
+                        setSelectedOralExam(null);
+                        setStartError(null);
+                      }}
+                    >
+                      {copy.orderSequential}
+                    </Button>
+                  </div>
                 </Card>
               </div>
             )}
 
-            {/* ── Язык ── */}
+            {/* Язык */}
             {(
               (profession && examType === 'test' && mode) ||
               (profession && examType === 'oral' && oralMode === 'exam') ||
@@ -714,57 +610,39 @@ function ExamSelectClient() {
             ) && (
               <div ref={languageRef}>
                 <Card title={copy.languageTitle}>
-                  {examLanguage ? (
-                    <div className="flex items-center justify-between">
-                      {selectedChip(examLanguage === 'uz' ? copy.languageUz : copy.languageRu)}
-                      <button
-                        className="text-xs text-slate-400 hover:text-slate-600"
-                        onClick={() => {
-                          setExamLanguage(null);
-                          setDirection(null);
-                          setSelectedDirection(null);
-                          setSelectedOralExam(null);
-                          setStartError(null);
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-3">
-                      <Button
-                        size="lg"
-                        variant="secondary"
-                        onClick={() => {
-                          setExamLanguage('uz');
-                          setDirection(null);
-                          setSelectedDirection(null);
-                          setSelectedOralExam(null);
-                          setStartError(null);
-                        }}
-                      >
-                        {copy.languageUz}
-                      </Button>
-                      <Button
-                        size="lg"
-                        variant="secondary"
-                        onClick={() => {
-                          setExamLanguage('ru');
-                          setDirection(null);
-                          setSelectedDirection(null);
-                          setSelectedOralExam(null);
-                          setStartError(null);
-                        }}
-                      >
-                        {copy.languageRu}
-                      </Button>
-                    </div>
-                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      size="lg"
+                      variant={examLanguage === 'uz' ? 'primary' : 'secondary'}
+                      onClick={() => {
+                        setExamLanguage('uz');
+                        setDirection(null);
+                        setSelectedDirection(null);
+                        setSelectedOralExam(null);
+                        setStartError(null);
+                      }}
+                    >
+                      {copy.languageUz}
+                    </Button>
+                    <Button
+                      size="lg"
+                      variant={examLanguage === 'ru' ? 'primary' : 'secondary'}
+                      onClick={() => {
+                        setExamLanguage('ru');
+                        setDirection(null);
+                        setSelectedDirection(null);
+                        setSelectedOralExam(null);
+                        setStartError(null);
+                      }}
+                    >
+                      {copy.languageRu}
+                    </Button>
+                  </div>
                 </Card>
               </div>
             )}
 
-            {/* ── Направление (тест) ── */}
+            {/* Направление (тест) */}
             {profession && examType === 'test' && mode && examLanguage && (
               <div ref={directionRef}>
                 <Card title={copy.directionLabel}>
@@ -775,33 +653,31 @@ function ExamSelectClient() {
                   ) : directions.length === 0 ? (
                     <p className="text-sm text-slate-500">{copy.directionsEmpty}</p>
                   ) : (
-                    <>
-                      <select
-                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                        value={direction?.id ?? ''}
-                        onChange={(event) => {
-                          const selected = directions.find((item) => item.id === event.target.value) ?? null;
-                          setDirection(selected);
-                          setStartError(null);
-                        }}
-                      >
-                        <option value="" disabled>{copy.selectPlaceholder}</option>
-                        {directions.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      {mode === 'practice' && (
-                        <p className="mt-2 text-xs text-slate-600">{copy.calmHint}</p>
-                      )}
-                    </>
+                    <select
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      value={direction?.id ?? ''}
+                      onChange={(event) => {
+                        const selected = directions.find((item) => item.id === event.target.value) ?? null;
+                        setDirection(selected);
+                        setStartError(null);
+                      }}
+                    >
+                      <option value="" disabled>{copy.selectPlaceholder}</option>
+                      {directions.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {mode === 'practice' && (
+                    <p className="mt-2 text-xs text-slate-600">{copy.calmHint}</p>
                   )}
                 </Card>
               </div>
             )}
 
-            {/* ── Направление (устный) ── */}
+            {/* Направление (устный) */}
             {(
               (profession && examType === 'oral' && oralMode === 'exam' && examLanguage) ||
               (profession && examType === 'oral' && oralMode === 'preparation' && orderMode && examLanguage)
@@ -834,7 +710,7 @@ function ExamSelectClient() {
               </div>
             )}
 
-            {/* ── Категория (устный) ── */}
+            {/* Категория (устный) */}
             {(
               (profession && examType === 'oral' && oralMode === 'exam' && examLanguage && selectedDirection) ||
               (profession && examType === 'oral' && oralMode === 'preparation' && orderMode && examLanguage && selectedDirection)
@@ -868,7 +744,7 @@ function ExamSelectClient() {
               </div>
             )}
 
-            {/* ── Кнопка старта ── */}
+            {/* Кнопка старта */}
             {canStart && (
               <div ref={startSectionRef}>
                 <Button
@@ -888,7 +764,7 @@ function ExamSelectClient() {
               </div>
             )}
 
-            {/* ── Ошибки и оплата ── */}
+            {/* Ошибки и оплата */}
             {startError && (
               <div ref={startErrorRef}>
                 {accessMode === 'one-time' ? (
@@ -896,7 +772,10 @@ function ExamSelectClient() {
                     className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm"
                     role="alert"
                   >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600" aria-hidden>
+                    <span
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600"
+                      aria-hidden
+                    >
                       ℹ
                     </span>
                     <div className="min-w-0 flex-1">
@@ -923,7 +802,10 @@ function ExamSelectClient() {
                     className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm"
                     role="alert"
                   >
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-200 text-amber-700" aria-hidden>
+                    <span
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-200 text-amber-700"
+                      aria-hidden
+                    >
                       !
                     </span>
                     <div className="min-w-0 flex-1">
