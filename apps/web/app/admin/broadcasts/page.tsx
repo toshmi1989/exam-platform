@@ -116,7 +116,7 @@ export default function AdminBroadcastsPage() {
           free: 'Obunasizlar',
           active: 'Faollar (30 kun)',
         },
-        upload: 'Rasm qo'shish',
+        upload: "Rasm qo'shish",
         imageTooLarge: 'Rasm juda katta.',
         channelLabel: 'Qayerga',
         channelTelegram: 'Faqat Telegram',
