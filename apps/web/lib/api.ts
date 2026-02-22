@@ -1116,7 +1116,8 @@ export async function startOralSession(examId: string): Promise<OralSession> {
 export async function submitOralAnswer(
   sessionId: string,
   questionId: string,
-  audioBlob: Blob
+  audioBlob: Blob,
+  mimeType?: string
 ): Promise<OralAnswerResult> {
   const user = readTelegramUser();
   const headers: Record<string, string> = {};
@@ -1127,7 +1128,14 @@ export async function submitOralAnswer(
   const formData = new FormData();
   formData.append('sessionId', sessionId);
   formData.append('questionId', questionId);
-  formData.append('audio', audioBlob, 'answer.webm');
+  const normalizedType = (mimeType ?? audioBlob.type ?? 'audio/webm').toLowerCase();
+  const ext =
+    normalizedType.includes('ogg') ? 'ogg' :
+    normalizedType.includes('wav') ? 'wav' :
+    normalizedType.includes('mp3') || normalizedType.includes('mpeg') ? 'mp3' :
+    'webm';
+  const file = new File([audioBlob], `answer.${ext}`, { type: normalizedType });
+  formData.append('audio', file);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 90000);

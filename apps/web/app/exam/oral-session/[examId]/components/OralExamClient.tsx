@@ -271,7 +271,7 @@ export default function OralExamClient({ examId }: OralExamClientProps) {
 
       setPageState('submitting');
       try {
-        const result = await submitOralAnswer(sessionIdRef.current, question.id, blob);
+        const result = await submitOralAnswer(sessionIdRef.current, question.id, blob, mimeType);
         setAnswers((prev) => ({ ...prev, [question.id]: result }));
         setPageState('reviewing');
       } catch (err) {

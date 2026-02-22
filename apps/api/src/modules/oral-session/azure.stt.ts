@@ -6,6 +6,15 @@ const LANG_MAP: Record<string, string> = {
   uz: 'uz-UZ',
 };
 
+function normalizeAzureMimeType(input: string): string {
+  const t = (input || '').toLowerCase();
+  if (t.includes('webm')) return 'audio/webm';
+  if (t.includes('ogg')) return 'audio/ogg; codecs=opus';
+  if (t.includes('wav') || t.includes('x-wav')) return 'audio/wav';
+  if (t.includes('mpeg') || t.includes('mp3')) return 'audio/mpeg';
+  return 'application/octet-stream';
+}
+
 /**
  * Transcribe audio buffer using Azure Speech-to-Text REST API.
  * Accepts WAV or WebM audio (pass the actual MIME type).
@@ -28,8 +37,7 @@ export async function transcribeAudio(
     method: 'POST',
     headers: {
       'Ocp-Apim-Subscription-Key': AZURE_SPEECH_KEY,
-      'Content-Type': mimeType,
-      'Transfer-Encoding': 'chunked',
+      'Content-Type': normalizeAzureMimeType(mimeType),
     },
     body: audioBuffer,
   });
