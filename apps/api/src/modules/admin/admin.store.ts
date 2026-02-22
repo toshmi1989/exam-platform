@@ -24,6 +24,16 @@ type Broadcast = {
   createdAt: number;
 };
 
+export type BroadcastStats = {
+  broadcastId: string;
+  status: 'pending' | 'sending' | 'done';
+  total: number;
+  sent: number;
+  failed: number;
+  startedAt: number;
+  finishedAt?: number;
+};
+
 type BlacklistEntry = {
   telegramId: string;
   reason?: string;
@@ -34,6 +44,7 @@ const chatMessages: ChatMessage[] = [];
 const chatThreads = new Map<string, ChatThread>();
 const broadcasts: Broadcast[] = [];
 const blacklist = new Map<string, BlacklistEntry>();
+const broadcastStatsMap = new Map<string, BroadcastStats>();
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB base64 (~3.75 MB image)
 const CHAT_RETENTION_DAYS = 10;
@@ -237,5 +248,43 @@ export function addBroadcast({
     broadcasts.shift();
   }
   return broadcast;
+}
+
+export function initBroadcastStats(broadcastId: string, total: number): void {
+  broadcastStatsMap.set(broadcastId, {
+    broadcastId,
+    status: 'sending',
+    total,
+    sent: 0,
+    failed: 0,
+    startedAt: Date.now(),
+  });
+}
+
+export function updateBroadcastStats(
+  broadcastId: string,
+  delta: { sent?: number; failed?: number }
+): void {
+  const stats = broadcastStatsMap.get(broadcastId);
+  if (!stats) return;
+  broadcastStatsMap.set(broadcastId, {
+    ...stats,
+    sent: stats.sent + (delta.sent ?? 0),
+    failed: stats.failed + (delta.failed ?? 0),
+  });
+}
+
+export function finishBroadcastStats(broadcastId: string): void {
+  const stats = broadcastStatsMap.get(broadcastId);
+  if (!stats) return;
+  broadcastStatsMap.set(broadcastId, {
+    ...stats,
+    status: 'done',
+    finishedAt: Date.now(),
+  });
+}
+
+export function getBroadcastStats(broadcastId: string): BroadcastStats | undefined {
+  return broadcastStatsMap.get(broadcastId);
 }
 

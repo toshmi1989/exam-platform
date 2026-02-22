@@ -4,6 +4,11 @@
  */
 
 import { prisma } from '../db/prisma';
+import {
+  initBroadcastStats,
+  updateBroadcastStats,
+  finishBroadcastStats,
+} from '../modules/admin/admin.store';
 
 const BOT_TOKEN = (process.env.TELEGRAM_BOT_TOKEN ?? '').trim();
 const MAX_MESSAGE_LENGTH = 4096;
@@ -11,6 +16,7 @@ const MAX_MESSAGE_LENGTH = 4096;
 type Segment = 'all' | 'subscribed' | 'free' | 'active';
 
 export interface BroadcastPayload {
+  broadcastId: string;
   title: string;
   text: string;
   segment: string;
@@ -182,17 +188,27 @@ export function sendBroadcastToUsers(payload: BroadcastPayload): void {
         message += '\n\n📎 [Изображение приложено в рассылке]';
       }
 
+      initBroadcastStats(payload.broadcastId, telegramIds.length);
+
       let sent = 0;
       let failed = 0;
       for (const telegramId of telegramIds) {
         const ok = await sendTelegramMessage(telegramId, message);
-        if (ok) sent++;
-        else failed++;
+        if (ok) {
+          sent++;
+          updateBroadcastStats(payload.broadcastId, { sent: 1 });
+        } else {
+          failed++;
+          updateBroadcastStats(payload.broadcastId, { failed: 1 });
+        }
         // Small delay to avoid Telegram rate limits (30 msg/sec)
         await new Promise((r) => setTimeout(r, 35));
       }
+
+      finishBroadcastStats(payload.broadcastId);
       console.log('[broadcast-sender] Done:', { segment, total: telegramIds.length, sent, failed });
     } catch (err) {
+      finishBroadcastStats(payload.broadcastId);
       console.error('[broadcast-sender] Error:', err);
     }
   })();

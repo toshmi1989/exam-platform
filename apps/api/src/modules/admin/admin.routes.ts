@@ -16,6 +16,7 @@ import {
   updateThreadStatus,
   addMessage,
   getTotalUnreadAdmin,
+  getBroadcastStats,
 } from './admin.store';
 import {
   getAccessSettings,
@@ -812,9 +813,17 @@ router.post('/broadcasts', (req, res) => {
   }
   const broadcast = addBroadcast({ title, text, segment, imageData });
   if (channel === 'telegram' || channel === 'both') {
-    sendBroadcastToUsers({ title, text, segment, imageData });
+    sendBroadcastToUsers({ broadcastId: broadcast.id, title, text, segment, imageData });
   }
   res.json({ ok: true, broadcast });
+});
+
+router.get('/broadcasts/:id/stats', (req, res) => {
+  const stats = getBroadcastStats(req.params.id);
+  if (!stats) {
+    return res.status(404).json({ ok: false });
+  }
+  res.json({ ok: true, stats });
 });
 
 router.get('/settings/access', async (_req, res) => {
