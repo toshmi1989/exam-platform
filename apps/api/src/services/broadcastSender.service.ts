@@ -17,16 +17,27 @@ export interface BroadcastPayload {
   imageData?: string;
 }
 
+/** Only real numeric Telegram IDs are valid — skip guest-* and empty strings. */
+function isRealTelegramId(id: string): boolean {
+  return /^\d+$/.test(id.trim());
+}
+
 async function getTelegramIdsBySegment(segment: Segment): Promise<string[]> {
   const now = new Date();
   const thirtyDaysAgo = new Date(now);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
+  // Always exclude guests and already-blocked users
+  const baseFilter = {
+    telegramBlocked: false,
+  };
+
   if (segment === 'all') {
     const users = await prisma.user.findMany({
+      where: baseFilter,
       select: { telegramId: true },
     });
-    return users.map((u) => u.telegramId);
+    return users.map((u) => u.telegramId).filter(isRealTelegramId);
   }
 
   if (segment === 'subscribed') {
@@ -42,10 +53,10 @@ async function getTelegramIdsBySegment(segment: Segment): Promise<string[]> {
     const userIds = subs.map((s) => s.userId);
     if (userIds.length === 0) return [];
     const users = await prisma.user.findMany({
-      where: { id: { in: userIds } },
+      where: { id: { in: userIds }, ...baseFilter },
       select: { telegramId: true },
     });
-    return users.map((u) => u.telegramId);
+    return users.map((u) => u.telegramId).filter(isRealTelegramId);
   }
 
   if (segment === 'free') {
@@ -60,9 +71,13 @@ async function getTelegramIdsBySegment(segment: Segment): Promise<string[]> {
     });
     const subscribedIds = new Set(subs.map((s) => s.userId));
     const users = await prisma.user.findMany({
+      where: baseFilter,
       select: { id: true, telegramId: true },
     });
-    return users.filter((u) => !subscribedIds.has(u.id)).map((u) => u.telegramId);
+    return users
+      .filter((u) => !subscribedIds.has(u.id))
+      .map((u) => u.telegramId)
+      .filter(isRealTelegramId);
   }
 
   if (segment === 'active') {
@@ -76,13 +91,29 @@ async function getTelegramIdsBySegment(segment: Segment): Promise<string[]> {
     const userIds = attempts.map((a) => a.userId);
     if (userIds.length === 0) return [];
     const users = await prisma.user.findMany({
-      where: { id: { in: userIds } },
+      where: { id: { in: userIds }, ...baseFilter },
       select: { telegramId: true },
     });
-    return users.map((u) => u.telegramId);
+    return users.map((u) => u.telegramId).filter(isRealTelegramId);
   }
 
   return [];
+}
+
+/**
+ * Mark user as blocked so future broadcasts skip them.
+ * 403 = bot blocked / user deactivated
+ * 400 chat not found = user never started the bot
+ */
+async function markTelegramBlocked(telegramId: string): Promise<void> {
+  try {
+    await prisma.user.updateMany({
+      where: { telegramId },
+      data: { telegramBlocked: true },
+    });
+  } catch {
+    // Non-critical — ignore DB errors here
+  }
 }
 
 function escapeHtml(text: string): string {
@@ -92,7 +123,7 @@ function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;');
 }
 
-async function sendTelegramMessage(telegramId: string, text: string, imageUrl?: string): Promise<boolean> {
+async function sendTelegramMessage(telegramId: string, text: string): Promise<boolean> {
   if (!BOT_TOKEN) {
     console.warn('[broadcast-sender] TELEGRAM_BOT_TOKEN not set, skip send');
     return false;
@@ -100,22 +131,27 @@ async function sendTelegramMessage(telegramId: string, text: string, imageUrl?: 
   const safeText = text.slice(0, MAX_MESSAGE_LENGTH);
   const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
   try {
-    const payload = {
-      chat_id: telegramId,
-      text: safeText,
-      parse_mode: 'HTML' as const,
-      disable_web_page_preview: true,
-    };
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        chat_id: telegramId,
+        text: safeText,
+        parse_mode: 'HTML' as const,
+        disable_web_page_preview: true,
+      }),
     });
     const body = await res.text();
+
     if (!res.ok) {
+      // 403 = bot blocked / deactivated, 400 chat not found → mark and skip
+      if (res.status === 403 || res.status === 400) {
+        await markTelegramBlocked(telegramId);
+      }
       console.warn('[broadcast-sender] sendMessage failed', telegramId, res.status, body.slice(0, 200));
       return false;
     }
+
     const data = JSON.parse(body) as { ok?: boolean };
     if (!data.ok) {
       console.warn('[broadcast-sender] sendMessage not ok', telegramId, body.slice(0, 200));
@@ -130,7 +166,6 @@ async function sendTelegramMessage(telegramId: string, text: string, imageUrl?: 
 
 /**
  * Отправить рассылку всем пользователям выбранного сегмента (запускать в фоне).
- * Текст отправляется в Telegram; при наличии imageData в сообщение добавляется пометка.
  */
 export function sendBroadcastToUsers(payload: BroadcastPayload): void {
   const segment = (['all', 'subscribed', 'free', 'active'].includes(payload.segment)
@@ -153,7 +188,8 @@ export function sendBroadcastToUsers(payload: BroadcastPayload): void {
         const ok = await sendTelegramMessage(telegramId, message);
         if (ok) sent++;
         else failed++;
-        await new Promise((r) => setImmediate(r));
+        // Small delay to avoid Telegram rate limits (30 msg/sec)
+        await new Promise((r) => setTimeout(r, 35));
       }
       console.log('[broadcast-sender] Done:', { segment, total: telegramIds.length, sent, failed });
     } catch (err) {

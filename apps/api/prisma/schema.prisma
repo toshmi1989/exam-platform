@@ -222,6 +222,7 @@ model User {
   acceptedAt             DateTime?
   agreementVersion       String?
   dismissedBroadcastIds  String[]  @default([])
+  telegramBlocked        Boolean  @default(false)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
