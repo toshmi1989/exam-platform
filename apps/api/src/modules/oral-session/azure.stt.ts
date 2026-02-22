@@ -6,18 +6,23 @@ const LANG_MAP: Record<string, string> = {
   uz: 'uz-UZ',
 };
 
-function normalizeAzureMimeType(input: string): string {
-  const t = (input || '').toLowerCase();
-  if (t.includes('webm')) return 'audio/webm';
+/**
+ * Azure STT short audio REST API only accepts:
+ *   - audio/wav; codecs=audio/pcm; samplerate=16000
+ *   - audio/ogg; codecs=opus
+ *
+ * WebM is NOT supported. The Recorder component converts to WAV 16kHz before sending.
+ */
+function getAzureContentType(mimeType: string): string {
+  const t = (mimeType || '').toLowerCase();
   if (t.includes('ogg')) return 'audio/ogg; codecs=opus';
-  if (t.includes('wav') || t.includes('x-wav')) return 'audio/wav';
-  if (t.includes('mpeg') || t.includes('mp3')) return 'audio/mpeg';
-  return 'application/octet-stream';
+  // Default: WAV PCM (browser Recorder always sends this after conversion)
+  return 'audio/wav; codecs=audio/pcm; samplerate=16000';
 }
 
 /**
- * Transcribe audio buffer using Azure Speech-to-Text REST API.
- * Accepts WAV or WebM audio (pass the actual MIME type).
+ * Transcribe audio buffer using Azure Speech-to-Text REST API (short audio).
+ * Input must be WAV PCM 16kHz mono or OGG/OPUS — the only formats supported.
  */
 export async function transcribeAudio(
   audioBuffer: Buffer,
@@ -29,29 +34,37 @@ export async function transcribeAudio(
   }
 
   const language = LANG_MAP[lang] ?? 'ru-RU';
+  const contentType = getAzureContentType(mimeType);
   const url =
     `https://${AZURE_SPEECH_REGION}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1` +
     `?language=${language}&format=detailed`;
+
+  console.log(`[Azure STT] lang=${language} contentType=${contentType} bufferSize=${audioBuffer.length}`);
 
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Ocp-Apim-Subscription-Key': AZURE_SPEECH_KEY,
-      'Content-Type': normalizeAzureMimeType(mimeType),
+      'Content-Type': contentType,
+      'Accept': 'application/json',
     },
     body: audioBuffer,
   });
 
+  const responseText = await response.text();
+  console.log(`[Azure STT] HTTP ${response.status}: ${responseText.slice(0, 300)}`);
+
   if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`Azure STT error ${response.status}: ${text}`);
+    throw new Error(`Azure STT error ${response.status}: ${responseText}`);
   }
 
-  const data = (await response.json()) as {
+  const data = JSON.parse(responseText) as {
     RecognitionStatus: string;
     NBest?: { Lexical?: string; ITN?: string; Display?: string }[];
     DisplayText?: string;
   };
+
+  console.log(`[Azure STT] RecognitionStatus=${data.RecognitionStatus}`);
 
   if (data.RecognitionStatus !== 'Success') {
     if (data.RecognitionStatus === 'NoMatch' || data.RecognitionStatus === 'InitialSilenceTimeout') {
@@ -60,9 +73,7 @@ export async function transcribeAudio(
     throw new Error(`Azure STT recognition status: ${data.RecognitionStatus}`);
   }
 
-  // Prefer the top NBest result's display text
-  const display =
-    data.NBest?.[0]?.Display ?? data.DisplayText ?? '';
-
+  const display = data.NBest?.[0]?.Display ?? data.DisplayText ?? '';
+  console.log(`[Azure STT] transcript="${display.slice(0, 100)}"`);
   return display.trim();
 }
