@@ -9,7 +9,7 @@ import Button from '../../../../components/Button';
 import Card from '../../../../components/Card';
 import PageHeader from '../../../../components/PageHeader';
 import { readSettings, Language } from '../../../../lib/uiSettings';
-import { getOralQuestions, streamOralAnswer, getProfile } from '../../../../lib/api';
+import { getOralQuestions, streamOralAnswer } from '../../../../lib/api';
 import { apiFetch } from '../../../../lib/api/client';
 import { API_BASE_URL } from '../../../../lib/api/config';
 import { readTelegramUser } from '../../../../lib/telegramUser';
@@ -75,7 +75,6 @@ export default function OralExamPage() {
   const [answerLimitReached, setAnswerLimitReached] = useState(false);
   const [iframeUrl, setIframeUrl] = useState<string | null>(null);
   const [isGuest, setIsGuest] = useState(false);
-  const [isSubscriber, setIsSubscriber] = useState(false);
   const [audioUrl, setAudioUrl] = useState<Record<string, string>>({});
   const [loadingAudioId, setLoadingAudioId] = useState<string | null>(null);
   const [audioError, setAudioError] = useState<string | null>(null);
@@ -96,9 +95,6 @@ export default function OralExamPage() {
     const user = readTelegramUser();
     const isGuestUser = !user?.telegramId || user.telegramId.startsWith('guest-');
     setIsGuest(isGuestUser);
-    if (!isGuestUser) {
-      getProfile().then((p) => setIsSubscriber(!!p.subscriptionActive)).catch(() => {});
-    }
   }, []);
 
   useEffect(() => {
@@ -417,8 +413,8 @@ export default function OralExamPage() {
             subtitle={`${copy.questionNum(index + 1, total)}`}
           />
 
-          {/* Take oral exam button — subscribers only */}
-          {isSubscriber && !isGuest && (
+          {/* Take oral exam button — shown to all logged-in users, backend enforces subscription */}
+          {!isGuest && (
             <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
               <p className="mb-2 text-sm font-semibold text-indigo-800">
                 🎤 {(copy as { takeExam?: string }).takeExam}
