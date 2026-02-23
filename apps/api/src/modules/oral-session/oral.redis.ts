@@ -2,7 +2,7 @@ import redis from '../../lib/redis';
 
 const LOCK_TTL_S = 30;
 const EXPLANATION_TTL_S = 3600; // 1 hour
-const SESSION_TTL_S = 600; // 10 minutes
+const SESSION_TTL_S = 900; // 15 minutes
 const RATE_LIMIT_KEY_PREFIX = 'rate:oral:user:';
 const LOCK_KEY_PREFIX = 'lock:question:';
 const EXPLANATION_KEY_PREFIX = 'question:';

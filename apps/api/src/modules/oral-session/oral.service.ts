@@ -217,10 +217,10 @@ export async function startSession(
     },
   });
 
-  // 7. Set Redis timer (10 minutes)
-  await setSessionTimer(session.id, 600);
+  // 7. Set Redis timer (15 minutes)
+  await setSessionTimer(session.id, 900);
 
-  const expiresAt = new Date(Date.now() + 600_000);
+  const expiresAt = new Date(Date.now() + 900_000);
 
   return {
     sessionId: session.id,
@@ -244,7 +244,13 @@ export async function submitAnswer(
   // 1. Check session
   const session = await prisma.oralExamSession.findUnique({
     where: { id: sessionId },
-    select: { status: true, userId: true, questionIds: true, exam: { select: { language: true } } },
+    select: {
+      status: true,
+      userId: true,
+      questionIds: true,
+      exam: { select: { language: true } },
+      user: { select: { firstName: true, username: true } },
+    },
   });
 
   if (!session) {
@@ -266,6 +272,7 @@ export async function submitAnswer(
   }
 
   const lang: 'ru' | 'uz' = session.exam.language === 'RU' ? 'ru' : 'uz';
+  const userName = session.user?.firstName ?? session.user?.username ?? undefined;
 
   // 4. Transcribe audio via Azure STT
   let transcript = '';
@@ -292,7 +299,8 @@ export async function submitAnswer(
     question?.prompt ?? '',
     referenceAnswer,
     transcript,
-    lang
+    lang,
+    userName
   );
 
   // 8. Save answer in DB (update if already submitted for this question, else create)

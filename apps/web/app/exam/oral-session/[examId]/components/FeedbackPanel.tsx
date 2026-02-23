@@ -29,7 +29,7 @@ const COPY = {
     noTranscript: 'Ответ не был распознан.',
     coverage: 'Покрытие тем',
     missedPoints: 'Пропущенные пункты',
-    summary: 'Комментарий',
+    summary: '🤖 Зиёда комментирует',
   },
   uz: {
     score: 'Ball',
@@ -37,7 +37,7 @@ const COPY = {
     noTranscript: "Javob tanilmadi.",
     coverage: "Mavzular qamrovi",
     missedPoints: "O'tkazib yuborilgan nuqtalar",
-    summary: 'Izoh',
+    summary: '🤖 Ziyoda izohlaydi',
   },
   en: {
     score: 'Score',
@@ -45,7 +45,7 @@ const COPY = {
     noTranscript: 'Answer was not recognized.',
     coverage: 'Topic coverage',
     missedPoints: 'Missed points',
-    summary: 'Comment',
+    summary: '🤖 Ziyoda comments',
   },
 };
 
@@ -145,13 +145,13 @@ export default function FeedbackPanel({
             </div>
           )}
 
-          {/* Summary */}
+          {/* Summary — Зиёда комментирует */}
           {feedback.summary && (
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <div className="rounded-xl border-2 border-[#2AABEE]/20 bg-gradient-to-b from-slate-50 to-white p-4">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#2AABEE]">
                 {copy.summary}
               </p>
-              <p className="text-sm text-slate-700">{feedback.summary}</p>
+              <p className="text-sm leading-relaxed text-slate-700">{feedback.summary}</p>
             </div>
           )}
         </>
