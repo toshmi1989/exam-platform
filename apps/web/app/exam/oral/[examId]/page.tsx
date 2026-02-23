@@ -413,25 +413,6 @@ export default function OralExamPage() {
             subtitle={`${copy.questionNum(index + 1, total)}`}
           />
 
-          {/* Take oral exam button — shown to all logged-in users, backend enforces subscription */}
-          {!isGuest && (
-            <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4">
-              <p className="mb-2 text-sm font-semibold text-indigo-800">
-                🎤 {(copy as { takeExam?: string }).takeExam}
-              </p>
-              <p className="mb-3 text-xs text-indigo-600">
-                {(copy as { takeExamHint?: string }).takeExamHint}
-              </p>
-              <Button
-                href={`/exam/oral-session/${examId}`}
-                variant="primary"
-                size="md"
-              >
-                {(copy as { takeExam?: string }).takeExam}
-              </Button>
-            </div>
-          )}
-
           <Card>
             <p className="whitespace-pre-wrap text-slate-800">{current.prompt}</p>
             <div className="mt-4 flex gap-2">
