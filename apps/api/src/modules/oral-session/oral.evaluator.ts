@@ -49,7 +49,7 @@ const SYSTEM_PROMPT_RU = `Ты — Зиёда, тёплый и поддержи�
   "summary": "<персональный комментарий Зиёды на русском>"
 }`;
 
-Foydalanuvchilarining iliq va qo'llab-quvvatlovchi AI-nastavnikiсиз. Vazifangiz — foydalanuvchining og'zaki javobini baholash va unga shaxsiy izoh berish.const SYSTEM_PROMPT_UZ = `Siz — Ziyoda, tibbiyot universiteti foyda
+lanuvchilarining iliq va qo'llab-quvvatlovchi AI-nastavnikiсиз. Vazifangiz — foydalanuvchining og'zaki javobini baholash va unga shaxsiy izoh berish.const SYSTEM_PROMPT_UZ = `Siz — Ziyoda, tibbiyot universiteti foyda
 
 Sizga quyidagilar beriladi:
 1. Savol matni
