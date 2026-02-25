@@ -29,6 +29,14 @@ router.get('/directions', async (req, res) => {
     orderBy: { direction: 'asc' },
   });
 
+  // Порядок категорий: 3 → 2 → 1 → высшая (если нет 3, то с 2)
+  const CATEGORY_ORDER = ['3', '2', '1', 'высшая'];
+  function categorySortKey(label: string): number {
+    const normalized = label.trim().toLowerCase();
+    const idx = CATEGORY_ORDER.findIndex((c) => normalized === c || normalized.startsWith(c + ' ') || normalized.includes(c));
+    return idx >= 0 ? idx : CATEGORY_ORDER.length;
+  }
+
   if (isOral) {
     const byDirection = new Map<string, { direction: string; exams: { id: string; categoryLabel: string }[] }>();
     for (const exam of exams) {
@@ -42,12 +50,11 @@ router.get('/directions', async (req, res) => {
         categoryLabel,
       });
     }
-    return res.json({
-      directions: Array.from(byDirection.values()).map(({ direction, exams: list }) => ({
-        direction,
-        exams: list,
-      })),
-    });
+    const directions = Array.from(byDirection.values()).map(({ direction, exams: list }) => ({
+      direction,
+      exams: [...list].sort((a, b) => categorySortKey(a.categoryLabel) - categorySortKey(b.categoryLabel)),
+    }));
+    return res.json({ directions });
   }
 
   res.json({

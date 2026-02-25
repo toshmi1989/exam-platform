@@ -210,24 +210,55 @@ export default function SubscribePage() {
                 <p className="text-sm text-slate-500">Нет доступных планов подписки.</p>
               )}
               {plans.length > 1 && (
-                <div className="flex flex-col gap-3">
-                  {plans.map((plan) => (
-                    <Card
-                      key={plan.index}
-                      className={`cursor-pointer transition ${selectedPlan?.index === plan.index ? 'ring-2 ring-[#2AABEE]' : 'hover:opacity-90'}`}
-                      onClick={() => setSelectedPlan(plan)}
-                    >
-                      <p className="font-medium text-slate-800">{plan.name || `План ${plan.index}`}</p>
-                      <p className="mt-1 text-sm text-slate-600">
-                        {plan.price.toLocaleString()} сум · {plan.durationDays} {copy.days}
-                      </p>
-                    </Card>
-                  ))}
+                <div className="flex flex-col gap-4">
+                  <div className="grid gap-3 sm:grid-cols-1">
+                    {plans.map((plan) => {
+                      const isSelected = selectedPlan?.index === plan.index;
+                      return (
+                        <button
+                          key={plan.index}
+                          type="button"
+                          onClick={() => setSelectedPlan(plan)}
+                          className={`
+                            flex w-full items-start gap-4 rounded-2xl border-2 p-4 text-left transition-all
+                            ${isSelected
+                              ? 'border-[#2AABEE] bg-[#2AABEE]/8 shadow-md'
+                              : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80'
+                            }
+                          `}
+                        >
+                          <span
+                            className={`
+                              mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2
+                              ${isSelected ? 'border-[#2AABEE] bg-[#2AABEE]' : 'border-slate-300 bg-white'}
+                            `}
+                          >
+                            {isSelected && (
+                              <svg className="h-3 w-3 text-white" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M2 6l3 3 5-6" />
+                              </svg>
+                            )}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-slate-800">
+                              {plan.name || `План ${plan.index}`}
+                            </p>
+                            <p className="mt-1 text-lg font-bold text-[#2AABEE]">
+                              {plan.price.toLocaleString()} сум
+                            </p>
+                            <p className="mt-0.5 text-sm text-slate-500">
+                              {plan.durationDays} {copy.days}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                   <button
                     type="button"
                     disabled={!selectedPlan}
                     onClick={() => selectedPlan && setStep('payment')}
-                    className="rounded-xl bg-[#2AABEE] px-4 py-3 font-medium text-white disabled:opacity-50 hover:enabled:opacity-90"
+                    className="rounded-xl bg-[#2AABEE] px-4 py-3 font-medium text-white disabled:opacity-50 hover:enabled:opacity-90 active:enabled:scale-[0.98]"
                   >
                     {copy.next}
                   </button>
