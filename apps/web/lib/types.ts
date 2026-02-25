@@ -35,6 +35,13 @@ export interface ExamReview {
   answers: Record<string, string>;
 }
 
+export interface SubscriptionPlanOption {
+  index: 1 | 2 | 3;
+  name: string;
+  price: number;
+  durationDays: number;
+}
+
 export interface UserProfile {
   telegramId: string;
   acceptedTerms?: boolean;
@@ -44,6 +51,7 @@ export interface UserProfile {
   subscriptionEndsAt?: string;
   oneTimePrice?: number;
   subscriptionPrice?: number;
+  subscriptionPlans?: SubscriptionPlanOption[];
   dismissedBroadcastIds?: string[];
 }
 

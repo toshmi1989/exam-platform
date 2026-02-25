@@ -271,6 +271,18 @@ model AccessSettings {
   showAnswersWithoutSubscription Boolean
   oneTimePrice                Int
   showAnswersForOneTime        Boolean
+  plan1Name                   String? @default("Подписка")
+  plan1Price                  Int?    @default(99000)
+  plan1DurationDays           Int?    @default(30)
+  plan1Enabled                Boolean? @default(true)
+  plan2Name                   String?
+  plan2Price                  Int?    @default(0)
+  plan2DurationDays            Int?    @default(0)
+  plan2Enabled                Boolean? @default(false)
+  plan3Name                   String?
+  plan3Price                  Int?    @default(0)
+  plan3DurationDays           Int?    @default(0)
+  plan3Enabled                Boolean? @default(false)
   updatedAt                   DateTime @updatedAt
 }
 
@@ -303,6 +315,8 @@ model PaymentInvoice {
   ps            String
   status        String    @default("created")
   mcUuid        String?
+  subscriptionDurationDays Int?  // for subscription: days to add when paid
+  subscriptionPlanName       String? // for subscription: plan label for display
   createdAt     DateTime  @default(now())
   paidAt        DateTime?
 

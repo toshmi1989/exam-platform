@@ -302,6 +302,8 @@ export interface CreatePaymentParams {
   paymentSystem: string;
   examId?: string;
   mode?: 'exam' | 'practice';
+  /** For kind=subscription: plan index 1..3 (must be an enabled plan). */
+  subscriptionPlanIndex?: 1 | 2 | 3;
 }
 
 export interface CreatePaymentResult {

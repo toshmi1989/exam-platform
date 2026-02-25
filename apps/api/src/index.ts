@@ -88,6 +88,10 @@ app.get('/me', async (req, res, next) => {
       }),
       getAccessSettings(),
     ]);
+    const subscriptionPlans = (settings.subscriptionPlans ?? [])
+      .filter((p) => p.enabled)
+      .map((p) => ({ index: p.index, name: p.name, price: p.price, durationDays: p.durationDays }));
+
     return res.json({
       telegramId,
       acceptedTerms: user?.acceptedTerms ?? false,
@@ -97,6 +101,7 @@ app.get('/me', async (req, res, next) => {
       subscriptionEndsAt: subscription?.endsAt?.toISOString(),
       oneTimePrice: settings.oneTimePrice,
       subscriptionPrice: settings.subscriptionPrice,
+      subscriptionPlans,
       dismissedBroadcastIds: user?.dismissedBroadcastIds ?? [],
     });
   } catch (e) {

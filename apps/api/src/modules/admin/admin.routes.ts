@@ -834,6 +834,20 @@ router.get('/settings/access', async (_req, res) => {
 router.post('/settings/access', async (req, res) => {
   try {
     const body = req.body ?? {};
+    const plansRaw = body.subscriptionPlans;
+    const subscriptionPlans: { index: 1 | 2 | 3; name: string; price: number; durationDays: number; enabled: boolean }[] = Array.isArray(plansRaw) && plansRaw.length >= 1
+      ? plansRaw.slice(0, 3).map((p: { index?: number; name?: string; price?: number; durationDays?: number; enabled?: boolean }, i: number) => ({
+          index: (i + 1) as 1 | 2 | 3,
+          name: String(p?.name ?? (i === 0 ? 'Подписка' : '')).trim(),
+          price: Math.max(0, Number(p?.price ?? 0)),
+          durationDays: Math.max(0, Number(p?.durationDays ?? 0)),
+          enabled: Boolean(p?.enabled),
+        }))
+      : [
+          { index: 1, name: 'Подписка', price: Number(body.subscriptionPrice ?? 0), durationDays: Number(body.subscriptionDurationDays ?? 0), enabled: true },
+          { index: 2, name: '', price: 0, durationDays: 0, enabled: false },
+          { index: 3, name: '', price: 0, durationDays: 0, enabled: false },
+        ];
     const settings = await updateAccessSettings({
       subscriptionPrice: Number(body.subscriptionPrice ?? 0),
       subscriptionDurationDays: Number(body.subscriptionDurationDays ?? 0),
@@ -844,6 +858,7 @@ router.post('/settings/access', async (req, res) => {
       showAnswersWithoutSubscription: Boolean(body.showAnswersWithoutSubscription),
       oneTimePrice: Number(body.oneTimePrice ?? 0),
       showAnswersForOneTime: Boolean(body.showAnswersForOneTime),
+      subscriptionPlans,
     });
     res.json({ ok: true, settings });
   } catch (err) {

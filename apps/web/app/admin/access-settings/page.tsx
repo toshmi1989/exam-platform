@@ -12,6 +12,12 @@ import { readSettings, Language } from '../../../lib/uiSettings';
 import { readTelegramUser } from '../../../lib/telegramUser';
 
 export default function AdminAccessSettingsPage() {
+  type PlanState = { name: string; price: string; duration: string; enabled: boolean };
+  const [plans, setPlans] = useState<PlanState[]>([
+    { name: 'Подписка', price: '99000', duration: '30', enabled: true },
+    { name: '', price: '0', duration: '0', enabled: false },
+    { name: '', price: '0', duration: '0', enabled: false },
+  ]);
   const [language, setLanguage] = useState<Language>(readSettings().language);
   const [price, setPrice] = useState('99000');
   const [duration, setDuration] = useState('30');
@@ -42,6 +48,9 @@ export default function AdminAccessSettingsPage() {
         title: 'Access settings',
         subtitle: 'Manage subscription and free access rules.',
         subscription: 'Subscription',
+        planNum: (n: number) => `Plan ${n}`,
+        planName: 'Plan name',
+        enabled: 'Enabled',
         price: 'Price',
         duration: 'Duration (days)',
         subscriptionHint: 'Applies to users with an active subscription.',
@@ -71,6 +80,9 @@ export default function AdminAccessSettingsPage() {
         title: 'Kirish sozlamalari',
         subtitle: 'Obuna va bepul kirish qoidalarini boshqaring.',
         subscription: 'Obuna',
+        planNum: (n: number) => `Tarif ${n}`,
+        planName: 'Tarif nomi',
+        enabled: 'Yoqilgan',
         price: 'Narx',
         duration: 'Davomiyligi (kun)',
         subscriptionHint: 'Faol obuna egalariga qo‘llanadi.',
@@ -99,6 +111,9 @@ export default function AdminAccessSettingsPage() {
       title: 'Настройки доступа',
       subtitle: 'Управление правилами подписки и доступа.',
       subscription: 'Подписка',
+      planNum: (n: number) => `План ${n}`,
+      planName: 'Название плана',
+      enabled: 'Включён',
       price: 'Цена',
       duration: 'Длительность (дни)',
       subscriptionHint: 'Применяется к пользователям с активной подпиской.',
@@ -134,6 +149,7 @@ export default function AdminAccessSettingsPage() {
         settings?: {
           subscriptionPrice: number;
           subscriptionDurationDays: number;
+          subscriptionPlans?: { index: number; name: string; price: number; durationDays: number; enabled: boolean }[];
           allowFreeAttempts: boolean;
           freeDailyLimit: number;
           freeOralDailyLimit?: number;
@@ -145,8 +161,22 @@ export default function AdminAccessSettingsPage() {
       setLoadError(null);
       if (!res.ok) return;
       if (!data?.settings) return;
-      setPrice(String(data.settings.subscriptionPrice));
-      setDuration(String(data.settings.subscriptionDurationDays));
+      const sp = data.settings.subscriptionPlans;
+      if (Array.isArray(sp) && sp.length >= 1) {
+        setPlans([
+          { name: sp[0]?.name ?? 'Подписка', price: String(sp[0]?.price ?? 0), duration: String(sp[0]?.durationDays ?? 0), enabled: sp[0]?.enabled ?? true },
+          { name: sp[1]?.name ?? '', price: String(sp[1]?.price ?? 0), duration: String(sp[1]?.durationDays ?? 0), enabled: sp[1]?.enabled ?? false },
+          { name: sp[2]?.name ?? '', price: String(sp[2]?.price ?? 0), duration: String(sp[2]?.durationDays ?? 0), enabled: sp[2]?.enabled ?? false },
+        ]);
+      } else {
+        setPrice(String(data.settings.subscriptionPrice));
+        setDuration(String(data.settings.subscriptionDurationDays));
+        setPlans((prev) => [
+          { name: 'Подписка', price: String(data.settings!.subscriptionPrice), duration: String(data.settings!.subscriptionDurationDays), enabled: true },
+          prev[1],
+          prev[2],
+        ]);
+      }
       setFreeAttempts(data.settings.allowFreeAttempts ? 'yes' : 'no');
       setDailyLimit(String(data.settings.freeDailyLimit));
       setOralDailyLimit(String(data.settings.freeOralDailyLimit ?? 5));
@@ -166,12 +196,20 @@ export default function AdminAccessSettingsPage() {
     const user = readTelegramUser();
     if (user?.telegramId) headers['x-telegram-id'] = user.telegramId;
     try {
+      const firstEnabled = plans.find((p) => p.enabled);
       const res = await fetch('/api/admin/settings/access', {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          subscriptionPrice: Number(price),
-          subscriptionDurationDays: Number(duration),
+          subscriptionPrice: firstEnabled ? Number(firstEnabled.price) : Number(price),
+          subscriptionDurationDays: firstEnabled ? Number(firstEnabled.duration) : Number(duration),
+          subscriptionPlans: plans.map((p, i) => ({
+            index: i + 1,
+            name: p.name.trim() || (i === 0 ? 'Подписка' : ''),
+            price: Number(p.price) || 0,
+            durationDays: Number(p.duration) || 0,
+            enabled: p.enabled,
+          })),
           allowFreeAttempts: freeAttempts === 'yes',
           freeDailyLimit: Number(dailyLimit),
           freeOralDailyLimit: Number(oralDailyLimit),
@@ -205,29 +243,55 @@ export default function AdminAccessSettingsPage() {
               <p className="text-sm text-rose-600">{loadError}</p>
             )}
 
-            <Card title={copy.subscription}>
-              <p className="mb-3 text-xs text-slate-500">{copy.subscriptionHint}</p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
+            {[0, 1, 2].map((i) => (
+              <Card key={i} title={copy.planNum(i + 1)}>
+                <p className="mb-3 text-xs text-slate-500">{i === 0 ? copy.subscriptionHint : ''}</p>
+                <div className="mb-3 flex items-center gap-2">
                   <input
-                    value={price}
-                    onChange={(event) => setPrice(event.target.value)}
-                    placeholder={copy.price}
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#2AABEE]"
+                    type="checkbox"
+                    id={`plan-enabled-${i}`}
+                    checked={plans[i].enabled}
+                    onChange={(e) => {
+                      setPlans((prev) => {
+                        const next = [...prev];
+                        next[i] = { ...next[i], enabled: e.target.checked };
+                        return next;
+                      });
+                    }}
+                    className="h-4 w-4 rounded border-slate-300 text-[#2AABEE] focus:ring-[#2AABEE]"
                   />
-                  <p className="mt-1 text-xs text-slate-500">{copy.priceHint}</p>
+                  <label htmlFor={`plan-enabled-${i}`} className="text-sm text-slate-600">{copy.enabled}</label>
                 </div>
-                <div>
-                  <input
-                    value={duration}
-                    onChange={(event) => setDuration(event.target.value)}
-                    placeholder={copy.duration}
-                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#2AABEE]"
-                  />
-                  <p className="mt-1 text-xs text-slate-500">{copy.durationHint}</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <input
+                      value={plans[i].name}
+                      onChange={(e) => setPlans((prev) => { const n = [...prev]; n[i] = { ...n[i], name: e.target.value }; return n; })}
+                      placeholder={copy.planName}
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#2AABEE]"
+                    />
+                  </div>
+                  <div>
+                    <input
+                      value={plans[i].price}
+                      onChange={(e) => setPlans((prev) => { const n = [...prev]; n[i] = { ...n[i], price: e.target.value }; return n; })}
+                      placeholder={copy.price}
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#2AABEE]"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">{copy.priceHint}</p>
+                  </div>
+                  <div>
+                    <input
+                      value={plans[i].duration}
+                      onChange={(e) => setPlans((prev) => { const n = [...prev]; n[i] = { ...n[i], duration: e.target.value }; return n; })}
+                      placeholder={copy.duration}
+                      className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-[#2AABEE]"
+                    />
+                    <p className="mt-1 text-xs text-slate-500">{i === 0 ? copy.durationHint : ''}</p>
+                  </div>
                 </div>
-              </div>
-            </Card>
+              </Card>
+            ))}
 
             <Card title={copy.free}>
               <p className="mb-3 text-xs text-slate-500">{copy.freeHint}</p>

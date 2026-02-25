@@ -32,14 +32,17 @@ const FRONTEND_URL = (process.env.FRONTEND_URL ?? process.env.CORS_ORIGIN ?? 'ht
 
 /**
  * POST /payments/create
- * Body: { kind: 'one-time' | 'subscription', examId?: string, paymentSystem: string }
+ * Body: { kind: 'one-time' | 'subscription', examId?: string, paymentSystem: string, subscriptionPlanIndex?: 1|2|3 }
  * paymentSystem: frontend value (payme, click, visa, mastercard, etc.) — mapped to Multicard codes internally.
+ * subscriptionPlanIndex: for kind=subscription, which plan (1..3) to use; must be an enabled plan.
  * Returns: { checkout_url, invoiceId }
  */
 router.post('/create', async (req: Request, res: Response) => {
   const userId = (req as Request & { user?: { id: string } }).user?.id;
   const kind = req.body?.kind === 'subscription' ? 'subscription' : 'one-time';
   const examId = typeof req.body?.examId === 'string' ? req.body.examId.trim() : null;
+  const subscriptionPlanIndex = req.body?.subscriptionPlanIndex;
+  const planIndex = subscriptionPlanIndex === 1 || subscriptionPlanIndex === 2 || subscriptionPlanIndex === 3 ? subscriptionPlanIndex : 1;
   const psRaw = typeof req.body?.paymentSystem === 'string' ? req.body.paymentSystem.trim().toLowerCase() : '';
   const ps = psRaw && PS_MAP[psRaw] ? PS_MAP[psRaw] : '';
 
@@ -75,7 +78,20 @@ router.post('/create', async (req: Request, res: Response) => {
   }
 
   const settings = await getAccessSettings();
-  const amountTiyin = kind === 'one-time' ? settings.oneTimePrice * 100 : settings.subscriptionPrice * 100;
+  let amountTiyin: number;
+  let subscriptionDurationDays: number | null = null;
+  let subscriptionPlanName: string | null = null;
+  if (kind === 'one-time') {
+    amountTiyin = settings.oneTimePrice * 100;
+  } else {
+    const plan = settings.subscriptionPlans?.find((p) => p.index === planIndex && p.enabled);
+    if (!plan) {
+      return res.status(400).json({ ok: false, reasonCode: 'INVALID_SUBSCRIPTION_PLAN' });
+    }
+    amountTiyin = plan.price * 100;
+    subscriptionDurationDays = plan.durationDays;
+    subscriptionPlanName = plan.name || null;
+  }
 
   const invoiceId = randomUUID();
   const callbackUrl = `${process.env.API_PUBLIC_URL ?? `${req.protocol}://${req.get('host')}`}/payments/multicard/callback`;
@@ -128,6 +144,8 @@ router.post('/create', async (req: Request, res: Response) => {
         ps,
         status: 'created',
         mcUuid: payment.uuid ?? null,
+        subscriptionDurationDays: subscriptionDurationDays ?? undefined,
+        subscriptionPlanName: subscriptionPlanName ?? undefined,
       },
     });
 
@@ -190,6 +208,8 @@ router.post('/multicard/callback', async (req: Request, res: Response) => {
           status: true,
           amountTiyin: true,
           mcUuid: true,
+          subscriptionDurationDays: true,
+          subscriptionPlanName: true,
         },
       });
       if (inv && inv.status !== 'paid') {
@@ -273,8 +293,9 @@ router.post('/multicard/callback', async (req: Request, res: Response) => {
           
           if (!existingSub) {
             const now = new Date();
+            const days = inv.subscriptionDurationDays ?? settings.subscriptionDurationDays;
             subscriptionEndsAt = new Date(now);
-            subscriptionEndsAt.setDate(subscriptionEndsAt.getDate() + settings.subscriptionDurationDays);
+            subscriptionEndsAt.setDate(subscriptionEndsAt.getDate() + days);
             try {
               await prisma.userSubscription.create({
                 data: {
