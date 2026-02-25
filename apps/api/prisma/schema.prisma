@@ -358,7 +358,7 @@ model OralExamSession {
   questionIds String[]
 
   user    User             @relation(fields: [userId], references: [id])
-  exam    Exam             @relation(fields: [examId], references: [id])
+  exam    Exam             @relation(fields: [examId], references: [id], onDelete: Cascade)
   answers OralExamAnswer[]
 
   @@index([userId, status])
