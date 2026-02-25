@@ -1271,6 +1271,49 @@ router.get('/tts/stats', async (_req, res) => {
   }
 });
 
+/** STT usage stats for the last 30 days: total uses, errors, per-user counts. */
+router.get('/tts/stt-stats', async (_req, res) => {
+  try {
+    const since = new Date();
+    since.setDate(since.getDate() - 30);
+    const logs = await prisma.sttUsageLog.findMany({
+      where: { createdAt: { gte: since } },
+      select: { userId: true, success: true },
+    });
+    const totalUses = logs.length;
+    const totalErrors = logs.filter((l) => !l.success).length;
+    const byUserId = new Map<string, { total: number; errors: number }>();
+    for (const l of logs) {
+      const cur = byUserId.get(l.userId) ?? { total: 0, errors: 0 };
+      cur.total += 1;
+      if (!l.success) cur.errors += 1;
+      byUserId.set(l.userId, cur);
+    }
+    const userIds = Array.from(byUserId.keys());
+    const users = userIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, firstName: true, username: true, telegramId: true },
+        })
+      : [];
+    const byUser = users.map((u) => {
+      const counts = byUserId.get(u.id)!;
+      const name = [u.firstName, u.username].filter(Boolean).join(' ') || u.telegramId || u.id;
+      return {
+        userId: u.id,
+        userName: name.trim() || '—',
+        totalCount: counts.total,
+        errorCount: counts.errors,
+      };
+    }).sort((a, b) => b.totalCount - a.totalCount);
+    res.json({ totalUses, totalErrors, byUser });
+  } catch (err) {
+    console.error('[admin/tts/stt-stats]', err);
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ ok: false, error: msg });
+  }
+});
+
 /** List direction groups for TTS clear-by-direction: label with type (oral/test), languages (RU/UZ), audio count. Optional filters: type (ORAL/TEST), profession (DOCTOR/NURSE). */
 router.get('/tts/directions', async (req, res) => {
   try {

@@ -276,12 +276,15 @@ export async function submitAnswer(
 
   // 4. Transcribe audio via Azure STT
   let transcript = '';
+  const userId = session.userId;
   if (audioBuffer.length > 100) {
     try {
       transcript = await transcribeAudio(audioBuffer, lang, mimeType);
+      void prisma.sttUsageLog.create({ data: { userId, success: true } }).catch(() => {});
     } catch (err) {
       console.error('[oral.service] STT failed:', err);
       transcript = ''; // continue without transcript
+      void prisma.sttUsageLog.create({ data: { userId, success: false } }).catch(() => {});
     }
   }
 

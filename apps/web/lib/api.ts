@@ -803,6 +803,23 @@ export async function getAdminTtsStats(): Promise<{ scriptsCount: number; audioC
   };
 }
 
+export interface AdminSttStats {
+  totalUses: number;
+  totalErrors: number;
+  byUser: Array<{ userId: string; userName: string; totalCount: number; errorCount: number }>;
+}
+
+export async function getAdminSttStats(): Promise<AdminSttStats> {
+  const { response, data } = await apiFetch('/admin/tts/stt-stats');
+  if (!response.ok) throw (data as ApiError) ?? new Error('Failed to load STT stats');
+  const payload = data as AdminSttStats | null;
+  return {
+    totalUses: payload?.totalUses ?? 0,
+    totalErrors: payload?.totalErrors ?? 0,
+    byUser: payload?.byUser ?? [],
+  };
+}
+
 export async function clearAllTtsData(): Promise<{
   ok: boolean;
   scriptsDeleted: number;

@@ -13,11 +13,13 @@ import {
   getAdminTtsSettings,
   updateAdminTtsSettings,
   getAdminTtsStats,
+  getAdminSttStats,
   clearAllTtsData,
   getAdminTtsDirections,
   clearTtsDataByDirection,
   type AdminTtsSettings,
   type TtsDirectionItem,
+  type AdminSttStats,
 } from '../../../lib/api';
 
 const VOICES_RU = [
@@ -48,6 +50,10 @@ export default function AdminTtsPage() {
   const [clearDirectionConfirm, setClearDirectionConfirm] = useState(false);
   const [directionTypeFilter, setDirectionTypeFilter] = useState<'TEST' | 'ORAL' | ''>('');
   const [directionProfessionFilter, setDirectionProfessionFilter] = useState<'DOCTOR' | 'NURSE' | ''>('');
+  const [subSection, setSubSection] = useState<'tts' | 'stt'>('tts');
+  const [sttStats, setSttStats] = useState<AdminSttStats | null>(null);
+  const [sttStatsError, setSttStatsError] = useState<string | null>(null);
+  const [sttStatsLoading, setSttStatsLoading] = useState(false);
 
   useEffect(() => {
     const update = () => setLanguage(readSettings().language);
@@ -77,6 +83,16 @@ export default function AdminTtsPage() {
       .then(setDirections)
       .catch(() => setDirections([]));
   }, [directionTypeFilter, directionProfessionFilter]);
+
+  useEffect(() => {
+    if (subSection !== 'stt') return;
+    setSttStatsLoading(true);
+    setSttStatsError(null);
+    getAdminSttStats()
+      .then(setSttStats)
+      .catch((e) => setSttStatsError(e instanceof Error ? e.message : 'Failed to load'))
+      .finally(() => setSttStatsLoading(false));
+  }, [subSection]);
 
   const copy = useMemo(() => {
     if (language === 'Английский') {
@@ -111,6 +127,13 @@ export default function AdminTtsPage() {
         filterNurse: 'Nurse',
         filterTest: 'Test',
         filterOral: 'Oral',
+        sttLastMonth: 'Last 30 days',
+        sttTotalUses: 'Total uses',
+        sttTotalErrors: 'Errors',
+        sttByUser: 'By user',
+        sttUser: 'User',
+        sttUses: 'Uses',
+        sttErrors: 'Errors',
       };
     }
     if (language === 'Узбекский') {
@@ -145,6 +168,13 @@ export default function AdminTtsPage() {
         filterNurse: 'Hamshira',
         filterTest: 'Test',
         filterOral: 'Og\'zaki',
+        sttLastMonth: 'So\'nggi 30 kun',
+        sttTotalUses: 'Jami ishlatilgan',
+        sttTotalErrors: 'Xatolar',
+        sttByUser: 'Foydalanuvchi bo\'yicha',
+        sttUser: 'Foydalanuvchi',
+        sttUses: 'Ishlatilgan',
+        sttErrors: 'Xatolar',
       };
     }
     return {
@@ -178,6 +208,13 @@ export default function AdminTtsPage() {
       filterNurse: 'Медсёстры',
       filterTest: 'Тест',
       filterOral: 'Устный',
+      sttLastMonth: 'За последние 30 дней',
+      sttTotalUses: 'Всего использований',
+      sttTotalErrors: 'Ошибок',
+      sttByUser: 'По пользователям',
+      sttUser: 'Пользователь',
+      sttUses: 'Использований',
+      sttErrors: 'Ошибок',
     };
   }, [language]);
 
@@ -242,13 +279,40 @@ export default function AdminTtsPage() {
             <PageHeader title={copy.title} subtitle={copy.subtitle} />
             <AdminNav />
 
-            {loadError && (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSubSection('tts')}
+                className={`flex-1 rounded-xl border-2 px-4 py-3 text-sm font-medium transition ${
+                  subSection === 'tts'
+                    ? 'border-[#2AABEE] bg-[#2AABEE] text-white'
+                    : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                }`}
+              >
+                TTS
+              </button>
+              <button
+                type="button"
+                onClick={() => setSubSection('stt')}
+                className={`flex-1 rounded-xl border-2 px-4 py-3 text-sm font-medium transition ${
+                  subSection === 'stt'
+                    ? 'border-[#2AABEE] bg-[#2AABEE] text-white'
+                    : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                }`}
+              >
+                STT
+              </button>
+            </div>
+
+            {loadError && subSection === 'tts' && (
               <p className="text-sm text-rose-600">{loadError}</p>
             )}
-            {saveError && (
+            {saveError && subSection === 'tts' && (
               <p className="text-sm text-rose-600">{saveError}</p>
             )}
 
+            {subSection === 'tts' && (
+              <>
             {/* ─── TTS ─── */}
             <h2 className="text-lg font-semibold text-slate-800">{copy.sectionTts}</h2>
             <Card title={copy.status}>
@@ -435,9 +499,13 @@ export default function AdminTtsPage() {
                 <p className="mt-2 text-xs text-amber-600">{copy.clearConfirm}</p>
               )}
             </Card>
+              </>
+            )}
 
-            {/* ─── STT ─── */}
-            <Card title={copy.sectionStt} className="mt-8">
+            {subSection === 'stt' && (
+            <>
+            <h2 className="text-lg font-semibold text-slate-800">{copy.sectionStt}</h2>
+            <Card title={copy.sectionStt}>
               <p className="mb-4 text-sm text-slate-600">
                 {copy.sttDescription}
               </p>
@@ -457,6 +525,49 @@ export default function AdminTtsPage() {
                     : 'Ключ и регион задаются в переменных окружения (AZURE_SPEECH_KEY, AZURE_SPEECH_REGION) на сервере.'}
               </p>
             </Card>
+
+            <Card title={copy.sttLastMonth}>
+              {sttStatsLoading && <p className="text-sm text-slate-500">…</p>}
+              {sttStatsError && <p className="text-sm text-rose-600">{sttStatsError}</p>}
+              {!sttStatsLoading && !sttStatsError && sttStats && (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap gap-6 text-sm">
+                    <span className="font-medium text-slate-700">
+                      {copy.sttTotalUses}: <strong>{sttStats.totalUses}</strong>
+                    </span>
+                    <span className="font-medium text-slate-700">
+                      {copy.sttTotalErrors}: <strong className="text-rose-600">{sttStats.totalErrors}</strong>
+                    </span>
+                  </div>
+                  {sttStats.byUser.length > 0 ? (
+                    <div className="overflow-x-auto rounded-xl border border-slate-200">
+                      <table className="w-full min-w-[280px] text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-200 bg-slate-50">
+                            <th className="px-3 py-2 text-left font-medium text-slate-700">{copy.sttUser}</th>
+                            <th className="px-3 py-2 text-right font-medium text-slate-700">{copy.sttUses}</th>
+                            <th className="px-3 py-2 text-right font-medium text-slate-700">{copy.sttErrors}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sttStats.byUser.map((row) => (
+                            <tr key={row.userId} className="border-b border-slate-100 last:border-0">
+                              <td className="px-3 py-2 text-slate-800">{row.userName}</td>
+                              <td className="px-3 py-2 text-right text-slate-600">{row.totalCount}</td>
+                              <td className="px-3 py-2 text-right text-rose-600">{row.errorCount}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500">{copy.sttByUser}: —</p>
+                  )}
+                </div>
+              )}
+            </Card>
+            </>
+            )}
           </AdminGuard>
         </main>
       </AnimatedPage>
