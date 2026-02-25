@@ -57,7 +57,7 @@ export default function AdminNav() {
         { href: '/admin/access-settings', label: 'Access' },
         { href: '/admin/import', label: 'Import' },
         { href: '/admin/ai', label: 'AI' },
-        { href: '/admin/tts', label: 'TTS' },
+        { href: '/admin/tts', label: 'TTS+STT' },
         { href: '/admin/server', label: 'Server' },
       ];
     }
@@ -73,7 +73,7 @@ export default function AdminNav() {
         { href: '/admin/access-settings', label: 'Kirish' },
         { href: '/admin/import', label: 'Import' },
         { href: '/admin/ai', label: 'AI' },
-        { href: '/admin/tts', label: 'TTS' },
+        { href: '/admin/tts', label: 'TTS+STT' },
         { href: '/admin/server', label: 'Server' },
       ];
     }
@@ -88,7 +88,7 @@ export default function AdminNav() {
       { href: '/admin/access-settings', label: 'Доступ' },
       { href: '/admin/import', label: 'Импорт' },
       { href: '/admin/ai', label: 'AI' },
-      { href: '/admin/tts', label: 'Озвучка (TTS)' },
+      { href: '/admin/tts', label: 'TTS+STT' },
       { href: '/admin/server', label: 'Сервер' },
     ];
   }, [language]);

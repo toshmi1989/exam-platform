@@ -18,7 +18,10 @@ const EXEC_OPTS = {
 } as const;
 
 const EXEC_CWD = '/opt/exam/exam-platform';
+const DEPLOY_CWD = '/opt/exam/exam-platform';
+const DEPLOY_CMD = 'git pull origin main && /opt/exam/deploy.sh';
 const PM2_BIN = '/usr/bin/pm2';
+const DEPLOY_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 const MAX_OUTPUT = 4000;
 
@@ -149,6 +152,24 @@ router.post('/restart-bot', async (req: Request, res: Response) => {
   } catch (err) {
     const msg = safeError(err);
     res.json({ title: 'Restart BOT', output: trimOutput(cleanOutput(msg)) });
+  }
+});
+
+/** Full deploy: git pull + deploy.sh (build + pm2 restart from current release). */
+router.post('/deploy', async (req: Request, res: Response) => {
+  try {
+    const { stdout, stderr } = await execAsync(DEPLOY_CMD, {
+      timeout: DEPLOY_TIMEOUT_MS,
+      maxBuffer: 2 * 1024 * 1024,
+      env: PM2_ENV,
+      cwd: DEPLOY_CWD,
+    });
+    const raw = [stdout, stderr].filter(Boolean).join('\n');
+    const output = trimOutput(cleanOutput(raw));
+    res.json({ title: 'Deploy', output: output || '✅ Deploy finished' });
+  } catch (err) {
+    const msg = safeError(err);
+    res.json({ title: 'Deploy', output: trimOutput(cleanOutput(msg)) });
   }
 });
 

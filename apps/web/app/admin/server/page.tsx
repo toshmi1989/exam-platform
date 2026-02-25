@@ -8,10 +8,11 @@ import AdminGuard from '../components/AdminGuard';
 import AdminNav from '../components/AdminNav';
 import { apiFetch } from '../../../lib/api/client';
 
+const DEPLOY_CMD = 'cd /opt/exam/exam-platform && git pull origin main && /opt/exam/deploy.sh';
+
 type CommandId =
   | 'status'
-  | 'restart-api'
-  | 'restart-web'
+  | 'deploy'
   | 'restart-bot'
   | 'load'
   | 'memory'
@@ -32,8 +33,7 @@ interface CommandSpec {
 
 const COMMANDS: CommandSpec[] = [
   { id: 'status', label: 'Status', icon: '🟢', method: 'GET', path: '/admin/server/status' },
-  { id: 'restart-api', label: 'Restart API', icon: '🔄', method: 'POST', path: '/admin/server/restart-api' },
-  { id: 'restart-web', label: 'Restart WEB', icon: '🔄', method: 'POST', path: '/admin/server/restart-web' },
+  { id: 'deploy', label: 'Deploy', icon: '🚀', method: 'POST', path: '/admin/server/deploy' },
   { id: 'restart-bot', label: 'Restart BOT', icon: '🔄', method: 'POST', path: '/admin/server/restart-bot' },
   { id: 'load', label: 'Load', icon: '📈', method: 'GET', path: '/admin/server/load' },
   { id: 'memory', label: 'Memory', icon: '🧠', method: 'GET', path: '/admin/server/memory' },
@@ -72,10 +72,11 @@ export default function AdminServerPage() {
 
   const runCommand = useCallback(async (spec: CommandSpec) => {
     setLoading(spec.id);
+    const timeoutMs = spec.id === 'deploy' ? 5 * 60 * 1000 : 15000; // 5 min for deploy
     try {
       const { response, data } = await apiFetch(spec.path, {
         method: spec.method,
-        timeoutMs: 15000,
+        timeoutMs,
       });
       const title = (data && typeof data === 'object' && 'title' in data && typeof (data as { title: string }).title === 'string')
         ? (data as { title: string }).title
@@ -122,7 +123,16 @@ export default function AdminServerPage() {
       <AnimatedPage>
         <PageHeader title="Server console" />
         <AdminNav />
-        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-[auto_1fr]">
+        <div className="mt-4 space-y-4">
+          <Card className="rounded-xl border-slate-200 bg-slate-50/50 p-3">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Полный деплой (на сервере)
+            </p>
+            <code className="block break-all rounded-lg bg-slate-800 px-3 py-2 font-mono text-sm text-slate-200">
+              {DEPLOY_CMD}
+            </code>
+          </Card>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-[auto_1fr]">
           <Card className="flex flex-col gap-2 p-2">
             {COMMANDS.map((spec) => (
               <button
@@ -172,6 +182,7 @@ export default function AdminServerPage() {
               )}
             </div>
           </Card>
+        </div>
         </div>
       </AnimatedPage>
     </AdminGuard>

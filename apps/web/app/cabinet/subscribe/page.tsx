@@ -24,8 +24,6 @@ const paymentMethods = [
   { id: 'uzum', label: 'Uzum', logo: 'uzum.svg' },
   { id: 'xazna', label: 'Xazna', logo: 'xazna.svg' },
   { id: 'alif', label: 'Alif', logo: 'alif.svg' },
-  { id: 'visa', label: 'Visa', logo: 'visa.svg' },
-  { id: 'mastercard', label: 'Mastercard', logo: 'mastercard.svg' },
 ];
 
 export default function SubscribePage() {

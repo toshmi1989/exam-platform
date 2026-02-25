@@ -81,8 +81,11 @@ export default function AdminTtsPage() {
   const copy = useMemo(() => {
     if (language === 'Английский') {
       return {
-        title: 'Azure TTS',
-        subtitle: 'Voice and recording settings for oral exam.',
+        title: 'TTS+STT',
+        subtitle: 'Voice synthesis and speech-to-text for oral exam.',
+        sectionTts: 'TTS (text-to-speech)',
+        sectionStt: 'STT (speech-to-text)',
+        sttDescription: 'Converts user audio to text in "Submit oral exam" mode. Uses the same Azure Speech resource (AZURE_SPEECH_KEY, AZURE_SPEECH_REGION).',
         status: 'Status',
         keyConfigured: 'API key',
         regionConfigured: 'Region',
@@ -112,8 +115,11 @@ export default function AdminTtsPage() {
     }
     if (language === 'Узбекский') {
       return {
-        title: 'Azure TTS',
-        subtitle: 'Og\'zaki imtihon uchun ovoz va yozuv sozlamalari.',
+        title: 'TTS+STT',
+        subtitle: 'Og\'zaki imtihon uchun ovoz va nutqni matnga aylantirish.',
+        sectionTts: 'TTS (matnni ovozga)',
+        sectionStt: 'STT (ovozni matnga)',
+        sttDescription: '"Og\'zaki topshirish" rejimida foydalanuvchi ovozini matnga aylantiradi. Xuddi shu Azure Speech resursi ishlatiladi (AZURE_SPEECH_KEY, AZURE_SPEECH_REGION).',
         status: 'Holat',
         keyConfigured: 'API kaliti',
         regionConfigured: 'Region',
@@ -142,8 +148,11 @@ export default function AdminTtsPage() {
       };
     }
     return {
-      title: 'Azure TTS',
-      subtitle: 'Настройки озвучки и записей для устного экзамена.',
+      title: 'TTS+STT',
+      subtitle: 'Озвучка и распознавание речи для устного экзамена.',
+      sectionTts: 'TTS (текст в речь)',
+      sectionStt: 'STT (речь в текст)',
+      sttDescription: 'Преобразование аудио пользователя в текст в режиме «Сдать устный». Используется тот же ресурс Azure Speech (AZURE_SPEECH_KEY, AZURE_SPEECH_REGION).',
       status: 'Статус',
       keyConfigured: 'API‑ключ',
       regionConfigured: 'Регион',
@@ -240,6 +249,8 @@ export default function AdminTtsPage() {
               <p className="text-sm text-rose-600">{saveError}</p>
             )}
 
+            {/* ─── TTS ─── */}
+            <h2 className="text-lg font-semibold text-slate-800">{copy.sectionTts}</h2>
             <Card title={copy.status}>
               <div className="flex flex-wrap gap-3 text-sm">
                 <span className={settings?.keyConfigured ? 'text-green-600' : 'text-amber-600'}>
@@ -423,6 +434,28 @@ export default function AdminTtsPage() {
               {clearConfirm && (
                 <p className="mt-2 text-xs text-amber-600">{copy.clearConfirm}</p>
               )}
+            </Card>
+
+            {/* ─── STT ─── */}
+            <Card title={copy.sectionStt} className="mt-8">
+              <p className="mb-4 text-sm text-slate-600">
+                {copy.sttDescription}
+              </p>
+              <div className="flex flex-wrap gap-3 text-sm">
+                <span className={settings?.keyConfigured ? 'text-green-600' : 'text-amber-600'}>
+                  {copy.keyConfigured}: {settings?.keyConfigured ? '✓' : '—'}
+                </span>
+                <span className={settings?.regionConfigured ? 'text-green-600' : 'text-amber-600'}>
+                  {copy.regionConfigured}: {settings?.regionConfigured ? '✓' : '—'}
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                {language === 'Английский'
+                  ? 'Key and region are set in environment variables (AZURE_SPEECH_KEY, AZURE_SPEECH_REGION) on the server.'
+                  : language === 'Узбекский'
+                    ? 'Kalit va region serverdagi muhit o\'zgaruvchilarida (AZURE_SPEECH_KEY, AZURE_SPEECH_REGION) belgilanadi.'
+                    : 'Ключ и регион задаются в переменных окружения (AZURE_SPEECH_KEY, AZURE_SPEECH_REGION) на сервере.'}
+              </p>
             </Card>
           </AdminGuard>
         </main>
