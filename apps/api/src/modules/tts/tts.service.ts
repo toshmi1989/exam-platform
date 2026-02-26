@@ -11,6 +11,12 @@ import { generateAudioScript } from './audio-script.generator';
 import { synthesizeSpeech, getAudioPath } from './azure.tts';
 import { getOrCreateExplanation } from '../ai/ai.service';
 import { getTtsSettingsForPipeline } from './tts-settings.service';
+import {
+  acquireLock,
+  releaseLock,
+  ttsLockKey,
+  waitForLockRelease,
+} from '../oral-session/oral.redis';
 
 const AUDIO_BASE_URL = process.env.AUDIO_BASE_URL ?? '/audio';
 
@@ -143,124 +149,199 @@ export async function getOrCreateAudio(
 
   // DETERMINISTIC: Detect language from question text
   // Cyrillic → RU, Latin → UZ
-  const questionLang = /[А-Яа-яЁё]/.test(question.prompt) ? 'ru' : 'uz';
-  
-  // Check if audio exists for question language
-  const existing = await prisma.questionAudio.findUnique({
-    where: { questionId_lang: { questionId, lang: questionLang } },
-  });
+  const questionLang: 'ru' | 'uz' = /[А-Яа-яЁё]/.test(question.prompt) ? 'ru' : 'uz';
 
-  if (existing && fs.existsSync(existing.audioPath)) {
-    return { audioUrl: `${AUDIO_BASE_URL}/${path.basename(existing.audioPath)}` };
-  }
+  // Helper: try to find existing audio either for this question or for any other
+  // question with the same prompt (same text) in the same language.
+  async function findExistingAudio(): Promise<{ audioUrl: string } | null> {
+    // 1) Direct hit: audio for this specific questionId+lang
+    const existing = await prisma.questionAudio.findUnique({
+      where: { questionId_lang: { questionId, lang: questionLang } },
+    });
 
-  // 2. Get AI explanation (ensure it exists first)
-  const explanationResult = await getOrCreateExplanation(questionId);
-  if (!explanationResult.success) {
-    throw new Error('AI explanation not available');
-  }
+    if (existing && fs.existsSync(existing.audioPath)) {
+      return { audioUrl: `${AUDIO_BASE_URL}/${path.basename(existing.audioPath)}` };
+    }
 
-  // Get raw explanation from DB (without greeting)
-  const explanationRecord = await prisma.questionAIExplanation.findUnique({
-    where: { questionId },
-  });
+    // 2) Reuse audio from another question with the same text (prompt) and lang.
+    const sameTextQuestions = await prisma.question.findMany({
+      where: {
+        prompt: question.prompt,
+        id: { not: questionId },
+      },
+      select: { id: true },
+    });
 
-  if (!explanationRecord) {
-    throw new Error('AI explanation record not found');
-  }
+    if (sameTextQuestions.length > 0) {
+      const ids = sameTextQuestions.map((q) => q.id);
+      const siblingAudio = await prisma.questionAudio.findFirst({
+        where: { questionId: { in: ids }, lang: questionLang },
+      });
 
-  // 3. Use question language for hash and cache key (already determined above)
-  const expectedHash = calculateHash(question.prompt, explanationRecord.content, questionLang);
-  let script = await prisma.questionAudioScript.findUnique({
-    where: { questionId_lang: { questionId, lang: questionLang } },
-  });
+      if (siblingAudio && fs.existsSync(siblingAudio.audioPath)) {
+        // Create (or update) a record for the current question pointing to the same file.
+        await prisma.questionAudio.upsert({
+          where: { questionId_lang: { questionId, lang: questionLang } },
+          create: {
+            questionId,
+            lang: questionLang,
+            audioPath: siblingAudio.audioPath,
+          },
+          update: {
+            audioPath: siblingAudio.audioPath,
+          },
+        });
 
-  let generationLang: 'ru' | 'uz' = questionLang;
-
-  if (!script || script.hash !== expectedHash) {
-    // Generate new script based on QUESTION + ANSWER + explanation
-    // For oral questions, there might be no correct option - extract from explanation
-    const correctOption = question.options.find((opt) => opt.isCorrect);
-    let correctAnswer = correctOption?.label ?? '';
-    
-    // If no correct answer found, extract key concept from explanation
-    if (!correctAnswer || correctAnswer.trim().length < 10) {
-      // Extract first meaningful sentence from explanation
-      const sentences = explanationRecord.content.split(/[.!?]\s+/).filter(s => s.trim().length > 15);
-      if (sentences.length > 0) {
-        correctAnswer = sentences[0].trim().slice(0, 200);
+        return { audioUrl: `${AUDIO_BASE_URL}/${path.basename(siblingAudio.audioPath)}` };
       }
     }
 
-    const scriptResult = await generateAudioScript({
-      question: question.prompt,
-      correctAnswer,
-      aiExplanation: explanationRecord.content,
-      lang: questionLang, // Use question language
-    });
+    return null;
+  }
 
-    const scriptContent = scriptResult.script;
-    generationLang = scriptResult.actualLang; // deterministic from question text
+  // Fast path: if audio уже есть (для этого вопроса или его дублей) — используем и не генерируем заново.
+  const cached = await findExistingAudio();
+  if (cached) {
+    return cached;
+  }
 
-    // Validate script was generated
-    if (!scriptContent || scriptContent.trim().length < 20) {
-      console.error('[TTS] Generated script is too short:', scriptContent);
-      throw new Error(`Failed to generate audio script: script is too short (${scriptContent?.length || 0} chars)`);
+  // 2. Distributed lock to avoid parallel TTS generation for the same question/lang.
+  const lockKey = ttsLockKey(questionId, questionLang);
+  const locked = await acquireLock(lockKey, 60);
+
+  if (!locked) {
+    // Кто-то уже генерирует аудио — ждём и пробуем взять готовый результат.
+    await waitForLockRelease(lockKey);
+    const afterWait = await findExistingAudio();
+    if (afterWait) {
+      return afterWait;
+    }
+    // Если по какой-то причине аудио так и нет — продолжаем без владения лока.
+  }
+
+  try {
+    // После получения лока (или ожидания) ещё раз проверяем, вдруг аудио успели создать.
+    const cachedAfterLock = await findExistingAudio();
+    if (cachedAfterLock) {
+      return cachedAfterLock;
     }
 
-    // Clean text for database storage (basic normalization only)
-    let cleanContent = scriptContent
-      .normalize('NFC')
-      .replace(/[\uD800-\uDFFF]/g, '') // Remove broken surrogates
-      .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g, '') // Remove control chars
-      .replace(/[\uFEFF]/g, '') // Remove BOM
-      .trim();
+    // 3. Get AI explanation (ensure it exists first)
+    const explanationResult = await getOrCreateExplanation(questionId);
+    if (!explanationResult.success) {
+      throw new Error('AI explanation not available');
+    }
 
-    script = await prisma.questionAudioScript.upsert({
+    // Get raw explanation from DB (without greeting)
+    const explanationRecord = await prisma.questionAIExplanation.findUnique({
+      where: { questionId },
+    });
+
+    if (!explanationRecord) {
+      throw new Error('AI explanation record not found');
+    }
+
+    // 4. Use question language for hash and cache key (already determined above)
+    const expectedHash = calculateHash(question.prompt, explanationRecord.content, questionLang);
+    let script = await prisma.questionAudioScript.findUnique({
+      where: { questionId_lang: { questionId, lang: questionLang } },
+    });
+
+    let generationLang: 'ru' | 'uz' = questionLang;
+
+    if (!script || script.hash !== expectedHash) {
+      // Generate new script based on QUESTION + ANSWER + explanation
+      // For oral questions, there might be no correct option - extract from explanation
+      const correctOption = question.options.find((opt) => opt.isCorrect);
+      let correctAnswer = correctOption?.label ?? '';
+
+      // If no correct answer found, extract key concept from explanation
+      if (!correctAnswer || correctAnswer.trim().length < 10) {
+        // Extract first meaningful sentence from explanation
+        const sentences = explanationRecord.content
+          .split(/[.!?]\s+/)
+          .filter((s) => s.trim().length > 15);
+        if (sentences.length > 0) {
+          correctAnswer = sentences[0].trim().slice(0, 200);
+        }
+      }
+
+      const scriptResult = await generateAudioScript({
+        question: question.prompt,
+        correctAnswer,
+        aiExplanation: explanationRecord.content,
+        lang: questionLang, // Use question language
+      });
+
+      const scriptContent = scriptResult.script;
+      generationLang = scriptResult.actualLang; // deterministic from question text
+
+      // Validate script was generated
+      if (!scriptContent || scriptContent.trim().length < 20) {
+        console.error('[TTS] Generated script is too short:', scriptContent);
+        throw new Error(
+          `Failed to generate audio script: script is too short (${scriptContent?.length || 0} chars)`
+        );
+      }
+
+      // Clean text for database storage (basic normalization only)
+      let cleanContent = scriptContent
+        .normalize('NFC')
+        .replace(/[\uD800-\uDFFF]/g, '') // Remove broken surrogates
+        .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]/g, '') // Remove control chars
+        .replace(/[\uFEFF]/g, '') // Remove BOM
+        .trim();
+
+      script = await prisma.questionAudioScript.upsert({
+        where: { questionId_lang: { questionId, lang: generationLang } },
+        create: {
+          questionId,
+          lang: generationLang,
+          content: cleanContent,
+          hash: expectedHash,
+        },
+        update: {
+          content: cleanContent,
+          hash: expectedHash,
+        },
+      });
+    }
+
+    // 5. Generate audio using language derived from question text.
+    const audioPath = getAudioPath(questionId, generationLang);
+    try {
+      await synthesizeSpeech(script.content, generationLang, audioPath, {
+        voiceRu: ttsSettings.voiceRu,
+        voiceUz: ttsSettings.voiceUz,
+      });
+    } catch (error) {
+      // Do not break exam flow when generation fails and old audio exists.
+      const fallback = await prisma.questionAudio.findUnique({
+        where: { questionId_lang: { questionId, lang: generationLang } },
+      });
+      if (fallback && fs.existsSync(fallback.audioPath)) {
+        return { audioUrl: `${AUDIO_BASE_URL}/${path.basename(fallback.audioPath)}` };
+      }
+      throw error;
+    }
+
+    // 6. Save audio record.
+    await prisma.questionAudio.upsert({
       where: { questionId_lang: { questionId, lang: generationLang } },
       create: {
         questionId,
         lang: generationLang,
-        content: cleanContent,
-        hash: expectedHash,
+        audioPath,
       },
       update: {
-        content: cleanContent,
-        hash: expectedHash,
+        audioPath,
       },
     });
-  }
 
-  // 5. Generate audio using language derived from question text.
-  const audioPath = getAudioPath(questionId, generationLang);
-  try {
-    await synthesizeSpeech(script.content, generationLang, audioPath, {
-      voiceRu: ttsSettings.voiceRu,
-      voiceUz: ttsSettings.voiceUz,
-    });
-  } catch (error) {
-    // Do not break exam flow when generation fails and old audio exists.
-    const fallback = await prisma.questionAudio.findUnique({
-      where: { questionId_lang: { questionId, lang: generationLang } },
-    });
-    if (fallback && fs.existsSync(fallback.audioPath)) {
-      return { audioUrl: `${AUDIO_BASE_URL}/${path.basename(fallback.audioPath)}` };
+    return { audioUrl: `${AUDIO_BASE_URL}/${path.basename(audioPath)}` };
+  } finally {
+    if (locked) {
+      await releaseLock(lockKey);
     }
-    throw error;
   }
-
-  // 6. Save audio record.
-  await prisma.questionAudio.upsert({
-    where: { questionId_lang: { questionId, lang: generationLang } },
-    create: {
-      questionId,
-      lang: generationLang,
-      audioPath,
-    },
-    update: {
-      audioPath,
-    },
-  });
-
-  return { audioUrl: `${AUDIO_BASE_URL}/${path.basename(audioPath)}` };
 }

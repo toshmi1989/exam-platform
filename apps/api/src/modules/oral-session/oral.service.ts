@@ -138,48 +138,48 @@ export async function startSession(
   }
 
   // 2. Check for existing active session.
-  // If user re-opens oral exam after closing browser/app, auto-close stale active session.
+  // Если есть ещё активная (не истёкшая) сессия, продолжаем её, а не создаём новую.
   const existing = await prisma.oralExamSession.findFirst({
     where: { userId, status: 'active' },
-    select: { id: true },
+    select: { id: true, questionIds: true },
   });
-  let hadActiveSession = false;
-  if (existing) {
-    hadActiveSession = true;
 
-    // If timer is already expired, mark as timeout; otherwise close as finished.
+  if (existing) {
+    // Проверяем таймер: если уже истёк, помечаем как timeout и идём дальше к созданию новой сессии.
     const expired = await checkAndExpireSession(existing.id);
     if (!expired) {
-      const answers = await prisma.oralExamAnswer.findMany({
-        where: { sessionId: existing.id },
-        select: { score: true },
+      // Сессия ещё активна — продолжаем её и НЕ трогаем дневной лимит.
+      const ttl = await getSessionTtl(existing.id);
+      const questions = await prisma.question.findMany({
+        where: { id: { in: existing.questionIds } },
+        select: { id: true, prompt: true },
       });
-      const totalScore = answers.reduce((sum, a) => sum + (a.score ?? 0), 0);
+      const qMap = new Map(questions.map((q) => [q.id, q.prompt]));
 
-      await prisma.oralExamSession.update({
-        where: { id: existing.id },
-        data: {
-          status: 'finished',
-          finishedAt: new Date(),
-          score: totalScore,
-        },
-      });
+      const orderedQuestions: SessionQuestion[] = existing.questionIds.map((qid, index) => ({
+        id: qid,
+        text: qMap.get(qid) ?? '',
+        order: index + 1,
+      }));
 
-      await expireSession(existing.id);
+      const expiresAt = new Date(Date.now() + Math.max(ttl, 0) * 1000);
+
+      return {
+        sessionId: existing.id,
+        questions: orderedQuestions,
+        expiresAt,
+      };
     }
   }
 
   // 3. Rate limit (1x per day for subscribers).
-  // If we just auto-closed an active session, do not consume/check the limit again.
-  // The previous start already consumed today's attempt.
-  if (!hadActiveSession) {
-    const rateCheck = await checkAndConsumeRateLimit(userId, isAdmin);
-    if (!rateCheck.allowed) {
-      return {
-        error: rateCheck.message ?? 'Превышен суточный лимит.',
-        reasonCode: 'RATE_LIMIT_EXCEEDED',
-      };
-    }
+  // Каждый раз, когда создаём НОВУЮ сессию в сутки, проверяем лимит.
+  const rateCheck = await checkAndConsumeRateLimit(userId, isAdmin);
+  if (!rateCheck.allowed) {
+    return {
+      error: rateCheck.message ?? 'Превышен суточный лимит.',
+      reasonCode: 'RATE_LIMIT_EXCEEDED',
+    };
   }
 
   // 4. Pick 5 random ORAL questions from the exam
