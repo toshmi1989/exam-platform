@@ -176,6 +176,7 @@ function ExamSelectClient() {
         directionLabel: 'Direction',
         directionsLoading: 'Loading directions...',
         directionsEmpty: 'No directions found.',
+        directionsError: 'Failed to load directions. Please reload the page.',
         start: 'Start test',
         calmHint: 'Calm, focused practice for this direction.',
         oralStub: 'Oral exams will be available soon.',
@@ -222,6 +223,7 @@ function ExamSelectClient() {
         directionLabel: "Yo'nalish",
         directionsLoading: "Yo'nalishlar yuklanmoqda...",
         directionsEmpty: "Yo'nalishlar hozircha yo'q.",
+        directionsError: "Yo'nalishlarni yuklab bo'lmadi. Sahifani yangilang.",
         start: 'Testni boshlash',
         calmHint: "Ushbu yo'nalish uchun sokin mashg'ulot.",
         oralStub: "Og'zaki imtihonlar tez orada qo'shiladi.",
@@ -267,6 +269,7 @@ function ExamSelectClient() {
       directionLabel: 'Направление',
       directionsLoading: 'Загружаем направления...',
       directionsEmpty: 'Направления пока не найдены.',
+      directionsError: 'Не удалось загрузить направления. Обновите страницу.',
       start: 'Начать тест',
       calmHint: 'Спокойная практика для этого направления.',
       oralStub: 'Устные экзамены будут доступны позже.',
@@ -649,7 +652,9 @@ function ExamSelectClient() {
                   {directionsLoading ? (
                     <p className="text-sm text-slate-600">{copy.directionsLoading}</p>
                   ) : directionsError ? (
-                    <p className="text-sm text-rose-500">{copy.directionsEmpty}</p>
+                    <p className="text-sm text-rose-500">
+                      {(copy as { directionsError?: string }).directionsError ?? copy.directionsEmpty}
+                    </p>
                   ) : directions.length === 0 ? (
                     <p className="text-sm text-slate-500">{copy.directionsEmpty}</p>
                   ) : (
@@ -686,7 +691,11 @@ function ExamSelectClient() {
                 <Card title={copy.directionLabel}>
                   {directionsLoading ? (
                     <p className="text-sm text-slate-600">{copy.directionsLoading}</p>
-                  ) : directionsError || oralDirections.length === 0 ? (
+                  ) : directionsError ? (
+                    <p className="text-sm text-rose-500">
+                      {(copy as { directionsError?: string }).directionsError ?? copy.directionsEmpty}
+                    </p>
+                  ) : oralDirections.length === 0 ? (
                     <p className="text-sm text-slate-500">{copy.directionsEmpty}</p>
                   ) : (
                     <select

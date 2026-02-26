@@ -237,13 +237,11 @@ export default function AdminExamsPage() {
     setDeleteSuccess(null);
     try {
       const params = new URLSearchParams();
-      if (selectedExam.directionGroupId) {
-        params.set('directionGroupId', selectedExam.directionGroupId);
-      } else {
-        params.set('profession', selectedExam.profession);
-        params.set('type', selectedExam.type);
-        params.set('direction', selectedExam.direction);
-      }
+      // Удаляем по профессии, типу и названию направления,
+      // чтобы не затронуть другие направления с тем же directionGroupId.
+      params.set('profession', selectedExam.profession);
+      params.set('type', selectedExam.type);
+      params.set('direction', selectedExam.direction);
       const { response } = await apiFetch(`/admin/exams/by-direction?${params}`, {
         method: 'DELETE',
       });
