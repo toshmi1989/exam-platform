@@ -55,6 +55,7 @@ export default function AdminExamsPage() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
+  const [questionQuery, setQuestionQuery] = useState('');
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -89,6 +90,8 @@ export default function AdminExamsPage() {
         deleteDirectionConfirm: 'Delete direction "{name}" (RU and UZ)? All questions will be removed.',
         deleteDone: 'Direction deleted.',
         deleteError: 'Could not delete.',
+        searchQuestion: 'Search question text…',
+        questionCount: 'Showing {{n}} of {{total}} questions',
       };
     }
     if (language === 'Узбекский') {
@@ -106,6 +109,8 @@ export default function AdminExamsPage() {
         deleteDirectionConfirm: '«{name}» yo‘nalishini (RU va UZ) o‘chirish? Savollar o‘chiriladi.',
         deleteDone: "Yo'nalish o'chirildi.",
         deleteError: "O'chirib bo'lmadi.",
+        searchQuestion: 'Savol matnini qidiring…',
+        questionCount: '{{n}} / {{total}} savol',
       };
     }
     return {
@@ -122,8 +127,20 @@ export default function AdminExamsPage() {
       deleteDirectionConfirm: 'Удалить направление «{name}» (RU и UZ)? Вопросы будут удалены.',
       deleteDone: 'Направление удалено.',
       deleteError: 'Не удалось удалить.',
+      searchQuestion: 'Поиск по тексту вопроса…',
+      questionCount: 'Показано {{n}} из {{total}} вопросов',
     };
   }, [language]);
+
+  const filteredQuestions = useMemo(() => {
+    if (!selectedExam) return [];
+    const q = questionQuery.trim().toLowerCase();
+    if (!q) return selectedExam.questions;
+    return selectedExam.questions.filter((question) => {
+      if (question.prompt.toLowerCase().includes(q)) return true;
+      return question.options.some((opt) => opt.label.toLowerCase().includes(q));
+    });
+  }, [selectedExam, questionQuery]);
 
   const copyFilters = useMemo(() => {
     if (language === 'Английский') {
@@ -144,11 +161,11 @@ export default function AdminExamsPage() {
 
   async function loadExams() {
     const params = new URLSearchParams();
-    if (query) params.set('search', query);
+    if (query.trim()) params.set('search', query.trim());
     if (typeFilter) params.set('type', typeFilter);
     if (professionFilter) params.set('profession', professionFilter);
     const { response, data } = await apiFetch(
-      `/admin/exams?${params.toString()}`
+      `/admin/exams${params.toString() ? `?${params.toString()}` : ''}`
     );
     if (!response.ok) return;
     const payload = data as { items?: ExamSummary[] } | null;
@@ -191,7 +208,9 @@ export default function AdminExamsPage() {
   async function saveQuestion(question: ExamQuestion) {
     if (!selectedExam) return;
     const correctOptionId = question.options.find((opt) => opt.isCorrect)?.id;
-    if (!correctOptionId) {
+    const isOral = selectedExam.type === 'ORAL';
+    const hasOptions = question.options.length > 0;
+    if (!isOral && hasOptions && !correctOptionId) {
       setErrorMessage(copy.saveError);
       return;
     }
@@ -208,12 +227,13 @@ export default function AdminExamsPage() {
               id: opt.id,
               label: opt.label,
             })),
-            correctOptionId,
+            ...(correctOptionId ? { correctOptionId } : {}),
           },
         }
       );
       if (!response.ok) {
-        setErrorMessage(copy.saveError);
+        const errPayload = data as { error?: string; message?: string } | null;
+        setErrorMessage(errPayload?.error ?? errPayload?.message ?? copy.saveError);
         setSavingId(null);
         return;
       }
@@ -221,8 +241,8 @@ export default function AdminExamsPage() {
       if (payload?.question) {
         updateQuestion(question.id, () => payload.question as ExamQuestion);
       }
-    } catch {
-      setErrorMessage(copy.saveError);
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : copy.saveError);
     } finally {
       setSavingId(null);
     }
@@ -378,11 +398,30 @@ export default function AdminExamsPage() {
                     {copy.deleteDirection}
                   </Button>
                 </div>
+                <div className="mb-4">
+                  <input
+                    type="text"
+                    value={questionQuery}
+                    onChange={(e) => setQuestionQuery(e.target.value)}
+                    placeholder={(copy as { searchQuestion?: string }).searchQuestion ?? copy.search}
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-700 outline-none transition focus:border-[#2AABEE]"
+                    autoComplete="off"
+                  />
+                  {questionQuery.trim() ? (
+                    <p className="mt-1.5 text-xs text-slate-500">
+                      {((copy as { questionCount?: string }).questionCount ?? '{{n}} / {{total}}')
+                        .replace('{{n}}', String(filteredQuestions.length))
+                        .replace('{{total}}', String(selectedExam.questions.length))}
+                    </p>
+                  ) : null}
+                </div>
                 <div className="flex flex-col gap-4">
-                  {selectedExam.questions.map((question, index) => (
+                  {filteredQuestions.map((question) => {
+                    const index = selectedExam.questions.findIndex((q) => q.id === question.id) + 1;
+                    return (
                     <div key={question.id} className="rounded-xl border border-slate-200 p-4">
                       <div className="text-xs text-slate-500">
-                        #{index + 1}
+                        #{index}
                       </div>
                       <textarea
                         value={question.prompt}
@@ -441,7 +480,8 @@ export default function AdminExamsPage() {
                         </Button>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </Card>
             ) : null}

@@ -646,73 +646,79 @@ router.patch('/exams/:examId/questions/:questionId', async (req, res) => {
       : undefined;
 
   if (!examId || !questionId) {
-    return res.status(400).json({ ok: false });
+    return res.status(400).json({ ok: false, error: 'examId and questionId required' });
   }
 
-  const question = await prisma.question.findFirst({
-    where: { id: questionId, examId },
-    include: { options: true },
-  });
-  if (!question) {
-    return res.status(404).json({ ok: false, reasonCode: 'QUESTION_NOT_FOUND' });
+  try {
+    const question = await prisma.question.findFirst({
+      where: { id: questionId, examId },
+      include: { options: true },
+    });
+    if (!question) {
+      return res.status(404).json({ ok: false, reasonCode: 'QUESTION_NOT_FOUND', error: 'Question not found' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      if (typeof prompt === 'string' && prompt.length > 0) {
+        await tx.question.update({
+          where: { id: questionId },
+          data: { prompt },
+        });
+      }
+
+      if (Array.isArray(options)) {
+        for (const opt of options) {
+          if (typeof opt?.id !== 'string' || typeof opt?.label !== 'string') {
+            continue;
+          }
+          const belongs = question.options.some((existing) => existing.id === opt.id);
+          if (!belongs) continue;
+          await tx.questionOption.update({
+            where: { id: opt.id },
+            data: { label: opt.label.trim() },
+          });
+        }
+      }
+
+      if (correctOptionId) {
+        const belongs = question.options.some((opt) => opt.id === correctOptionId);
+        if (belongs) {
+          await tx.questionOption.updateMany({
+            where: { questionId },
+            data: { isCorrect: false },
+          });
+          await tx.questionOption.update({
+            where: { id: correctOptionId },
+            data: { isCorrect: true },
+          });
+        }
+      }
+    });
+
+    const updated = await prisma.question.findUnique({
+      where: { id: questionId },
+      include: { options: { orderBy: { order: 'asc' } } },
+    });
+
+    return res.json({
+      ok: true,
+      question: updated
+        ? {
+            id: updated.id,
+            prompt: updated.prompt,
+            options: updated.options.map((opt) => ({
+              id: opt.id,
+              label: opt.label,
+              isCorrect: opt.isCorrect,
+            })),
+          }
+        : null,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to save question';
+    console.error('[admin PATCH exam question]', err);
+    return res.status(500).json({ ok: false, error: message });
   }
-
-  await prisma.$transaction(async (tx) => {
-    if (typeof prompt === 'string' && prompt.length > 0) {
-      await tx.question.update({
-        where: { id: questionId },
-        data: { prompt },
-      });
-    }
-
-    if (Array.isArray(options)) {
-      for (const opt of options) {
-        if (typeof opt?.id !== 'string' || typeof opt?.label !== 'string') {
-          continue;
-        }
-        const belongs = question.options.some((existing) => existing.id === opt.id);
-        if (!belongs) continue;
-        await tx.questionOption.update({
-          where: { id: opt.id },
-          data: { label: opt.label.trim() },
-        });
-      }
-    }
-
-    if (correctOptionId) {
-      const belongs = question.options.some((opt) => opt.id === correctOptionId);
-      if (belongs) {
-        await tx.questionOption.updateMany({
-          where: { questionId },
-          data: { isCorrect: false },
-        });
-        await tx.questionOption.update({
-          where: { id: correctOptionId },
-          data: { isCorrect: true },
-        });
-      }
-    }
-  });
-
-  const updated = await prisma.question.findUnique({
-    where: { id: questionId },
-    include: { options: { orderBy: { order: 'asc' } } },
-  });
-
-  return res.json({
-    ok: true,
-    question: updated
-      ? {
-          id: updated.id,
-          prompt: updated.prompt,
-          options: updated.options.map((opt) => ({
-            id: opt.id,
-            label: opt.label,
-            isCorrect: opt.isCorrect,
-          })),
-        }
-      : null,
-  });
 });
 
 router.get('/blacklist', (_req, res) => {
