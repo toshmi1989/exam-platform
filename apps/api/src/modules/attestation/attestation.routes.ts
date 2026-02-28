@@ -11,27 +11,33 @@ const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..', '..', '..');
 
 async function runParserOnce(): Promise<boolean> {
   const scriptPath = path.join(PROJECT_ROOT, 'scripts', 'parser_attestation.py');
-  try {
-    const r = spawnSync('python', [scriptPath], {
-      cwd: PROJECT_ROOT,
-      env: process.env,
-      timeout: 120_000,
-      maxBuffer: 10 * 1024 * 1024,
-      encoding: 'utf8',
-    });
-    if (r.error) {
-      console.error('[attestation] parser spawn error:', r.error);
+  const pythonCommands = ['python3', 'python'];
+  for (const cmd of pythonCommands) {
+    try {
+      const r = spawnSync(cmd, [scriptPath], {
+        cwd: PROJECT_ROOT,
+        env: process.env,
+        timeout: 120_000,
+        maxBuffer: 10 * 1024 * 1024,
+        encoding: 'utf8',
+      });
+      if (r.error) {
+        if (r.error.code === 'ENOENT') continue;
+        console.error('[attestation] parser spawn error:', r.error);
+        return false;
+      }
+      if (r.status !== 0) {
+        console.error('[attestation] parser exit', r.status, r.stderr?.slice(0, 500));
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.error('[attestation] parser run failed:', e);
       return false;
     }
-    if (r.status !== 0) {
-      console.error('[attestation] parser exit', r.status, r.stderr?.slice(0, 500));
-      return false;
-    }
-    return true;
-  } catch (e) {
-    console.error('[attestation] parser run failed:', e);
-    return false;
   }
+  console.error('[attestation] python not found (tried python3, python)');
+  return false;
 }
 
 async function getDataCoverageMessage(): Promise<string | null> {
