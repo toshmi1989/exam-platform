@@ -230,6 +230,11 @@ function CabinetClient() {
         attestationDoctor: 'Doctor',
         attestationNurse: 'Nurse',
         attestationSource: 'Source',
+        attestationZiyodaFound: 'Ziyoda found {{count}} entries for you:',
+        attestationZiyodaCardIntro: 'Found an entry!',
+        attestationZiyodaExamDate: 'Exam date',
+        attestationZiyodaDateTbd: 'see official source for date',
+        attestationZiyodaSourceLink: 'Open official source',
       };
     }
     if (language === 'Узбекский') {
@@ -268,6 +273,11 @@ function CabinetClient() {
         attestationDoctor: 'Shifokor',
         attestationNurse: 'Hamshira',
         attestationSource: 'Manba',
+        attestationZiyodaFound: 'Ziyoda siz uchun {{count}} ta yozuv topdi:',
+        attestationZiyodaCardIntro: 'Yozuv topildi!',
+        attestationZiyodaExamDate: 'Imtihon sanasi',
+        attestationZiyodaDateTbd: 'sana rasmiy manbada',
+        attestationZiyodaSourceLink: 'Rasmiy manbani ochish',
       };
     }
     return {
@@ -305,6 +315,11 @@ function CabinetClient() {
       attestationDoctor: 'Врач',
       attestationNurse: 'Медсестра',
       attestationSource: 'Источник',
+      attestationZiyodaFound: 'Зиёда нашла для вас {{count}} записей:',
+      attestationZiyodaCardIntro: 'Нашла запись!',
+      attestationZiyodaExamDate: 'Дата экзамена',
+      attestationZiyodaDateTbd: 'уточняется в официальном источнике',
+      attestationZiyodaSourceLink: 'Подробности в официальном источнике',
     };
   }, [language]);
 
@@ -432,33 +447,56 @@ function CabinetClient() {
               </p>
             )}
             {!attestationLoading && attestationResults.length > 0 && (
-              <ul className="mt-4 flex flex-col gap-3">
-                {attestationResults.map((r, i) => (
-                  <li key={`${r.source_url}-${r.full_name}-${i}`} className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-sm">
-                    <p className="font-semibold text-slate-900">{r.full_name}</p>
-                    {(r.specialty || r.region) && (
-                      <p className="mt-1 text-slate-600">
-                        {[r.specialty, r.region].filter(Boolean).join(' · ')}
-                      </p>
-                    )}
-                    <p className="mt-1 text-slate-500">
-                      {copy.attestationStage1}/{copy.attestationStage2}: {r.stage === 1 ? copy.attestationStage1 : copy.attestationStage2}
-                      {' · '}
-                      {r.profession === 'doctor' ? copy.attestationDoctor : copy.attestationNurse}
-                      {r.exam_date ? ` · ${r.exam_date}` : ''}
-                      {r.exam_time ? ` ${r.exam_time}` : ''}
-                    </p>
-                    <a
-                      href={r.source_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-2 inline-block text-xs font-medium text-blue-600 hover:underline"
+              <div className="mt-4 space-y-4">
+                <p className="text-sm font-medium text-slate-700">
+                  👩‍⚕️ {copy.attestationZiyodaFound.replace('{{count}}', String(attestationResults.length))}
+                </p>
+                <ul className="flex flex-col gap-4">
+                  {attestationResults.map((r, i) => (
+                    <li
+                      key={`${r.source_url}-${r.full_name}-${i}`}
+                      className="rounded-xl border-2 border-violet-200 bg-gradient-to-br from-violet-50/90 to-white p-4 text-sm shadow-sm"
                     >
-                      {copy.attestationSource}
-                    </a>
-                  </li>
-                ))}
-              </ul>
+                      <p className="mb-2 font-semibold text-violet-800">
+                        ✨ {copy.attestationZiyodaCardIntro}
+                      </p>
+                      <p className="font-semibold text-slate-900">
+                        👤 {r.full_name}
+                      </p>
+                      {(r.specialty || r.region) && (
+                        <p className="mt-1 text-slate-600">
+                          {r.specialty && <span>🩺 {r.specialty}</span>}
+                          {r.specialty && r.region && ' · '}
+                          {r.region && <span>📍 {r.region}</span>}
+                        </p>
+                      )}
+                      <p className="mt-1 text-slate-600">
+                        📋 {r.stage === 1 ? copy.attestationStage1 : copy.attestationStage2}
+                        {' · '}
+                        {r.profession === 'doctor' ? copy.attestationDoctor : copy.attestationNurse}
+                      </p>
+                      <p className="mt-2 font-medium text-slate-800">
+                        {r.exam_date ? (
+                          <>
+                            📅 {copy.attestationZiyodaExamDate}: {r.exam_date}
+                            {r.exam_time ? ` ${r.exam_time}` : ''}
+                          </>
+                        ) : (
+                          <>📅 {copy.attestationZiyodaExamDate}: {copy.attestationZiyodaDateTbd}</>
+                        )}
+                      </p>
+                      <a
+                        href={r.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 inline-flex items-center gap-1 rounded-lg bg-violet-100 px-3 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-200"
+                      >
+                        🔗 {copy.attestationZiyodaSourceLink}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </Card>
 

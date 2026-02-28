@@ -156,7 +156,7 @@ router.get('/search', async (req: Request, res: Response) => {
         { examDate: { sort: 'desc', nulls: 'last' } },
         { publishedDate: { sort: 'desc', nulls: 'last' } },
       ],
-      take: 20,
+      take: 50,
       select: {
         fullName: true,
         specialty: true,
