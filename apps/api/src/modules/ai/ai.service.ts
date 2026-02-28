@@ -99,7 +99,7 @@ export async function getOrCreateExplanation(
     where: { id: questionId },
     include: {
       options: { orderBy: { order: 'asc' } },
-      exam: { select: { language: true } },
+      exam: { select: { language: true, direction: true } },
     },
   });
 
@@ -128,6 +128,7 @@ export async function getOrCreateExplanation(
       question: question.prompt,
       options: options.map((o) => ({ label: o.label })),
       correctAnswer,
+      direction: question.exam.direction ?? undefined,
     });
 
     await prisma.questionAIExplanation.upsert({
@@ -175,7 +176,7 @@ export async function* prewarm(
     where,
     include: {
       options: { orderBy: { order: 'asc' } },
-      exam: { select: { language: true } },
+      exam: { select: { language: true, direction: true } },
     },
     orderBy: { order: 'asc' },
   });
@@ -210,6 +211,7 @@ export async function* prewarm(
           options: options.map((o) => ({ label: o.label })),
           correctAnswer,
           lang: l,
+          direction: question.exam.direction ?? undefined,
         });
         await prisma.questionAIExplanation.upsert({
           where: { questionId: question.id },
@@ -328,6 +330,7 @@ export async function getOrCreateOralAnswer(
     const content = await generateOralAnswer({
       lang,
       question: question.prompt,
+      direction,
     });
 
     await prisma.directionOralAnswer.upsert({
@@ -392,7 +395,11 @@ export async function* getOrCreateOralAnswerStream(
   const lang: AiLang = question.exam.language === 'UZ' ? 'uz' : 'ru';
   let content = '';
   try {
-    for await (const chunk of generateOralAnswerStream({ lang, question: question.prompt })) {
+    for await (const chunk of generateOralAnswerStream({
+      lang,
+      question: question.prompt,
+      direction,
+    })) {
       content += chunk;
       yield chunk;
     }
@@ -423,7 +430,7 @@ export async function* getOrCreateExplanationStream(
     where: { id: questionId },
     include: {
       options: { orderBy: { order: 'asc' } },
-      exam: { select: { language: true } },
+      exam: { select: { language: true, direction: true } },
     },
   });
 
@@ -451,6 +458,7 @@ export async function* getOrCreateExplanationStream(
       question: question.prompt,
       options: options.map((o) => ({ label: o.label })),
       correctAnswer,
+      direction: question.exam.direction ?? undefined,
     })) {
       content += chunk;
       yield chunk;
@@ -594,7 +602,11 @@ export async function* prewarmOral(
     }
 
     try {
-      const content = await generateOralAnswer({ lang, question: first.prompt });
+      const content = await generateOralAnswer({
+        lang,
+        question: first.prompt,
+        direction,
+      });
       await prisma.directionOralAnswer.upsert({
         where: {
           direction_language_promptHash: { direction, language: languageKey, promptHash },

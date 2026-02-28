@@ -489,9 +489,9 @@ export default function OralExamPage() {
                     {playingAudioId === current.id ? (
                       <>🛑 {copy.stopAudio}</>
                     ) : loadingAudioId === current.id ? (
-                      <>🤖 {copy.preparing}</>
+                      <>👩 {copy.preparing}</>
                     ) : (
-                      <>🤖 {copy.playAudio}</>
+                      <>👩 {copy.playAudio}</>
                     )}
                   </Button>
                   {loadingAudioId === current.id && (
@@ -539,7 +539,7 @@ export default function OralExamPage() {
               <div className="mt-4 overflow-hidden rounded-xl border-2 border-[#2AABEE]/20 bg-gradient-to-b from-slate-50 to-white shadow-sm">
                 <div className="border-b border-slate-200 bg-[#2AABEE]/10 px-4 py-2.5">
                   <p className="text-sm font-semibold text-slate-800">
-                    🤖 {copy.answerHeader}
+                    👩 {copy.answerHeader}
                   </p>
                 </div>
                 <div className="p-4 text-sm prose prose-slate max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-blockquote:border-[#2AABEE] prose-blockquote:bg-slate-50/80 prose-blockquote:rounded-r prose-img:rounded-lg prose-img:shadow-md">

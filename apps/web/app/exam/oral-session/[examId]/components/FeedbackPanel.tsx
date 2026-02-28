@@ -29,7 +29,7 @@ const COPY = {
     noTranscript: 'Ответ не был распознан.',
     coverage: 'Покрытие тем',
     missedPoints: 'Пропущенные пункты',
-    summary: '🤖 Зиёда комментирует',
+    summary: '👩 Зиёда комментирует',
   },
   uz: {
     score: 'Ball',
@@ -37,7 +37,7 @@ const COPY = {
     noTranscript: "Javob tanilmadi.",
     coverage: "Mavzular qamrovi",
     missedPoints: "O'tkazib yuborilgan nuqtalar",
-    summary: '🤖 Ziyoda izohlaydi',
+    summary: '👩 Ziyoda izohlaydi',
   },
   en: {
     score: 'Score',
@@ -45,7 +45,7 @@ const COPY = {
     noTranscript: 'Answer was not recognized.',
     coverage: 'Topic coverage',
     missedPoints: 'Missed points',
-    summary: '🤖 Ziyoda comments',
+    summary: '👩 Ziyoda comments',
   },
 };
 

@@ -121,7 +121,7 @@ export default function ZiyodaPrewarmModal({ onClose }: ZiyodaPrewarmModalProps)
     >
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
         <h2 id="ziyoda-prewarm-title" className="text-lg font-semibold text-slate-900">
-          🤖 {copy.title}
+          👩 {copy.title}
         </h2>
 
         {!running && !done ? (

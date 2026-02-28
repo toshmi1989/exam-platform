@@ -10,6 +10,8 @@ export interface ZiyodaGeneratorInput {
   question: string;
   options: { label: string }[];
   correctAnswer: string;
+  /** Направление/специальность экзамена — чтобы объяснение было в контексте этой области. */
+  direction?: string;
 }
 
 const OPENAI_API_KEY = (process.env.OPENAI_API_KEY ?? '').trim();
@@ -23,23 +25,29 @@ const openai = new OpenAI({
   maxRetries: 2,
 });
 
-function getSystemPrompt(lang: ZiyodaLang): string {
+function getSystemPrompt(lang: ZiyodaLang, direction?: string): string {
+  const directionContext =
+    direction && direction.trim()
+      ? lang === 'uz'
+        ? `\n\nMuhim: Savol berilgan yo'nalish/speziallik — "${direction.trim()}". Tushuntirishingiz STRICT shu yo'nalish doirasida bo'lsin. Boshqa sohalarga o'tmang.`
+        : `\n\nВажно: вопрос задан в рамках направления/специальности — «${direction.trim()}». Объясняйте СТРОГО в контексте этой специальности. Не уходите в другие области.`
+      : '';
   if (lang === 'uz') {
     return `Siz "Ziyoda" tibbiy savol-yo'riqnomasi yordamchisisiz. Savol matni, variantlar va to'g'ri javob beriladi. Javobingiz quyidagi strukturada bo'lsin (Markdown ishlating, sarlavhalarda emoji ishlating):
 1) 🧠 Savol qisqacha mazmuni
 2) ✅ To'g'ri javob
 3) 🔍 Tibbiy tushuntirish
-Har bir blok sarlavhasini emoji bilan bosing, masalan: ## 🧠 Savol qisqacha mazmuni, ## ✅ To'g'ri javob, ## 🔍 Tibbiy tushuntirish. Bloklar orasida bo'sh qator, tibbiy tushuntirishda qisqa abzatslar. Barcha matn o'zbek tilida. Qisqa va tushunarli yozing.`;
+Har bir blok sarlavhasini emoji bilan bosing, masalan: ## 🧠 Savol qisqacha mazmuni, ## ✅ To'g'ri javob, ## 🔍 Tibbiy tushuntirish. Bloklar orasida bo'sh qator, tibbiy tushuntirishda qisqa abzatslar. Barcha matn o'zbek tilida. Qisqa va tushunarli yozing.${directionContext}`;
   }
   return `Вы — помощник "Зиёда" по медицинским вопросам. Даны текст вопроса, варианты ответов и правильный ответ. Ваш ответ должен быть в формате (обязательно используйте Markdown и эмодзи в заголовках для удобства чтения):
 1) 🧠 Краткий смысл вопроса
 2) ✅ Правильный ответ
 3) 🔍 Медицинское объяснение
-Обязательно начинайте каждый блок с эмодзи в заголовке, например: ## 🧠 Краткий смысл вопроса, ## ✅ Правильный ответ, ## 🔍 Медицинское объяснение. Между блоками — пустая строка, внутри медицинского объяснения — короткие абзацы. Весь текст на русском языке. Пишите кратко и понятно.`;
+Обязательно начинайте каждый блок с эмодзи в заголовке, например: ## 🧠 Краткий смысл вопроса, ## ✅ Правильный ответ, ## 🔍 Медицинское объяснение. Между блоками — пустая строка, внутри медицинского объяснения — короткие абзацы. Весь текст на русском языке. Пишите кратко и понятно.${directionContext}`;
 }
 
 function getHeader(lang: ZiyodaLang): string {
-  return lang === 'uz' ? '🤖 Ziyoda tushuntiradi' : '🤖 Зиёда объясняет';
+  return lang === 'uz' ? '👩 Ziyoda tushuntiradi' : '👩 Зиёда объясняет';
 }
 
 export async function generateZiyodaExplanation(input: ZiyodaGeneratorInput): Promise<string> {
@@ -49,7 +57,7 @@ export async function generateZiyodaExplanation(input: ZiyodaGeneratorInput): Pr
     );
   }
 
-  const { lang, question, options, correctAnswer } = input;
+  const { lang, question, options, correctAnswer, direction } = input;
   const optionsText = options.map((o) => o.label).join('\n');
   const userContent = `${lang === 'uz' ? 'Savol' : 'Вопрос'}: ${question}\n\n${lang === 'uz' ? 'Variantlar' : 'Варианты ответов'}:\n${optionsText}\n\n${lang === 'uz' ? "To'g'ri javob" : 'Правильный ответ'}: ${correctAnswer}`;
 
@@ -58,7 +66,7 @@ export async function generateZiyodaExplanation(input: ZiyodaGeneratorInput): Pr
     const completion = await openai.chat.completions.create({
       model: 'gpt-4.1-mini',
       messages: [
-        { role: 'system', content: getSystemPrompt(lang) },
+        { role: 'system', content: getSystemPrompt(lang, direction) },
         { role: 'user', content: userContent },
       ],
       temperature: 0.5,
@@ -89,7 +97,7 @@ export async function* generateZiyodaExplanationStream(
     throw new Error('OPENAI_API_KEY не настроен. Объяснения Зиёды недоступны.');
   }
 
-  const { lang, question, options, correctAnswer } = input;
+  const { lang, question, options, correctAnswer, direction } = input;
   const optionsText = options.map((o) => o.label).join('\n');
   const userContent = `${lang === 'uz' ? 'Savol' : 'Вопрос'}: ${question}\n\n${lang === 'uz' ? 'Variantlar' : 'Варианты ответов'}:\n${optionsText}\n\n${lang === 'uz' ? "To'g'ri javob" : 'Правильный ответ'}: ${correctAnswer}`;
   const header = getHeader(lang);
@@ -99,7 +107,7 @@ export async function* generateZiyodaExplanationStream(
   const stream = await openai.chat.completions.create({
     model: 'gpt-4.1-mini',
     messages: [
-      { role: 'system', content: getSystemPrompt(lang) },
+      { role: 'system', content: getSystemPrompt(lang, direction) },
       { role: 'user', content: userContent },
     ],
     temperature: 0.5,

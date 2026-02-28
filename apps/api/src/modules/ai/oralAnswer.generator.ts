@@ -14,7 +14,7 @@ const openai = new OpenAI({
   maxRetries: 2,
 });
 
-function getSystemPrompt(lang: ZiyodaLang): string {
+function getSystemPrompt(lang: ZiyodaLang, direction?: string): string {
   // Для узбекского: uz.wikipedia.org часто пустой — ссылки ведём на ru.wikipedia.org с русским термином в URL; текст ссылки в ответе остаётся на узбекском.
   const linkRule =
     lang === 'uz'
@@ -24,25 +24,33 @@ function getSystemPrompt(lang: ZiyodaLang): string {
     lang === 'uz'
       ? "Javobni tushunarli qilish uchun emodzilardan foydalaning: 📌 asosiy fikr, 📋 ro'yxat, ⚠️ muhim, 💡 maslahat, ✅ xulosa. Taqqoslash yoki ro'yxat (belgilar, bosqichlar va h.k.) kerak bo'lsa — Markdown jadval ishlating (| ustun | ustun |). Agar foydali bo'lsa, diagramma yoki sxema uchun rasmlarga havola qo'shing: ![tavsif](https://...). Barcha matn o'zbek tilida."
       : "Используйте эмодзи для наглядности: 📌 главное, 📋 список, ⚠️ важно, 💡 совет, ✅ вывод. При необходимости сравнения или перечня (симптомы, стадии и т.д.) — используйте Markdown-таблицу (| столбец | столбец |). При необходимости добавьте ссылку на изображение (схема, диаграмма): ![описание](https://...). Весь текст на русском языке.";
+  const directionContext =
+    direction && direction.trim()
+      ? lang === 'uz'
+        ? `\n\nMuhim: Savol berilgan yo'nalish/speziallik — "${direction.trim()}". Javobingiz STRICT shu yo'nalish doirasida bo'lsin. Boshqa sohalarga o'tmang.`
+        : `\n\nВажно: вопрос задан в рамках направления/специальности — «${direction.trim()}». Отвечайте СТРОГО в контексте этой специальности. Не уходите в другие области.`
+      : '';
   if (lang === 'uz') {
     return `Siz "Ziyoda" tibbiy og'zaki savollar yordamchisisiz. Savol matni beriladi. Javobingiz qisqa, tushunarli va strukturali bo'lsin (Markdown).
 1) 📌 Qisqa javob yoki asosiy fikr
 2) Batafsil tushuntirish (bulleted/numbered list, bo'lishi mumkin)
 3) Kerak bo'lsa jadval yoki ro'yxat
 ${linkRule}
-${emojiTableRule}`;
+${emojiTableRule}${directionContext}`;
   }
   return `Вы — помощник "Зиёда" по устным медицинским вопросам. Дан только текст вопроса. Ваш ответ должен быть кратким, понятным и структурированным (Markdown).
 1) 📌 Краткий ответ или основная мысль
 2) Подробное объяснение (списки, при необходимости)
 3) При необходимости — таблица или структурированный перечень
 ${linkRule}
-${emojiTableRule}`;
+${emojiTableRule}${directionContext}`;
 }
 
 export interface OralAnswerGeneratorInput {
   lang: ZiyodaLang;
   question: string;
+  /** Направление/специальность экзамена (например «Общая стоматология») — чтобы ответ был в контексте этой области. */
+  direction?: string;
 }
 
 export async function generateOralAnswer(input: OralAnswerGeneratorInput): Promise<string> {
@@ -50,14 +58,14 @@ export async function generateOralAnswer(input: OralAnswerGeneratorInput): Promi
     throw new Error('OPENAI_API_KEY не настроен. Генерация устных ответов недоступна.');
   }
 
-  const { lang, question } = input;
+  const { lang, question, direction } = input;
   const label = lang === 'uz' ? 'Savol' : 'Вопрос';
 
   try {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4.1-mini',
       messages: [
-        { role: 'system', content: getSystemPrompt(lang) },
+        { role: 'system', content: getSystemPrompt(lang, direction) },
         { role: 'user', content: `${label}: ${question}` },
       ],
       temperature: 0.5,
@@ -87,13 +95,13 @@ export async function* generateOralAnswerStream(
     throw new Error('OPENAI_API_KEY не настроен. Генерация устных ответов недоступна.');
   }
 
-  const { lang, question } = input;
+  const { lang, question, direction } = input;
   const label = lang === 'uz' ? 'Savol' : 'Вопрос';
 
   const stream = await openai.chat.completions.create({
     model: 'gpt-4.1-mini',
     messages: [
-      { role: 'system', content: getSystemPrompt(lang) },
+      { role: 'system', content: getSystemPrompt(lang, direction) },
       { role: 'user', content: `${label}: ${question}` },
     ],
     temperature: 0.5,
