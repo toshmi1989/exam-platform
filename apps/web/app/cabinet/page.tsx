@@ -237,6 +237,10 @@ function CabinetClient() {
         attestationZiyodaDateTbd: 'see official source for date',
         attestationZiyodaSourceLink: 'Open official source',
         attestationZiyodaListFrom: 'List from',
+        attestationCategoryLabel: 'Selected category',
+        attestationStage1Short: 'Stage 1 (Test)',
+        attestationStage2Short: 'Stage 2 (Oral)',
+        attestationSecondInvitation: 'Invited a second time for this date ({{secondDate}}); first time was {{firstDate}}. If they do not participate the second time either, a new application will be required.',
       };
     }
     if (language === 'Узбекский') {
@@ -281,6 +285,10 @@ function CabinetClient() {
         attestationZiyodaDateTbd: 'sana rasmiy manbada',
         attestationZiyodaSourceLink: 'Rasmiy manbani ochish',
         attestationZiyodaListFrom: 'Ro\'yxat sanasi',
+        attestationCategoryLabel: 'Tanlangan kategoriya',
+        attestationStage1Short: 'Birinchi bosqich (test)',
+        attestationStage2Short: 'Ikkinchi bosqich (og\'zaki)',
+        attestationSecondInvitation: 'Ikkinchi marta shu sanaga ({{secondDate}}) taklif qilindi, birinchi marta {{firstDate}} edi. Agar ikkinchi marta ham qatnashmasa — yangi ariza topshirish kerak bo\'ladi.',
       };
     }
     return {
@@ -324,6 +332,10 @@ function CabinetClient() {
       attestationZiyodaDateTbd: 'уточняется в официальном источнике',
       attestationZiyodaSourceLink: 'Подробности в официальном источнике',
       attestationZiyodaListFrom: 'Список от',
+      attestationCategoryLabel: 'Выбранная категория',
+      attestationStage1Short: '1-й этап (тест)',
+      attestationStage2Short: '2-й этап (устный)',
+      attestationSecondInvitation: 'Приглашена во второй раз на эту дату ({{secondDate}}), первый раз была {{firstDate}}. Если не будет участвовать и во второй раз — придётся сдавать новую заявку!',
     };
   }, [language]);
 
@@ -331,6 +343,31 @@ function CabinetClient() {
     () => (expandedBroadcastId ? visibleBroadcasts.find((b) => b.id === expandedBroadcastId) : null),
     [expandedBroadcastId, visibleBroadcasts]
   );
+
+  type AttestationRow = typeof attestationResults[number];
+  const attestationDisplayGroups = useMemo(() => {
+    const key = (r: AttestationRow) => `${r.full_name}|${r.stage}`;
+    const groups = new Map<string, AttestationRow[]>();
+    for (const r of attestationResults) {
+      const k = key(r);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k)!.push(r);
+    }
+    const getSortDate = (r: AttestationRow) => r.published_date || r.exam_date || '';
+    const formatDate = (d: string) => (d.length === 10 && d.includes('-') ? d.split('-').reverse().join('.') : d);
+    const out: { type: 'single'; row: AttestationRow } | { type: 'merged'; firstDate: string; secondDate: string; mainRow: AttestationRow }[] = [];
+    groups.forEach((rows) => {
+      rows.sort((a, b) => getSortDate(a).localeCompare(getSortDate(b)));
+      if (rows.length === 1) {
+        out.push({ type: 'single', row: rows[0] });
+      } else {
+        const firstDate = formatDate(getSortDate(rows[0]));
+        const secondDate = formatDate(getSortDate(rows[rows.length - 1]));
+        out.push({ type: 'merged', firstDate, secondDate, mainRow: rows[rows.length - 1] });
+      }
+    });
+    return out;
+  }, [attestationResults]);
 
   return (
     <>
@@ -456,54 +493,103 @@ function CabinetClient() {
                   👩‍⚕️ {copy.attestationZiyodaFound.replace('{{count}}', String(attestationResults.length))}
                 </p>
                 <ul className="flex flex-col gap-4">
-                  {attestationResults.map((r, i) => (
-                    <li
-                      key={`${r.source_url}-${r.full_name}-${i}`}
-                      className="rounded-xl border-2 border-violet-200 bg-gradient-to-br from-violet-50/90 to-white p-4 text-sm shadow-sm"
-                    >
-                      <p className="mb-2 font-semibold text-violet-800">
-                        ✨ {copy.attestationZiyodaCardIntro}
-                      </p>
-                      <p className="font-semibold text-slate-900">
-                        👤 {r.full_name}
-                      </p>
-                      {(r.specialty || r.region) && (
-                        <p className="mt-1 text-slate-600">
-                          {r.specialty && <span>🩺 {r.specialty}</span>}
-                          {r.specialty && r.region && ' · '}
-                          {r.region && <span>📍 {r.region}</span>}
-                        </p>
-                      )}
-                      <p className="mt-1 text-slate-600">
-                        📋 {r.stage === 1 ? copy.attestationStage1 : copy.attestationStage2}
-                        {' · '}
-                        {r.profession === 'doctor' ? copy.attestationDoctor : copy.attestationNurse}
-                      </p>
-                      <p className="mt-2 font-medium text-slate-800">
-                        {r.exam_date ? (
-                          <>
-                            📅 {copy.attestationZiyodaExamDate}: {r.exam_date}
-                            {r.exam_time ? ` ${r.exam_time}` : ''}
-                          </>
-                        ) : r.published_date ? (
-                          <>
-                            📅 {copy.attestationZiyodaListFrom}{' '}
-                            {r.published_date.split('-').reverse().join('.')}
-                          </>
-                        ) : (
-                          <>📅 {copy.attestationZiyodaExamDate}: {copy.attestationZiyodaDateTbd}</>
-                        )}
-                      </p>
-                      <a
-                        href={r.source_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-3 inline-flex items-center gap-1 rounded-lg bg-violet-100 px-3 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-200"
+                  {attestationDisplayGroups.map((item, i) => {
+                    if (item.type === 'single') {
+                      const r = item.row;
+                      const stageLabel = r.stage === 1 ? copy.attestationStage1Short : copy.attestationStage2Short;
+                      const professionLabel = r.profession === 'doctor' ? copy.attestationDoctor : copy.attestationNurse;
+                      return (
+                        <li
+                          key={`single-${r.source_url}-${r.full_name}-${i}`}
+                          className="rounded-xl border-2 border-violet-200 bg-gradient-to-br from-violet-50/90 to-white p-4 text-sm shadow-sm"
+                        >
+                          <p className="mb-2 font-semibold text-violet-800">
+                            ✨ {copy.attestationZiyodaCardIntro}
+                          </p>
+                          <p className="font-semibold text-slate-900">
+                            👤 {r.full_name}
+                          </p>
+                          {(r.specialty || r.region) && (
+                            <p className="mt-1 text-slate-600">
+                              {r.specialty && <span>🩺 {r.specialty}</span>}
+                              {r.specialty && r.region && ' · '}
+                              {r.region && <span>📍 {r.region}</span>}
+                            </p>
+                          )}
+                          <p className="mt-2 text-slate-600">
+                            📋 {copy.attestationCategoryLabel}
+                            <br />
+                            <span className="font-medium">{stageLabel} · {professionLabel}</span>
+                          </p>
+                          <p className="mt-2 font-medium text-slate-800">
+                            {r.exam_date ? (
+                              <>
+                                📅 {copy.attestationZiyodaExamDate}: {r.exam_date}
+                                {r.exam_time ? ` ${r.exam_time}` : ''}
+                              </>
+                            ) : r.published_date ? (
+                              <>
+                                📅 {copy.attestationZiyodaListFrom}{' '}
+                                {r.published_date.split('-').reverse().join('.')}
+                              </>
+                            ) : (
+                              <>📅 {copy.attestationZiyodaExamDate}: {copy.attestationZiyodaDateTbd}</>
+                            )}
+                          </p>
+                          <a
+                            href={r.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-3 inline-flex items-center gap-1 rounded-lg bg-violet-100 px-3 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-200"
+                          >
+                            🔗 {copy.attestationZiyodaSourceLink}
+                          </a>
+                        </li>
+                      );
+                    }
+                    const { firstDate, secondDate, mainRow: r } = item;
+                    const stageLabel = r.stage === 1 ? copy.attestationStage1Short : copy.attestationStage2Short;
+                    const professionLabel = r.profession === 'doctor' ? copy.attestationDoctor : copy.attestationNurse;
+                    return (
+                      <li
+                        key={`merged-${r.full_name}-${r.stage}-${i}`}
+                        className="rounded-xl border-2 border-amber-200 bg-gradient-to-br from-amber-50/90 to-white p-4 text-sm shadow-sm"
                       >
-                        🔗 {copy.attestationZiyodaSourceLink}
-                      </a>
-                    </li>
-                  ))}
+                        <p className="mb-2 font-semibold text-amber-800">
+                          ✨ {copy.attestationZiyodaCardIntro}
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          👤 {r.full_name}
+                        </p>
+                        {(r.specialty || r.region) && (
+                          <p className="mt-1 text-slate-600">
+                            {r.specialty && <span>🩺 {r.specialty}</span>}
+                            {r.specialty && r.region && ' · '}
+                            {r.region && <span>📍 {r.region}</span>}
+                          </p>
+                        )}
+                        <p className="mt-2 text-slate-600">
+                          📋 {copy.attestationCategoryLabel}
+                          <br />
+                          <span className="font-medium">{stageLabel} · {professionLabel}</span>
+                        </p>
+                        <p className="mt-2 rounded-lg bg-amber-100 p-2 text-sm font-medium text-amber-900">
+                          ⚠️ {copy.attestationSecondInvitation.replace('{{firstDate}}', firstDate).replace('{{secondDate}}', secondDate)}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {copy.attestationZiyodaListFrom} {secondDate}
+                        </p>
+                        <a
+                          href={r.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-3 inline-flex items-center gap-1 rounded-lg bg-violet-100 px-3 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-200"
+                        >
+                          🔗 {copy.attestationZiyodaSourceLink}
+                        </a>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
