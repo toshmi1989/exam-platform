@@ -81,6 +81,8 @@ export default function OralExamPage() {
   const [audioError, setAudioError] = useState<string | null>(null);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [answerVisible, setAnswerVisible] = useState<Record<string, boolean>>({});
+  const [goToInput, setGoToInput] = useState('');
 
   const orderedQuestions = useMemo(() => {
     if (orderMode === 'random' && questions.length > 0) {
@@ -153,6 +155,10 @@ export default function OralExamPage() {
       // ignore
     }
   }, [orderMode, examId, index]);
+
+  useEffect(() => {
+    setGoToInput('');
+  }, [index]);
 
   const showAnswer = useCallback(async (questionId: string) => {
     if (answerCache[questionId]?.length) return;
@@ -298,6 +304,7 @@ export default function OralExamPage() {
         title: 'Oral exam',
         subtitle: 'Study questions and reveal answers.',
         showAnswer: 'Show answer',
+        hideAnswer: 'Hide answer',
         playAudio: 'Ziyoda explain!',
         stopAudio: 'Ziyoda stop!',
         preparing: 'Ziyoda is preparing...',
@@ -308,6 +315,7 @@ export default function OralExamPage() {
         next: 'Next',
         questionNum: (n: number, t: number) => `Question ${n} of ${t}`,
         goToQuestion: 'Go to question',
+        goToOf: 'of',
         close: 'Close',
         finish: 'Finish',
         openInRussian: 'Open in Russian',
@@ -326,6 +334,7 @@ export default function OralExamPage() {
         title: "Og'zaki imtihon",
         subtitle: "Savollarni o'rganing va javoblarni ko'ring.",
         showAnswer: "Javobni ko'rsatish",
+        hideAnswer: "Javobni yashirish",
         playAudio: "Ziyoda tushuntir!",
         stopAudio: "Ziyoda to'xtat!",
         preparing: "Ziyoda tayyorlanmoqda...",
@@ -336,6 +345,7 @@ export default function OralExamPage() {
         next: 'Keyingi',
         questionNum: (n: number, t: number) => `${n} / ${t} savol`,
         goToQuestion: "Savolga o'tish",
+        goToOf: '/',
         close: 'Yopish',
         finish: 'Tugatish',
         openInRussian: "Ruscha ochish",
@@ -353,6 +363,7 @@ export default function OralExamPage() {
       title: 'Устный экзамен',
       subtitle: 'Изучайте вопросы и открывайте ответы.',
         showAnswer: 'Показать ответ',
+        hideAnswer: 'Скрыть ответ',
         playAudio: 'Зиёда объясни!',
         stopAudio: 'Зиёда хватит!',
         preparing: 'Зиёда готовится...',
@@ -363,6 +374,7 @@ export default function OralExamPage() {
       next: 'Далее',
       questionNum: (n: number, t: number) => `Вопрос ${n} из ${t}`,
       goToQuestion: 'К вопросу',
+      goToOf: 'из',
       close: 'Закрыть',
       finish: 'Завершить',
       openInRussian: 'Открыть на русском',
@@ -451,12 +463,22 @@ export default function OralExamPage() {
             <div className="mt-4 flex gap-2">
               <Button
                 type="button"
-                onClick={() => showAnswer(current.id)}
+                onClick={() => {
+                  const visible = answerVisible[current.id];
+                  if (visible) {
+                    setAnswerVisible((prev) => ({ ...prev, [current.id]: false }));
+                  } else {
+                    setAnswerVisible((prev) => ({ ...prev, [current.id]: true }));
+                    if (answerCache[current.id] === undefined && loadingAnswerId !== current.id) {
+                      showAnswer(current.id);
+                    }
+                  }
+                }}
                 disabled={loadingAnswerId === current.id}
               >
-                {copy.showAnswer}
+                {answerVisible[current.id] ? (copy as { hideAnswer?: string }).hideAnswer ?? 'Скрыть ответ' : copy.showAnswer}
               </Button>
-              {answerCache[current.id] && (
+              {answerVisible[current.id] && answerCache[current.id] && (
                 <>
                   <Button
                     type="button"
@@ -513,7 +535,7 @@ export default function OralExamPage() {
                 )}
               </div>
             )}
-            {(answerCache[current.id] !== undefined || loadingAnswerId === current.id) && (
+            {(answerVisible[current.id] && (answerCache[current.id] !== undefined || loadingAnswerId === current.id)) && (
               <div className="mt-4 overflow-hidden rounded-xl border-2 border-[#2AABEE]/20 bg-gradient-to-b from-slate-50 to-white shadow-sm">
                 <div className="border-b border-slate-200 bg-[#2AABEE]/10 px-4 py-2.5">
                   <p className="text-sm font-semibold text-slate-800">
@@ -597,30 +619,52 @@ export default function OralExamPage() {
           </Card>
 
           {orderMode === 'order' && total > 1 && (
-            <div className="rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2">
-              <p className="mb-2 text-xs font-medium text-slate-500">
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2">
+              <span className="text-sm font-medium text-slate-600">
                 {(copy as { goToQuestion?: string }).goToQuestion ?? 'К вопросу'}
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {orderedQuestions.map((_, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => {
+              </span>
+              <input
+                type="number"
+                min={1}
+                max={total}
+                value={goToInput === '' ? index + 1 : goToInput}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/\D/g, '');
+                  if (raw === '') {
+                    setGoToInput('');
+                    return;
+                  }
+                  const n = parseInt(raw, 10);
+                  if (Number.isFinite(n)) {
+                    const clamped = Math.min(total, Math.max(1, n));
+                    setGoToInput(String(clamped));
+                  }
+                }}
+                onBlur={() => {
+                  const n = parseInt(goToInput, 10);
+                  if (Number.isFinite(n) && n >= 1 && n <= total) {
+                    stopAudio();
+                    setIndex(n - 1);
+                  }
+                  setGoToInput('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const n = parseInt(goToInput || String(index + 1), 10);
+                    if (Number.isFinite(n) && n >= 1 && n <= total) {
                       stopAudio();
-                      setIndex(i);
-                    }}
-                    className={`min-w-[2rem] rounded-lg px-2 py-1.5 text-sm font-medium transition ${
-                      i === index
-                        ? 'bg-indigo-600 text-white shadow-sm'
-                        : 'bg-white text-slate-600 shadow-sm ring-1 ring-slate-200 hover:bg-slate-100'
-                    }`}
-                    aria-label={`${(copy as { questionNum?: (n: number, t: number) => string }).questionNum?.(i + 1, total) ?? `Вопрос ${i + 1}`}`}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
-              </div>
+                      setIndex(n - 1);
+                    }
+                    setGoToInput('');
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
+                className="w-14 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-center text-sm tabular-nums text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                aria-label={`${(copy as { goToQuestion?: string }).goToQuestion ?? 'К вопросу'} 1 ${(copy as { goToOf?: string }).goToOf ?? 'из'} ${total}`}
+              />
+              <span className="text-sm text-slate-500 tabular-nums">
+                {(copy as { goToOf?: string }).goToOf ?? 'из'} {total}
+              </span>
             </div>
           )}
 
