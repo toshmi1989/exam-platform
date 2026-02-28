@@ -242,6 +242,7 @@ function CabinetClient() {
         attestationStage1Short: 'Stage 1 (Test)',
         attestationStage2Short: 'Stage 2 (Oral)',
         attestationSecondInvitation: 'Invited a second time for this date ({{secondDate}}); first time was {{firstDate}}. If they do not participate the second time either, a new application will be required.',
+        attestationOralAfterTest: 'Successfully passed the 1st stage on {{testDate}} and is invited to the 2nd stage on {{oralDate}}. Good luck!',
       };
     }
     if (language === 'Узбекский') {
@@ -291,6 +292,7 @@ function CabinetClient() {
         attestationStage1Short: 'Birinchi bosqich (test)',
         attestationStage2Short: 'Ikkinchi bosqich (og\'zaki)',
         attestationSecondInvitation: 'Ikkinchi marta shu sanaga ({{secondDate}}) taklif qilindi, birinchi marta {{firstDate}} edi. Agar ikkinchi marta ham qatnashmasa — yangi ariza topshirish kerak bo\'ladi.',
+        attestationOralAfterTest: '1-bosqichni {{testDate}} da muvaffaqiyatli topshirdi, 2-bosqichga {{oralDate}} da taklif qilindi. Omad!',
       };
     }
     return {
@@ -339,6 +341,7 @@ function CabinetClient() {
       attestationStage1Short: '1-й этап (тест)',
       attestationStage2Short: '2-й этап (устный)',
       attestationSecondInvitation: 'Приглашена во второй раз на эту дату ({{secondDate}}), первый раз была {{firstDate}}. Если не будет участвовать и во второй раз — придётся сдавать новую заявку!',
+      attestationOralAfterTest: 'Успешно прошёл(а) 1-й этап аттестации {{testDate}}, приглашён(а) на 2-й этап на {{oralDate}}. Удачи!',
     };
   }, [language]);
 
@@ -350,26 +353,47 @@ function CabinetClient() {
   type AttestationRow = typeof attestationResults[number];
   const attestationDisplayGroups = useMemo(() => {
     const normalizeName = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
-    const key = (r: AttestationRow) => `${normalizeName(r.full_name)}|${r.stage}`;
-    const groups = new Map<string, AttestationRow[]>();
-    for (const r of attestationResults) {
-      const k = key(r);
-      if (!groups.has(k)) groups.set(k, []);
-      groups.get(k)!.push(r);
-    }
     const getSortDate = (r: AttestationRow) => r.published_date || r.exam_date || '';
     const formatDate = (d: string) => (d.length === 10 && d.includes('-') ? d.split('-').reverse().join('.') : d);
-    const out: ({ type: 'single'; row: AttestationRow } | { type: 'merged'; firstDate: string; secondDate: string; mainRow: AttestationRow })[] = [];
-    groups.forEach((rows) => {
-      rows.sort((a, b) => getSortDate(a).localeCompare(getSortDate(b)));
-      if (rows.length === 1) {
-        out.push({ type: 'single', row: rows[0] });
-      } else {
-        const lastTwo = rows.slice(-2);
-        const firstDate = formatDate(getSortDate(lastTwo[0])) || '—';
-        const secondDate = formatDate(getSortDate(lastTwo[lastTwo.length - 1])) || '—';
-        out.push({ type: 'merged', firstDate, secondDate, mainRow: lastTwo[lastTwo.length - 1] });
+
+    const byPerson = new Map<string, AttestationRow[]>();
+    for (const r of attestationResults) {
+      const k = normalizeName(r.full_name);
+      if (!byPerson.has(k)) byPerson.set(k, []);
+      byPerson.get(k)!.push(r);
+    }
+
+    type OutItem =
+      | { type: 'single'; row: AttestationRow }
+      | { type: 'merged'; firstDate: string; secondDate: string; mainRow: AttestationRow }
+      | { type: 'oral_after_test'; oralRow: AttestationRow; testDate: string; oralDate: string };
+    const out: OutItem[] = [];
+
+    byPerson.forEach((rows) => {
+      const testRows = rows.filter((r) => r.stage === 1).sort((a, b) => getSortDate(a).localeCompare(getSortDate(b)));
+      const oralRows = rows.filter((r) => r.stage === 2).sort((a, b) => getSortDate(a).localeCompare(getSortDate(b)));
+
+      if (oralRows.length >= 1 && testRows.length >= 1) {
+        const oralRow = oralRows[oralRows.length - 1];
+        const testDate = formatDate(getSortDate(testRows[testRows.length - 1])) || '—';
+        const oralDate = formatDate(getSortDate(oralRow)) || '—';
+        out.push({ type: 'oral_after_test', oralRow, testDate, oralDate });
+        return;
       }
+
+      const emitStage = (stageRows: AttestationRow[]) => {
+        if (stageRows.length === 0) return;
+        if (stageRows.length === 1) {
+          out.push({ type: 'single', row: stageRows[0] });
+        } else {
+          const lastTwo = stageRows.slice(-2);
+          const firstDate = formatDate(getSortDate(lastTwo[0])) || '—';
+          const secondDate = formatDate(getSortDate(lastTwo[lastTwo.length - 1])) || '—';
+          out.push({ type: 'merged', firstDate, secondDate, mainRow: lastTwo[lastTwo.length - 1] });
+        }
+      };
+      emitStage(testRows);
+      emitStage(oralRows);
     });
     return out;
   }, [attestationResults]);
@@ -518,13 +542,10 @@ function CabinetClient() {
                             <p className="mt-1 text-slate-600">
                               {r.specialty && <span>🩺 {r.specialty}</span>}
                               {r.specialty && r.region && <br />}
-                              {r.region && <span>📍 {copy.attestationRegionLabel}: {r.region}</span>}
+                              {r.region && <span>📋 {copy.attestationRegionLabel}: {r.region}</span>}
                             </p>
                           )}
-                          <div className="mt-2 block">
-                            <p className="text-slate-600">📋 {copy.attestationCategoryLabel}</p>
-                            <p className="mt-0.5 font-medium text-slate-700">{stageLabel} · {professionLabel}</p>
-                          </div>
+                          <p className="mt-2 font-medium text-slate-700">{stageLabel} · {professionLabel}</p>
                           <p className="mt-2 font-medium text-slate-800">
                             {r.exam_date ? (
                               <>
@@ -569,13 +590,10 @@ function CabinetClient() {
                           <p className="mt-1 text-slate-600">
                             {r.specialty && <span>🩺 {r.specialty}</span>}
                             {r.specialty && r.region && <br />}
-                            {r.region && <span>📍 {copy.attestationRegionLabel}: {r.region}</span>}
+                            {r.region && <span>📋 {copy.attestationRegionLabel}: {r.region}</span>}
                           </p>
                         )}
-                        <div className="mt-2 block">
-                          <p className="text-slate-600">📋 {copy.attestationCategoryLabel}</p>
-                          <p className="mt-0.5 font-medium text-slate-700">{stageLabel} · {professionLabel}</p>
-                        </div>
+                        <p className="mt-2 font-medium text-slate-700">{stageLabel} · {professionLabel}</p>
                         <p className="mt-2 rounded-lg bg-amber-100 p-2 text-sm font-medium text-amber-900">
                           ⚠️ {copy.attestationSecondInvitation.replace('{{firstDate}}', firstDate).replace('{{secondDate}}', secondDate)}
                         </p>
@@ -592,6 +610,60 @@ function CabinetClient() {
                         </a>
                       </li>
                     );
+                    }
+                    if (item.type === 'oral_after_test') {
+                    const { oralRow: r, testDate, oralDate } = item;
+                    const stageLabel = copy.attestationStage2Short;
+                    const professionLabel = r.profession === 'doctor' ? copy.attestationDoctor : copy.attestationNurse;
+                    return (
+                      <li
+                        key={`oral-after-test-${r.full_name}-${i}`}
+                        className="rounded-xl border-2 border-violet-200 bg-gradient-to-br from-violet-50/90 to-white p-4 text-sm shadow-sm"
+                      >
+                        <p className="mb-2 font-semibold text-violet-800">
+                          ✨ {copy.attestationZiyodaCardIntro}
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          👤 {r.full_name}
+                        </p>
+                        {(r.specialty || r.region) && (
+                          <p className="mt-1 text-slate-600">
+                            {r.specialty && <span>🩺 {r.specialty}</span>}
+                            {r.specialty && r.region && <br />}
+                            {r.region && <span>📋 {copy.attestationRegionLabel}: {r.region}</span>}
+                          </p>
+                        )}
+                        <p className="mt-2 font-medium text-slate-700">{stageLabel} · {professionLabel}</p>
+                        <p className="mt-2 rounded-lg bg-emerald-100 p-2 text-sm font-medium text-emerald-900">
+                          ✅ {copy.attestationOralAfterTest.replace('{{testDate}}', testDate).replace('{{oralDate}}', oralDate)}
+                        </p>
+                        <p className="mt-2 font-medium text-slate-800">
+                          {r.exam_date ? (
+                            <>
+                              📅 {copy.attestationZiyodaExamDate}: {r.exam_date}
+                              {r.exam_time ? ` ${r.exam_time}` : ''}
+                            </>
+                          ) : r.published_date ? (
+                            <>
+                              📅 {copy.attestationZiyodaListFrom}{' '}
+                              {r.published_date.split('-').reverse().join('.')}
+                            </>
+                          ) : (
+                            <>📅 {copy.attestationZiyodaExamDate}: {copy.attestationZiyodaDateTbd}</>
+                          )}
+                        </p>
+                        <a
+                          href={r.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-3 inline-flex items-center gap-1 rounded-lg bg-violet-100 px-3 py-1.5 text-xs font-medium text-violet-700 hover:bg-violet-200"
+                        >
+                          🔗 {copy.attestationZiyodaSourceLink}
+                        </a>
+                      </li>
+                    );
+                    }
+                    return null;
                   })}
                 </ul>
               </div>
