@@ -75,16 +75,21 @@ router.get('/search', async (req: Request, res: Response) => {
     });
   }
   const normalized = normalizeName(name);
+  console.log('[attestation/search] query:', { name: name.slice(0, 50), normalized: normalized.slice(0, 50) });
   try {
     const total = await prisma.attestationPerson.count();
+    console.log('[attestation/search] attestation_people count:', total);
     if (total === 0) {
+      console.log('[attestation/search] DB empty, running parser...');
       const result = await runParserOnce();
       if (!result.ok) {
+        console.error('[attestation/search] parser failed, hint:', result.hint);
         const message = result.hint
           ? `База данных аттестаций пуста. ${result.hint}`
           : 'База данных аттестаций пуста. Не удалось загрузить данные с сайта. Попробуйте позже.';
         return res.status(503).json({ ok: false, error: message });
       }
+      console.log('[attestation/search] parser finished, re-querying count');
     }
 
     const rows = await prisma.attestationPerson.findMany({
@@ -107,6 +112,7 @@ router.get('/search', async (req: Request, res: Response) => {
         sourceUrl: true,
       },
     });
+    console.log('[attestation/search] found rows:', rows.length);
     const list = rows.map((r) => ({
       full_name: r.fullName,
       specialty: r.specialty,
@@ -126,7 +132,9 @@ router.get('/search', async (req: Request, res: Response) => {
 
     return res.status(200).json({ items: list, dataCoverage });
   } catch (e) {
-    console.error('[attestation/search]', e);
+    const err = e instanceof Error ? e : new Error(String(e));
+    console.error('[attestation/search] error:', err.message);
+    console.error('[attestation/search] stack:', err.stack);
     return res.status(500).json({ ok: false, error: 'Ошибка поиска' });
   }
 });
