@@ -406,3 +406,21 @@ model OralExamAnswer {
   @@index([sessionId])
   @@index([questionId])
 }
+
+model AttestationPerson {
+  id                 String    @id @default(cuid())
+  fullName           String    @map("full_name")
+  fullNameNormalized String   @map("full_name_normalized")
+  specialty          String?
+  region             String?
+  stage              Int
+  profession         String
+  examDate           String?  @map("exam_date")
+  examTime           String?  @map("exam_time")
+  sourceUrl          String   @map("source_url")
+  publishedDate      DateTime? @map("published_date")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@index([fullNameNormalized], name: "idx_attestation_name")
+  @@map("attestation_people")
+}

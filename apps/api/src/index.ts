@@ -10,6 +10,7 @@ import adminRouter from './modules/admin/admin.routes';
 import chatRouter from './modules/chat/chat.routes';
 import broadcastsRouter from './modules/broadcasts/broadcasts.routes';
 import examsRouter from './modules/exams/exams.routes';
+import attestationRouter from './modules/attestation/attestation.routes';
 import paymentsRouter from './modules/payments/payments.routes';
 import aiRouter from './modules/ai/ai.routes';
 import oralRouter from './modules/ai/oral.routes';
@@ -54,6 +55,7 @@ app.use((req, res, next) => {
 });
 app.use('/categories', categoriesRouter);
 app.use('/exams', examsRouter);
+app.use('/attestation', attestationRouter);
 
 // TODO: add auth middleware that populates req.user from Telegram.
 app.get('/health', (_req, res) => {

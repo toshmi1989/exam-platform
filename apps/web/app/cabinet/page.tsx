@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import { readTelegramUser, storeTelegramUser, TelegramUserSnapshot } from '../../lib/telegramUser';
 import { readSettings, Language } from '../../lib/uiSettings';
 import { getProfile, getChatUnread, getBroadcasts, dismissBroadcast as dismissBroadcastApi, type BroadcastItem } from '../../lib/api';
+import { apiFetch } from '../../lib/api/client';
 import { getQuoteByIndex, CABINET_QUOTES } from '../../data/cabinetQuotes';
 
 export const dynamic = 'force-dynamic';
@@ -25,6 +26,13 @@ function CabinetClient() {
   const [broadcasts, setBroadcasts] = useState<BroadcastItem[]>([]);
   const [dismissedBroadcastIds, setDismissedBroadcastIds] = useState<Set<string>>(new Set());
   const [expandedBroadcastId, setExpandedBroadcastId] = useState<string | null>(null);
+  const [attestationQuery, setAttestationQuery] = useState('');
+  const [attestationLoading, setAttestationLoading] = useState(false);
+  const [attestationError, setAttestationError] = useState<string | null>(null);
+  const [attestationResults, setAttestationResults] = useState<
+    { full_name: string; specialty?: string | null; region?: string | null; stage: number; profession: string; exam_date?: string | null; exam_time?: string | null; source_url: string }[]
+  >([]);
+  const [attestationSearched, setAttestationSearched] = useState(false);
   const [quoteIndex] = useState(() =>
     Math.floor(Math.random() * CABINET_QUOTES.length)
   );
@@ -110,6 +118,40 @@ function CabinetClient() {
     }
   }
 
+  async function searchAttestation() {
+    const name = attestationQuery.trim();
+    if (name.length < 3) {
+      setAttestationError(copy.attestationMinChars);
+      setAttestationResults([]);
+      return;
+    }
+    setAttestationError(null);
+    setAttestationSearched(false);
+    setAttestationLoading(true);
+    try {
+      const { response, data } = await apiFetch(
+        `/attestation/search?name=${encodeURIComponent(name)}`
+      );
+      setAttestationSearched(true);
+      if (!response.ok) {
+        const msg = typeof (data as { error?: string })?.error === 'string'
+          ? (data as { error: string }).error
+          : copy.attestationError;
+        setAttestationError(msg);
+        setAttestationResults([]);
+        return;
+      }
+      const list = Array.isArray(data) ? data : [];
+      setAttestationResults(list);
+    } catch {
+      setAttestationSearched(true);
+      setAttestationError(copy.attestationError);
+      setAttestationResults([]);
+    } finally {
+      setAttestationLoading(false);
+    }
+  }
+
   const visibleBroadcasts = useMemo(
     () => broadcasts.filter((b) => !dismissedBroadcastIds.has(b.id)),
     [broadcasts, dismissedBroadcastIds]
@@ -158,6 +200,18 @@ function CabinetClient() {
         broadcastHint: 'You can close each announcement with the red button.',
         broadcastTapToOpen: 'Tap to read full',
         broadcastModalClose: 'Close',
+        attestationTitle: 'Attestation',
+        attestationHint: 'Find attestation date by full name.',
+        attestationPlaceholder: 'Full name',
+        attestationSearch: 'Search',
+        attestationMinChars: 'Enter at least 3 characters.',
+        attestationEmpty: 'No results found.',
+        attestationError: 'Search error.',
+        attestationStage1: 'Test',
+        attestationStage2: 'Oral',
+        attestationDoctor: 'Doctor',
+        attestationNurse: 'Nurse',
+        attestationSource: 'Source',
       };
     }
     if (language === 'Узбекский') {
@@ -184,6 +238,18 @@ function CabinetClient() {
         broadcastHint: 'Har bir e\'lonni qizil tugma bilan yoping.',
         broadcastTapToOpen: 'To\'liq o\'qish uchun bosing',
         broadcastModalClose: 'Yopish',
+        attestationTitle: 'Attestatsiya',
+        attestationHint: 'F.I.O. bo\'yicha attestatsiya sanasini bilib oling.',
+        attestationPlaceholder: 'F.I.O.',
+        attestationSearch: 'Qidirish',
+        attestationMinChars: 'Kamida 3 ta belgi kiriting.',
+        attestationEmpty: 'Hech narsa topilmadi.',
+        attestationError: 'Qidiruv xatosi.',
+        attestationStage1: 'Test',
+        attestationStage2: 'Og\'zaki',
+        attestationDoctor: 'Shifokor',
+        attestationNurse: 'Hamshira',
+        attestationSource: 'Manba',
       };
     }
     return {
@@ -209,6 +275,18 @@ function CabinetClient() {
       broadcastHint: 'Каждое объявление можно закрыть красной кнопкой.',
       broadcastTapToOpen: 'Нажмите, чтобы открыть полностью',
       broadcastModalClose: 'Закрыть',
+      attestationTitle: 'Аттестация',
+      attestationHint: 'Узнать дату аттестации по ФИО.',
+      attestationPlaceholder: 'ФИО',
+      attestationSearch: 'Искать',
+      attestationMinChars: 'Введите минимум 3 символа.',
+      attestationEmpty: 'Ничего не найдено.',
+      attestationError: 'Ошибка поиска.',
+      attestationStage1: 'Тест',
+      attestationStage2: 'Устный',
+      attestationDoctor: 'Врач',
+      attestationNurse: 'Медсестра',
+      attestationSource: 'Источник',
     };
   }, [language]);
 
@@ -304,6 +382,65 @@ function CabinetClient() {
               ) : null}
             </Card>
           )}
+
+          <Card title={copy.attestationTitle}>
+            <p className="text-sm text-slate-600">{copy.attestationHint}</p>
+            <div className="mt-3 flex gap-2">
+              <input
+                type="text"
+                value={attestationQuery}
+                onChange={(e) => setAttestationQuery(e.target.value)}
+                placeholder={copy.attestationPlaceholder}
+                className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-slate-500 focus:ring-1 focus:ring-slate-500"
+                aria-label={copy.attestationPlaceholder}
+              />
+              <Button
+                size="md"
+                onClick={searchAttestation}
+                disabled={attestationQuery.trim().length < 3 || attestationLoading}
+              >
+                {attestationLoading ? '…' : copy.attestationSearch}
+              </Button>
+            </div>
+            {attestationQuery.trim().length > 0 && attestationQuery.trim().length < 3 && (
+              <p className="mt-2 text-xs text-amber-600">{copy.attestationMinChars}</p>
+            )}
+            {attestationError && (
+              <p className="mt-2 text-sm text-red-600">{attestationError}</p>
+            )}
+            {attestationSearched && !attestationLoading && attestationResults.length === 0 && !attestationError && (
+              <p className="mt-3 text-sm text-slate-500">{copy.attestationEmpty}</p>
+            )}
+            {!attestationLoading && attestationResults.length > 0 && (
+              <ul className="mt-4 flex flex-col gap-3">
+                {attestationResults.map((r, i) => (
+                  <li key={`${r.source_url}-${r.full_name}-${i}`} className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-sm">
+                    <p className="font-semibold text-slate-900">{r.full_name}</p>
+                    {(r.specialty || r.region) && (
+                      <p className="mt-1 text-slate-600">
+                        {[r.specialty, r.region].filter(Boolean).join(' · ')}
+                      </p>
+                    )}
+                    <p className="mt-1 text-slate-500">
+                      {copy.attestationStage1}/{copy.attestationStage2}: {r.stage === 1 ? copy.attestationStage1 : copy.attestationStage2}
+                      {' · '}
+                      {r.profession === 'doctor' ? copy.attestationDoctor : copy.attestationNurse}
+                      {r.exam_date ? ` · ${r.exam_date}` : ''}
+                      {r.exam_time ? ` ${r.exam_time}` : ''}
+                    </p>
+                    <a
+                      href={r.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-block text-xs font-medium text-blue-600 hover:underline"
+                    >
+                      {copy.attestationSource}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
 
           {visibleBroadcasts.length > 0 ? (
             <Card title={copy.broadcastsTitle}>
