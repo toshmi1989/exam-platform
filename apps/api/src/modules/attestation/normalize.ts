@@ -11,3 +11,10 @@ export function normalizeName(name: string): string {
   }
   return s.trim();
 }
+
+/** First 3 words only — на сайте не всегда есть 4-е слово (например QIZI). */
+export function firstThreeWords(name: string): string {
+  const normalized = normalizeName(name);
+  const words = normalized.split(/\s+/).filter(Boolean);
+  return words.slice(0, 3).join(' ').trim();
+}

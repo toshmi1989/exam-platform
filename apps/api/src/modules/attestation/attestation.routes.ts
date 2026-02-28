@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import path from 'path';
 import { spawn } from 'child_process';
 import { prisma } from '../../db/prisma';
-import { normalizeName } from './normalize';
+import { normalizeName, firstThreeWords } from './normalize';
 
 const router = Router();
 
@@ -131,7 +131,9 @@ router.get('/search', async (req: Request, res: Response) => {
     });
   }
   const normalized = normalizeName(name);
-  console.log('[attestation/search] query:', { name: name.slice(0, 50), normalized: normalized.slice(0, 50) });
+  const searchQuery = firstThreeWords(name);
+  const searchPattern = searchQuery.length >= 3 ? searchQuery : normalized;
+  console.log('[attestation/search] query:', { name: name.slice(0, 50), searchPattern: searchPattern.slice(0, 50) });
   try {
     const total = await prisma.attestationPerson.count();
     console.log('[attestation/search] attestation_people count:', total);
@@ -150,7 +152,7 @@ router.get('/search', async (req: Request, res: Response) => {
 
     const rows = await prisma.attestationPerson.findMany({
       where: {
-        fullNameNormalized: { contains: normalized, mode: 'insensitive' },
+        fullNameNormalized: { contains: searchPattern, mode: 'insensitive' },
       },
       orderBy: [
         { examDate: { sort: 'desc', nulls: 'last' } },

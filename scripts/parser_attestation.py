@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 USER_AGENT = "ZiyoMed-Attestation-Parser/1.0"
 TIMEOUT = 10
 SLEEP_BETWEEN_REQUESTS = 1
-MAX_POSTS_PER_CATEGORY = 5
+MAX_POSTS_PER_CATEGORY = 10
 MIN_PUBLISH_YEAR = 2025
 
 # Параметр ?l= на странице категории выбирает регион (1–14: Qoraqalpog'iston, Andijon, ... Xorazm).

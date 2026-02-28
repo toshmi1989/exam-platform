@@ -353,12 +353,14 @@ function CabinetClient() {
   type AttestationRow = typeof attestationResults[number];
   const attestationDisplayGroups = useMemo(() => {
     const normalizeName = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+    const firstThreeWords = (s: string) => normalizeName(s).split(/\s+/).filter(Boolean).slice(0, 3).join(' ');
     const getSortDate = (r: AttestationRow) => r.published_date || r.exam_date || '';
     const formatDate = (d: string) => (d.length === 10 && d.includes('-') ? d.split('-').reverse().join('.') : d);
 
     const byPerson = new Map<string, AttestationRow[]>();
     for (const r of attestationResults) {
-      const k = normalizeName(r.full_name);
+      const k = firstThreeWords(r.full_name);
+      if (!k) continue;
       if (!byPerson.has(k)) byPerson.set(k, []);
       byPerson.get(k)!.push(r);
     }
