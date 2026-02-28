@@ -30,7 +30,7 @@ function CabinetClient() {
   const [attestationLoading, setAttestationLoading] = useState(false);
   const [attestationError, setAttestationError] = useState<string | null>(null);
   const [attestationResults, setAttestationResults] = useState<
-    { full_name: string; specialty?: string | null; region?: string | null; stage: number; profession: string; exam_date?: string | null; exam_time?: string | null; source_url: string }[]
+    { full_name: string; specialty?: string | null; region?: string | null; stage: number; profession: string; exam_date?: string | null; exam_time?: string | null; source_url: string; published_date?: string | null }[]
   >([]);
   const [attestationDataCoverage, setAttestationDataCoverage] = useState<string | null>(null);
   const [attestationSearched, setAttestationSearched] = useState(false);
@@ -153,6 +153,7 @@ function CabinetClient() {
         exam_date?: string | null;
         exam_time?: string | null;
         source_url: string;
+        published_date?: string | null;
       };
       const payload = data as { items?: AttestationResultItem[]; dataCoverage?: string };
       const list = Array.isArray(payload?.items) ? payload.items : [];
@@ -235,6 +236,7 @@ function CabinetClient() {
         attestationZiyodaExamDate: 'Exam date',
         attestationZiyodaDateTbd: 'see official source for date',
         attestationZiyodaSourceLink: 'Open official source',
+        attestationZiyodaListFrom: 'List from',
       };
     }
     if (language === 'Узбекский') {
@@ -278,6 +280,7 @@ function CabinetClient() {
         attestationZiyodaExamDate: 'Imtihon sanasi',
         attestationZiyodaDateTbd: 'sana rasmiy manbada',
         attestationZiyodaSourceLink: 'Rasmiy manbani ochish',
+        attestationZiyodaListFrom: 'Ro\'yxat sanasi',
       };
     }
     return {
@@ -320,6 +323,7 @@ function CabinetClient() {
       attestationZiyodaExamDate: 'Дата экзамена',
       attestationZiyodaDateTbd: 'уточняется в официальном источнике',
       attestationZiyodaSourceLink: 'Подробности в официальном источнике',
+      attestationZiyodaListFrom: 'Список от',
     };
   }, [language]);
 
@@ -480,6 +484,11 @@ function CabinetClient() {
                           <>
                             📅 {copy.attestationZiyodaExamDate}: {r.exam_date}
                             {r.exam_time ? ` ${r.exam_time}` : ''}
+                          </>
+                        ) : r.published_date ? (
+                          <>
+                            📅 {copy.attestationZiyodaListFrom}{' '}
+                            {r.published_date.split('-').reverse().join('.')}
                           </>
                         ) : (
                           <>📅 {copy.attestationZiyodaExamDate}: {copy.attestationZiyodaDateTbd}</>

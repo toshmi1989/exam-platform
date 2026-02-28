@@ -166,6 +166,7 @@ router.get('/search', async (req: Request, res: Response) => {
         examDate: true,
         examTime: true,
         sourceUrl: true,
+        publishedDate: true,
       },
     });
     console.log('[attestation/search] found rows:', rows.length);
@@ -178,6 +179,7 @@ router.get('/search', async (req: Request, res: Response) => {
       exam_date: r.examDate,
       exam_time: r.examTime,
       source_url: r.sourceUrl,
+      published_date: r.publishedDate ? r.publishedDate.toISOString().slice(0, 10) : null,
     }));
 
     let dataCoverage: string | undefined;
