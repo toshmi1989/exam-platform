@@ -69,6 +69,7 @@ export default function OralExamPage() {
   const [error, setError] = useState<string | null>(null);
   const [accessDenied, setAccessDenied] = useState(false);
   const [index, setIndex] = useState(0);
+  const lastIndexRestored = useRef(false);
   const [answerCache, setAnswerCache] = useState<Record<string, string>>({});
   const [loadingAnswerId, setLoadingAnswerId] = useState<string | null>(null);
   const [answerError, setAnswerError] = useState<string | null>(null);
@@ -112,6 +113,7 @@ export default function OralExamPage() {
     setLoading(true);
     setError(null);
     setAccessDenied(false);
+    lastIndexRestored.current = false;
     getOralQuestions(examId)
       .then(setQuestions)
       .catch((err: { reasonCode?: string }) => {
@@ -123,6 +125,34 @@ export default function OralExamPage() {
       })
       .finally(() => setLoading(false));
   }, [examId]);
+
+  // В режиме «по очереди» восстанавливаем последний просмотренный вопрос при загрузке
+  useEffect(() => {
+    if (orderMode !== 'order' || !examId || orderedQuestions.length === 0 || lastIndexRestored.current) return;
+    lastIndexRestored.current = true;
+    try {
+      const key = `ziyomed:oral-prep:${examId}`;
+      const saved = localStorage.getItem(key);
+      if (saved !== null) {
+        const n = parseInt(saved, 10);
+        if (Number.isFinite(n) && n >= 0 && n < orderedQuestions.length) {
+          setIndex(n);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [examId, orderMode, orderedQuestions.length]);
+
+  // В режиме «по очереди» сохраняем индекс при переключении вопроса
+  useEffect(() => {
+    if (orderMode !== 'order' || !examId) return;
+    try {
+      localStorage.setItem(`ziyomed:oral-prep:${examId}`, String(index));
+    } catch {
+      // ignore
+    }
+  }, [orderMode, examId, index]);
 
   const showAnswer = useCallback(async (questionId: string) => {
     if (answerCache[questionId]?.length) return;
@@ -277,6 +307,7 @@ export default function OralExamPage() {
         prev: 'Previous',
         next: 'Next',
         questionNum: (n: number, t: number) => `Question ${n} of ${t}`,
+        goToQuestion: 'Go to question',
         close: 'Close',
         finish: 'Finish',
         openInRussian: 'Open in Russian',
@@ -304,6 +335,7 @@ export default function OralExamPage() {
         prev: 'Oldingi',
         next: 'Keyingi',
         questionNum: (n: number, t: number) => `${n} / ${t} savol`,
+        goToQuestion: "Savolga o'tish",
         close: 'Yopish',
         finish: 'Tugatish',
         openInRussian: "Ruscha ochish",
@@ -330,6 +362,7 @@ export default function OralExamPage() {
       prev: 'Назад',
       next: 'Далее',
       questionNum: (n: number, t: number) => `Вопрос ${n} из ${t}`,
+      goToQuestion: 'К вопросу',
       close: 'Закрыть',
       finish: 'Завершить',
       openInRussian: 'Открыть на русском',
@@ -562,6 +595,34 @@ export default function OralExamPage() {
               </div>
             )}
           </Card>
+
+          {orderMode === 'order' && total > 1 && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2">
+              <p className="mb-2 text-xs font-medium text-slate-500">
+                {(copy as { goToQuestion?: string }).goToQuestion ?? 'К вопросу'}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {orderedQuestions.map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => {
+                      stopAudio();
+                      setIndex(i);
+                    }}
+                    className={`min-w-[2rem] rounded-lg px-2 py-1.5 text-sm font-medium transition ${
+                      i === index
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'bg-white text-slate-600 shadow-sm ring-1 ring-slate-200 hover:bg-slate-100'
+                    }`}
+                    aria-label={`${(copy as { questionNum?: (n: number, t: number) => string }).questionNum?.(i + 1, total) ?? `Вопрос ${i + 1}`}`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-col items-center gap-4">
             <div className="flex justify-center gap-2">
