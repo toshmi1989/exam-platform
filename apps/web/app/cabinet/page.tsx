@@ -346,7 +346,8 @@ function CabinetClient() {
 
   type AttestationRow = typeof attestationResults[number];
   const attestationDisplayGroups = useMemo(() => {
-    const key = (r: AttestationRow) => `${r.full_name}|${r.stage}`;
+    const normalizeName = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+    const key = (r: AttestationRow) => `${normalizeName(r.full_name)}|${r.stage}`;
     const groups = new Map<string, AttestationRow[]>();
     for (const r of attestationResults) {
       const k = key(r);
@@ -363,7 +364,7 @@ function CabinetClient() {
       } else {
         const firstDate = formatDate(getSortDate(rows[0]));
         const secondDate = formatDate(getSortDate(rows[rows.length - 1]));
-        out.push({ type: 'merged', firstDate, secondDate, mainRow: rows[rows.length - 1] });
+        out.push({ type: 'merged', firstDate: firstDate || '—', secondDate: secondDate || '—', mainRow: rows[rows.length - 1] });
       }
     });
     return out;
@@ -516,11 +517,10 @@ function CabinetClient() {
                               {r.region && <span>📍 {r.region}</span>}
                             </p>
                           )}
-                          <p className="mt-2 text-slate-600">
-                            📋 {copy.attestationCategoryLabel}
-                            <br />
-                            <span className="font-medium">{stageLabel} · {professionLabel}</span>
-                          </p>
+                          <div className="mt-2 block">
+                            <p className="text-slate-600">📋 {copy.attestationCategoryLabel}</p>
+                            <p className="mt-0.5 font-medium text-slate-700">{stageLabel} · {professionLabel}</p>
+                          </div>
                           <p className="mt-2 font-medium text-slate-800">
                             {r.exam_date ? (
                               <>
@@ -568,11 +568,10 @@ function CabinetClient() {
                             {r.region && <span>📍 {r.region}</span>}
                           </p>
                         )}
-                        <p className="mt-2 text-slate-600">
-                          📋 {copy.attestationCategoryLabel}
-                          <br />
-                          <span className="font-medium">{stageLabel} · {professionLabel}</span>
-                        </p>
+                        <div className="mt-2 block">
+                          <p className="text-slate-600">📋 {copy.attestationCategoryLabel}</p>
+                          <p className="mt-0.5 font-medium text-slate-700">{stageLabel} · {professionLabel}</p>
+                        </div>
                         <p className="mt-2 rounded-lg bg-amber-100 p-2 text-sm font-medium text-amber-900">
                           ⚠️ {copy.attestationSecondInvitation.replace('{{firstDate}}', firstDate).replace('{{secondDate}}', secondDate)}
                         </p>
