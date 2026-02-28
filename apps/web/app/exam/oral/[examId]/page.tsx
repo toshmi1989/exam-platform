@@ -157,7 +157,7 @@ export default function OralExamPage() {
   }, [orderMode, examId, index]);
 
   useEffect(() => {
-    setGoToInput('');
+    setGoToInput(String(index + 1));
   }, [index]);
 
   const showAnswer = useCallback(async (questionId: string) => {
@@ -627,7 +627,8 @@ export default function OralExamPage() {
                 type="number"
                 min={1}
                 max={total}
-                value={goToInput === '' ? index + 1 : goToInput}
+                value={goToInput}
+                placeholder={String(index + 1)}
                 onChange={(e) => {
                   const raw = e.target.value.replace(/\D/g, '');
                   if (raw === '') {
@@ -641,21 +642,32 @@ export default function OralExamPage() {
                   }
                 }}
                 onBlur={() => {
+                  if (goToInput.trim() === '') {
+                    setGoToInput(String(index + 1));
+                    return;
+                  }
                   const n = parseInt(goToInput, 10);
                   if (Number.isFinite(n) && n >= 1 && n <= total) {
                     stopAudio();
                     setIndex(n - 1);
+                  } else {
+                    setGoToInput(String(index + 1));
                   }
-                  setGoToInput('');
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
-                    const n = parseInt(goToInput || String(index + 1), 10);
+                    if (goToInput.trim() === '') {
+                      setGoToInput(String(index + 1));
+                      (e.target as HTMLInputElement).blur();
+                      return;
+                    }
+                    const n = parseInt(goToInput, 10);
                     if (Number.isFinite(n) && n >= 1 && n <= total) {
                       stopAudio();
                       setIndex(n - 1);
+                    } else {
+                      setGoToInput(String(index + 1));
                     }
-                    setGoToInput('');
                     (e.target as HTMLInputElement).blur();
                   }
                 }}
