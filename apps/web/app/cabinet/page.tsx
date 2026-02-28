@@ -32,6 +32,7 @@ function CabinetClient() {
   const [attestationResults, setAttestationResults] = useState<
     { full_name: string; specialty?: string | null; region?: string | null; stage: number; profession: string; exam_date?: string | null; exam_time?: string | null; source_url: string }[]
   >([]);
+  const [attestationDataCoverage, setAttestationDataCoverage] = useState<string | null>(null);
   const [attestationSearched, setAttestationSearched] = useState(false);
   const [quoteIndex] = useState(() =>
     Math.floor(Math.random() * CABINET_QUOTES.length)
@@ -126,6 +127,7 @@ function CabinetClient() {
       return;
     }
     setAttestationError(null);
+    setAttestationDataCoverage(null);
     setAttestationSearched(false);
     setAttestationLoading(true);
     try {
@@ -139,14 +141,20 @@ function CabinetClient() {
           : copy.attestationError;
         setAttestationError(msg);
         setAttestationResults([]);
+        setAttestationDataCoverage(null);
         return;
       }
-      const list = Array.isArray(data) ? data : [];
+      const payload = data as { items?: unknown[]; dataCoverage?: string };
+      const list = Array.isArray(payload?.items) ? payload.items : [];
       setAttestationResults(list);
+      setAttestationDataCoverage(
+        typeof payload?.dataCoverage === 'string' ? payload.dataCoverage : null
+      );
     } catch {
       setAttestationSearched(true);
       setAttestationError(copy.attestationError);
       setAttestationResults([]);
+      setAttestationDataCoverage(null);
     } finally {
       setAttestationLoading(false);
     }
@@ -409,7 +417,9 @@ function CabinetClient() {
               <p className="mt-2 text-sm text-red-600">{attestationError}</p>
             )}
             {attestationSearched && !attestationLoading && attestationResults.length === 0 && !attestationError && (
-              <p className="mt-3 text-sm text-slate-500">{copy.attestationEmpty}</p>
+              <p className="mt-3 text-sm text-slate-500">
+                {attestationDataCoverage ?? copy.attestationEmpty}
+              </p>
             )}
             {!attestationLoading && attestationResults.length > 0 && (
               <ul className="mt-4 flex flex-col gap-3">
