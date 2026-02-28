@@ -22,7 +22,7 @@ async function runParserOnce(): Promise<boolean> {
         encoding: 'utf8',
       });
       if (r.error) {
-        if (r.error.code === 'ENOENT') continue;
+        if ((r.error as NodeJS.ErrnoException).code === 'ENOENT') continue;
         console.error('[attestation] parser spawn error:', r.error);
         return false;
       }
