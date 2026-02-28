@@ -9,9 +9,10 @@ const router = Router();
 /** Project root (exam-platform): from .../modules/attestation up to repo root */
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..', '..', '..');
 
-async function runParserOnce(): Promise<boolean> {
+async function runParserOnce(): Promise<{ ok: boolean; hint?: string }> {
   const scriptPath = path.join(PROJECT_ROOT, 'scripts', 'parser_attestation.py');
   const pythonCommands = ['python3', 'python'];
+  let lastStderr = '';
   for (const cmd of pythonCommands) {
     try {
       const r = spawnSync(cmd, [scriptPath], {
@@ -24,20 +25,28 @@ async function runParserOnce(): Promise<boolean> {
       if (r.error) {
         if ((r.error as NodeJS.ErrnoException).code === 'ENOENT') continue;
         console.error('[attestation] parser spawn error:', r.error);
-        return false;
+        return { ok: false };
       }
       if (r.status !== 0) {
-        console.error('[attestation] parser exit', r.status, r.stderr?.slice(0, 500));
-        return false;
+        lastStderr = (r.stderr || r.stdout || '').slice(0, 1000);
+        console.error('[attestation] parser exit', r.status, lastStderr);
+        const isMissingModule =
+          /ModuleNotFoundError|No module named|ImportError/i.test(lastStderr);
+        return {
+          ok: false,
+          hint: isMissingModule
+            ? 'На сервере установите зависимости: pip3 install -r scripts/requirements-attestation.txt'
+            : undefined,
+        };
       }
-      return true;
+      return { ok: true };
     } catch (e) {
       console.error('[attestation] parser run failed:', e);
-      return false;
+      return { ok: false };
     }
   }
   console.error('[attestation] python not found (tried python3, python)');
-  return false;
+  return { ok: false };
 }
 
 async function getDataCoverageMessage(): Promise<string | null> {
@@ -69,12 +78,12 @@ router.get('/search', async (req: Request, res: Response) => {
   try {
     const total = await prisma.attestationPerson.count();
     if (total === 0) {
-      const ok = await runParserOnce();
-      if (!ok) {
-        return res.status(503).json({
-          ok: false,
-          error: 'База данных аттестаций пуста. Не удалось загрузить данные с сайта. Попробуйте позже.',
-        });
+      const result = await runParserOnce();
+      if (!result.ok) {
+        const message = result.hint
+          ? `База данных аттестаций пуста. ${result.hint}`
+          : 'База данных аттестаций пуста. Не удалось загрузить данные с сайта. Попробуйте позже.';
+        return res.status(503).json({ ok: false, error: message });
       }
     }
 
