@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
-import { spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 import { prisma } from '../../db/prisma';
 import { normalizeName } from './normalize';
 
@@ -8,53 +8,101 @@ const router = Router();
 
 /** Project root (exam-platform): from .../modules/attestation up to repo root */
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..', '..', '..');
+const PARSER_TIMEOUT_MS = 900_000; // 15 min
 
-async function runParserOnce(): Promise<{ ok: boolean; hint?: string }> {
+function runParserOnce(): Promise<{ ok: boolean; hint?: string }> {
   const scriptPath = path.join(PROJECT_ROOT, 'scripts', 'parser_attestation.py');
   const pythonCommands = ['python3', 'python'];
-  let lastStderr = '';
-  for (const cmd of pythonCommands) {
-    try {
-      const r = spawnSync(cmd, [scriptPath], {
+
+  function run(cmd: string): Promise<{ ok: boolean; hint?: string }> {
+    return new Promise((resolve) => {
+      let resolved = false;
+      const done = (result: { ok: boolean; hint?: string }) => {
+        if (resolved) return;
+        resolved = true;
+        resolve(result);
+      };
+      const prefix = '[attestation-parser] ';
+      const stderrChunks: string[] = [];
+      console.log('[attestation] spawn', cmd, scriptPath);
+
+      const child = spawn(cmd, [scriptPath], {
         cwd: PROJECT_ROOT,
         env: process.env,
-        timeout: 900_000, // 15 min — парсер обходит все регионы (4×14 + посты)
-        maxBuffer: 10 * 1024 * 1024,
-        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
       });
-      if (r.error) {
-        if ((r.error as NodeJS.ErrnoException).code === 'ENOENT') continue;
-        const errCode = (r.error as NodeJS.ErrnoException).code;
+
+      child.stdout?.on('data', (data: Buffer) => {
+        process.stdout.write(prefix + data.toString());
+      });
+      child.stderr?.on('data', (data: Buffer) => {
+        const s = data.toString();
+        stderrChunks.push(s);
+        process.stderr.write(prefix + s);
+      });
+
+      child.on('error', (err) => {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+          done({ ok: false });
+          return;
+        }
+        const errCode = (err as NodeJS.ErrnoException).code;
         if (errCode === 'ETIMEDOUT') {
-          console.error('[attestation] parser timeout (run manually or increase timeout)');
-          return {
+          console.error('[attestation] parser timeout');
+          done({
             ok: false,
             hint: 'Загрузка данных заняла слишком много времени. Запустите на сервере: python3 scripts/parser_attestation.py (или настройте cron в 06:00).',
-          };
+          });
+          return;
         }
-        console.error('[attestation] parser spawn error:', r.error);
-        return { ok: false };
-      }
-      if (r.status !== 0) {
-        lastStderr = (r.stderr || r.stdout || '').slice(0, 1000);
-        console.error('[attestation] parser exit', r.status, lastStderr);
+        console.error('[attestation] parser spawn error:', err);
+        done({ ok: false });
+      });
+
+      const timeoutId = setTimeout(() => {
+        try {
+          child.kill('SIGTERM');
+          console.error('[attestation] parser killed (timeout %d min)', PARSER_TIMEOUT_MS / 60000);
+        } catch {
+          // ignore
+        }
+        done({
+          ok: false,
+          hint: 'Загрузка данных заняла слишком много времени. Запустите на сервере: python3 scripts/parser_attestation.py (или настройте cron в 06:00).',
+        });
+      }, PARSER_TIMEOUT_MS);
+
+      child.on('close', (code, signal) => {
+        clearTimeout(timeoutId);
+        if (code === 0 && !signal) {
+          done({ ok: true });
+          return;
+        }
+        if (resolved) return;
+        const lastStderr = stderrChunks.join('').slice(0, 1000);
+        console.error('[attestation] parser exit', code, signal, lastStderr);
         const isMissingModule =
           /ModuleNotFoundError|No module named|ImportError/i.test(lastStderr);
-        return {
+        done({
           ok: false,
           hint: isMissingModule
             ? 'На сервере установите Python-зависимости: apt install python3-pip && pip3 install -r scripts/requirements-attestation.txt'
             : undefined,
-        };
-      }
-      return { ok: true };
-    } catch (e) {
-      console.error('[attestation] parser run failed:', e);
-      return { ok: false };
-    }
+        });
+      });
+    });
   }
-  console.error('[attestation] python not found (tried python3, python)');
-  return { ok: false };
+
+  return (async () => {
+    for (const cmd of pythonCommands) {
+      const result = await run(cmd);
+      if (result.ok) return result;
+      if (result.hint) return result;
+      // ENOENT (cmd not found), try next
+    }
+    console.error('[attestation] python not found (tried python3, python)');
+    return { ok: false };
+  })();
 }
 
 async function getDataCoverageMessage(): Promise<string | null> {
