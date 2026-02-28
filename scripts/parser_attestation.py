@@ -28,13 +28,12 @@ SLEEP_BETWEEN_REQUESTS = 1
 MAX_POSTS_PER_CATEGORY = 10
 MIN_PUBLISH_YEAR = 2025
 
-# Параметр ?l= на странице категории выбирает регион (1–14: Qoraqalpog'iston, Andijon, ... Xorazm).
-REGION_IDS = list(range(1, 15))  # 1..14
-
+# testers_doctors — одна страница без кнопок регионов, сразу список ссылок по датам.
+# Остальные категории — с переключателем регионов ?l=1..14.
 SOURCES = [
     {"url": "https://tmbm.ssv.uz/post/category/testers_list_doctors", "stage": 1, "profession": "doctor", "by_region": True},
     {"url": "https://tmbm.ssv.uz/post/category/testers_list_nurses", "stage": 1, "profession": "nurse", "by_region": True},
-    {"url": "https://tmbm.ssv.uz/post/category/testers_doctors", "stage": 2, "profession": "doctor", "by_region": True},
+    {"url": "https://tmbm.ssv.uz/post/category/testers_doctors", "stage": 2, "profession": "doctor", "by_region": False},
     {"url": "https://tmbm.ssv.uz/post/category/testers_nurses", "stage": 2, "profession": "nurse", "by_region": True},
 ]
 

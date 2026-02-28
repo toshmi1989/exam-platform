@@ -31,7 +31,7 @@ Services (`pm2`) are started from `/opt/exam/current/`, **not** from
 The script performs all steps automatically:
 
 1. Creates a new `releases/YYYY-MM-DD-HHMM/` directory
-2. Copies the project from the Git working directory
+2. Copies the project from the Git working directory (**including `scripts/`** — attestation parser, cron setup)
 3. Runs `npm ci` for the backend
 4. Runs `npx prisma generate`
 5. Runs `npx prisma migrate deploy`
@@ -41,6 +41,8 @@ The script performs all steps automatically:
 9. Switches the `current` symlink to the new release
 10. Runs `pm2 reload` to restart services
 11. Removes old releases (keeps last N)
+
+The repository includes a **`deploy.sh`** in the project root. On the server, use it as `/opt/exam/deploy.sh` so each release includes the **`scripts/`** directory (attestation parser, `setup-attestation-cron.sh`). If your current deploy script copies only certain folders, add `scripts/` to the copy step or replace it with the repo’s `deploy.sh`.
 
 > **Never** run `npm run build`, `pm2 start`, or `pm2 restart` manually in
 > production. Always use `deploy.sh`.

@@ -38,4 +38,36 @@ pip3 install --user -r scripts/requirements-attestation.txt
 python3 scripts/parser_attestation.py
 ```
 
-Рекомендуется также настроить cron на ежедневный запуск в 06:00 для обновления данных.
+## Выгрузка в CSV
+
+Скрипт `export_attestation.py` выгружает таблицу `attestation_people` в CSV (те же зависимости и `DATABASE_URL`).
+
+Из корня репозитория:
+
+```bash
+python3 scripts/export_attestation.py
+# по умолчанию создаётся attestation_export.csv
+
+python3 scripts/export_attestation.py -o /path/to/attestation.csv
+```
+
+Рекомендуется настроить автозапуск по расписанию (ежедневно в **03:00**).
+
+### Вариант 1: скрипт установки (Linux/macOS)
+
+Из корня репозитория (должен быть файл `.env` с `DATABASE_URL`):
+
+```bash
+chmod +x scripts/setup-attestation-cron.sh
+./scripts/setup-attestation-cron.sh
+```
+
+Скрипт добавит задачу в crontab текущего пользователя. Лог: `/var/log/attestation-parser.log`.
+
+### Вариант 2: вручную
+
+См. пример в `scripts/cron-attestation.example`. Добавьте строку в crontab (`crontab -e`), подставив путь к проекту и `DATABASE_URL`:
+
+```cron
+0 3 * * * cd /path/to/exam-platform && export DATABASE_URL='...' && python3 scripts/parser_attestation.py >> /var/log/attestation-parser.log 2>&1
+```
