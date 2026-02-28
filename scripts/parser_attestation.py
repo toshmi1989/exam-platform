@@ -74,9 +74,11 @@ def fetch(session: requests.Session, url: str) -> str | None:
             timeout=TIMEOUT,
         )
         r.raise_for_status()
+        size = len(r.text) if r.text else 0
+        logger.info("GET OK %s -> %d bytes", url, size)
         return r.text
     except Exception as e:
-        logger.exception("Fetch failed %s: %s", url, e)
+        logger.warning("GET FAIL %s -> %s", url, e)
         return None
 
 
@@ -212,18 +214,23 @@ def main() -> None:
 
             html = fetch(session, cat_url)
             if not html:
+                logger.warning("Category skipped (no content): %s", cat_url)
                 continue
             time.sleep(SLEEP_BETWEEN_REQUESTS)
 
             links = parse_category_links(html, cat_url, limit=MAX_POSTS_PER_CATEGORY)
-            if not links and by_region:
-                continue
-            logger.info("Found %d post links", len(links))
+            if not links:
+                logger.info("Category %s: 0 post links (empty or all before %d)", cat_url, MIN_PUBLISH_YEAR)
+                if by_region:
+                    continue
+            else:
+                logger.info("Category %s: found %d post links", cat_url, len(links))
 
             for post_url, _title, published_date in links:
                 time.sleep(SLEEP_BETWEEN_REQUESTS)
                 post_html = fetch(session, post_url)
                 if not post_html:
+                    logger.warning("Post skipped (no content): %s", post_url)
                     continue
                 try:
                     post_soup = BeautifulSoup(post_html, "html.parser")
@@ -239,9 +246,9 @@ def main() -> None:
                         row["source_url"] = post_url
                         row["published_date"] = published_date
                         all_rows.append(row)
-                    logger.info("Post %s: %d rows", post_url, len(table_rows))
+                    logger.info("Post OK %s -> %d rows", post_url, len(table_rows))
                 except Exception as e:
-                    logger.exception("Process post %s: %s", post_url, e)
+                    logger.warning("Post FAIL %s -> %s", post_url, e)
 
     logger.info("Total rows to insert: %d", len(all_rows))
 

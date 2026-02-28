@@ -18,12 +18,20 @@ async function runParserOnce(): Promise<{ ok: boolean; hint?: string }> {
       const r = spawnSync(cmd, [scriptPath], {
         cwd: PROJECT_ROOT,
         env: process.env,
-        timeout: 120_000,
+        timeout: 900_000, // 15 min — парсер обходит все регионы (4×14 + посты)
         maxBuffer: 10 * 1024 * 1024,
         encoding: 'utf8',
       });
       if (r.error) {
         if ((r.error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+        const errCode = (r.error as NodeJS.ErrnoException).code;
+        if (errCode === 'ETIMEDOUT') {
+          console.error('[attestation] parser timeout (run manually or increase timeout)');
+          return {
+            ok: false,
+            hint: 'Загрузка данных заняла слишком много времени. Запустите на сервере: python3 scripts/parser_attestation.py (или настройте cron в 06:00).',
+          };
+        }
         console.error('[attestation] parser spawn error:', r.error);
         return { ok: false };
       }
