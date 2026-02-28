@@ -1,14 +1,19 @@
 /**
  * Azure Text-to-Speech module.
  * Academic Lecture Voice Engine renderer for Azure TTS.
+ * Output: MP3 (compressed) for faster loading; WAV used only internally for multi-chunk concatenation.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
 
 const AZURE_SPEECH_KEY = (process.env.AZURE_SPEECH_KEY ?? '').trim();
 const AZURE_SPEECH_REGION = (process.env.AZURE_SPEECH_REGION ?? 'eastus').trim();
-const AZURE_OUTPUT_FORMAT = (process.env.AZURE_OUTPUT_FORMAT ?? 'riff-24khz-16bit-mono-pcm').trim();
+/** Format for single-segment requests: MP3 reduces size and load time. */
+const AZURE_OUTPUT_FORMAT_MP3 = (process.env.AZURE_OUTPUT_FORMAT_MP3 ?? 'audio-24khz-48kbitrate-mono-mp3').trim();
+/** Format for multi-segment (we concat WAV then convert to MP3). */
+const AZURE_OUTPUT_FORMAT_WAV = (process.env.AZURE_OUTPUT_FORMAT ?? 'riff-24khz-16bit-mono-pcm').trim();
 const AUDIO_BASE_DIR = '/opt/exam/audio';
 
 /** Max characters per SSML request to prevent audio cut-off. */
@@ -203,8 +208,9 @@ function buildSSML(text: string, lang: 'ru' | 'uz', voiceOverrides?: { voiceRu?:
 
 /**
  * Post SSML to Azure TTS and return audio buffer, or throw.
+ * @param format - X-Microsoft-OutputFormat value (e.g. audio-24khz-48kbitrate-mono-mp3 or riff-24khz-16bit-mono-pcm).
  */
-async function requestAudioForSSML(ssml: string): Promise<ArrayBuffer> {
+async function requestAudioForSSML(ssml: string, format: string): Promise<ArrayBuffer> {
   const url = `https://${AZURE_SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`;
   const post = (body: string) =>
     fetch(url, {
@@ -212,7 +218,7 @@ async function requestAudioForSSML(ssml: string): Promise<ArrayBuffer> {
       headers: {
         'Ocp-Apim-Subscription-Key': AZURE_SPEECH_KEY,
         'Content-Type': 'application/ssml+xml',
-        'X-Microsoft-OutputFormat': AZURE_OUTPUT_FORMAT,
+        'X-Microsoft-OutputFormat': format,
         'User-Agent': 'ZiyoMed-TTS/1.0',
       },
       body,
@@ -238,11 +244,25 @@ async function requestAudioForSSML(ssml: string): Promise<ArrayBuffer> {
 }
 
 /**
- * Generate audio file from script using Azure TTS REST API.
- * Writes to outputPath (single request).
+ * Convert WAV file to MP3 using ffmpeg-static (no system ffmpeg required).
  */
-async function synthesizeSpeechWithSSML(ssml: string, outputPath: string): Promise<string> {
-  const audioBuffer = await requestAudioForSSML(ssml);
+function convertWavToMp3(wavPath: string, mp3Path: string): void {
+  const ffmpegPath = require('ffmpeg-static');
+  execFileSync(ffmpegPath as string, [
+    '-y',
+    '-i', wavPath,
+    '-codec:a', 'libmp3lame',
+    '-qscale:a', '4',
+    mp3Path,
+  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+}
+
+/**
+ * Generate audio file from script using Azure TTS REST API.
+ * Writes to outputPath (single request). Uses the given output format.
+ */
+async function synthesizeSpeechWithSSML(ssml: string, outputPath: string, format: string): Promise<string> {
+  const audioBuffer = await requestAudioForSSML(ssml, format);
   const dir = path.dirname(outputPath);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(outputPath, Buffer.from(audioBuffer));
@@ -313,9 +333,9 @@ export async function synthesizeSpeech(
 
   if (chunks.length === 1) {
     const ssml = buildSSML(trimmedScript, lang, Object.keys(voiceOverrides).length ? voiceOverrides : undefined);
-    console.log('[Azure TTS] Single segment, SSML length:', ssml.length);
+    console.log('[Azure TTS] Single segment (MP3), SSML length:', ssml.length);
     try {
-      return await synthesizeSpeechWithSSML(ssml, outputPath);
+      return await synthesizeSpeechWithSSML(ssml, outputPath, AZURE_OUTPUT_FORMAT_MP3);
     } catch (error) {
       console.error('[Azure TTS] Synthesis failed:', error);
       throw error;
@@ -327,18 +347,29 @@ export async function synthesizeSpeech(
   const buffers: Buffer[] = [];
   for (let i = 0; i < chunks.length; i++) {
     const ssml = buildSSML(chunks[i], lang, Object.keys(voiceOverrides).length ? voiceOverrides : undefined);
-    console.log(`[Azure TTS] Segment ${i + 1}/${chunks.length}, SSML length:`, ssml.length);
-    const arrayBuffer = await requestAudioForSSML(ssml);
+    console.log(`[Azure TTS] Segment ${i + 1}/${chunks.length} (WAV), SSML length:`, ssml.length);
+    const arrayBuffer = await requestAudioForSSML(ssml, AZURE_OUTPUT_FORMAT_WAV);
     buffers.push(Buffer.from(arrayBuffer));
   }
   const combined = concatenateWavBuffers(buffers);
-  fs.writeFileSync(outputPath, combined);
+  const tempWavPath = outputPath.replace(/\.mp3$/i, '.wav.tmp');
+  try {
+    fs.writeFileSync(tempWavPath, combined);
+    convertWavToMp3(tempWavPath, outputPath);
+  } finally {
+    try {
+      if (fs.existsSync(tempWavPath)) fs.unlinkSync(tempWavPath);
+    } catch {
+      // ignore
+    }
+  }
   return outputPath;
 }
 
 /**
  * Get audio file path for question and language.
+ * Returns .mp3 path (compressed format for faster loading).
  */
 export function getAudioPath(questionId: string, lang: 'ru' | 'uz'): string {
-  return path.join(AUDIO_BASE_DIR, `${questionId}_${lang}.wav`);
+  return path.join(AUDIO_BASE_DIR, `${questionId}_${lang}.mp3`);
 }
