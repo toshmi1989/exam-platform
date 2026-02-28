@@ -144,7 +144,17 @@ function CabinetClient() {
         setAttestationDataCoverage(null);
         return;
       }
-      const payload = data as { items?: unknown[]; dataCoverage?: string };
+      type AttestationResultItem = {
+        full_name: string;
+        specialty?: string | null;
+        region?: string | null;
+        stage: number;
+        profession: string;
+        exam_date?: string | null;
+        exam_time?: string | null;
+        source_url: string;
+      };
+      const payload = data as { items?: AttestationResultItem[]; dataCoverage?: string };
       const list = Array.isArray(payload?.items) ? payload.items : [];
       setAttestationResults(list);
       setAttestationDataCoverage(
