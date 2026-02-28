@@ -238,6 +238,7 @@ function CabinetClient() {
         attestationZiyodaSourceLink: 'Open official source',
         attestationZiyodaListFrom: 'List from',
         attestationCategoryLabel: 'Selected category',
+        attestationRegionLabel: 'Category',
         attestationStage1Short: 'Stage 1 (Test)',
         attestationStage2Short: 'Stage 2 (Oral)',
         attestationSecondInvitation: 'Invited a second time for this date ({{secondDate}}); first time was {{firstDate}}. If they do not participate the second time either, a new application will be required.',
@@ -286,6 +287,7 @@ function CabinetClient() {
         attestationZiyodaSourceLink: 'Rasmiy manbani ochish',
         attestationZiyodaListFrom: 'Ro\'yxat sanasi',
         attestationCategoryLabel: 'Tanlangan kategoriya',
+        attestationRegionLabel: 'Kategoriya',
         attestationStage1Short: 'Birinchi bosqich (test)',
         attestationStage2Short: 'Ikkinchi bosqich (og\'zaki)',
         attestationSecondInvitation: 'Ikkinchi marta shu sanaga ({{secondDate}}) taklif qilindi, birinchi marta {{firstDate}} edi. Agar ikkinchi marta ham qatnashmasa — yangi ariza topshirish kerak bo\'ladi.',
@@ -333,6 +335,7 @@ function CabinetClient() {
       attestationZiyodaSourceLink: 'Подробности в официальном источнике',
       attestationZiyodaListFrom: 'Список от',
       attestationCategoryLabel: 'Выбранная категория',
+      attestationRegionLabel: 'Категория',
       attestationStage1Short: '1-й этап (тест)',
       attestationStage2Short: '2-й этап (устный)',
       attestationSecondInvitation: 'Приглашена во второй раз на эту дату ({{secondDate}}), первый раз была {{firstDate}}. Если не будет участвовать и во второй раз — придётся сдавать новую заявку!',
@@ -362,9 +365,10 @@ function CabinetClient() {
       if (rows.length === 1) {
         out.push({ type: 'single', row: rows[0] });
       } else {
-        const firstDate = formatDate(getSortDate(rows[0]));
-        const secondDate = formatDate(getSortDate(rows[rows.length - 1]));
-        out.push({ type: 'merged', firstDate: firstDate || '—', secondDate: secondDate || '—', mainRow: rows[rows.length - 1] });
+        const lastTwo = rows.slice(-2);
+        const firstDate = formatDate(getSortDate(lastTwo[0])) || '—';
+        const secondDate = formatDate(getSortDate(lastTwo[lastTwo.length - 1])) || '—';
+        out.push({ type: 'merged', firstDate, secondDate, mainRow: lastTwo[lastTwo.length - 1] });
       }
     });
     return out;
@@ -491,7 +495,7 @@ function CabinetClient() {
             {!attestationLoading && attestationResults.length > 0 && (
               <div className="mt-4 space-y-4">
                 <p className="text-sm font-medium text-slate-700">
-                  👩‍⚕️ {copy.attestationZiyodaFound.replace('{{count}}', String(attestationResults.length))}
+                  👩‍⚕️ {copy.attestationZiyodaFound.replace('{{count}}', String(attestationDisplayGroups.length))}
                 </p>
                 <ul className="flex flex-col gap-4">
                   {attestationDisplayGroups.map((item, i) => {
@@ -513,8 +517,8 @@ function CabinetClient() {
                           {(r.specialty || r.region) && (
                             <p className="mt-1 text-slate-600">
                               {r.specialty && <span>🩺 {r.specialty}</span>}
-                              {r.specialty && r.region && ' · '}
-                              {r.region && <span>📍 {r.region}</span>}
+                              {r.specialty && r.region && <br />}
+                              {r.region && <span>📍 {copy.attestationRegionLabel}: {r.region}</span>}
                             </p>
                           )}
                           <div className="mt-2 block">
@@ -564,8 +568,8 @@ function CabinetClient() {
                         {(r.specialty || r.region) && (
                           <p className="mt-1 text-slate-600">
                             {r.specialty && <span>🩺 {r.specialty}</span>}
-                            {r.specialty && r.region && ' · '}
-                            {r.region && <span>📍 {r.region}</span>}
+                            {r.specialty && r.region && <br />}
+                            {r.region && <span>📍 {copy.attestationRegionLabel}: {r.region}</span>}
                           </p>
                         )}
                         <div className="mt-2 block">
