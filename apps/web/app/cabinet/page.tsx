@@ -572,6 +572,7 @@ function CabinetClient() {
                         </li>
                       );
                     }
+                    if (item.type === 'merged') {
                     const { firstDate, secondDate, mainRow: r } = item;
                     const stageLabel = r.stage === 1 ? copy.attestationStage1Short : copy.attestationStage2Short;
                     const professionLabel = r.profession === 'doctor' ? copy.attestationDoctor : copy.attestationNurse;
