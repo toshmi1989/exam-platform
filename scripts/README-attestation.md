@@ -4,19 +4,27 @@
 
 ## Зависимости Python
 
-На сервере, где запускается API (и при первой пустой БД вызывается парсер), установите:
+На сервере, где запускается API (и при первой пустой БД вызывается парсер), установите зависимости.
+
+Если `pip3` ещё нет (например, Ubuntu/Debian):
+
+```bash
+sudo apt update && sudo apt install -y python3-pip
+```
+
+Затем из корня репозитория:
 
 ```bash
 pip3 install -r scripts/requirements-attestation.txt
 ```
 
-Или с правами пользователя:
+Или в пользовательский каталог (без sudo):
 
 ```bash
 pip3 install --user -r scripts/requirements-attestation.txt
 ```
 
-Нужны: `requests`, `beautifulsoup4`, `psycopg2-binary`.
+Нужны пакеты: `requests`, `beautifulsoup4`, `psycopg2-binary`.
 
 ## Переменные окружения
 

@@ -35,7 +35,7 @@ async function runParserOnce(): Promise<{ ok: boolean; hint?: string }> {
         return {
           ok: false,
           hint: isMissingModule
-            ? 'На сервере установите зависимости: pip3 install -r scripts/requirements-attestation.txt'
+            ? 'На сервере установите Python-зависимости: apt install python3-pip && pip3 install -r scripts/requirements-attestation.txt'
             : undefined,
         };
       }

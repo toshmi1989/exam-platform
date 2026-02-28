@@ -9,9 +9,10 @@ Requires: DATABASE_URL in environment.
 import os
 import re
 import time
+import uuid
 import logging
 from datetime import datetime
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse, urlunparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -27,11 +28,14 @@ SLEEP_BETWEEN_REQUESTS = 1
 MAX_POSTS_PER_CATEGORY = 5
 MIN_PUBLISH_YEAR = 2025
 
+# Параметр ?l= на странице категории выбирает регион (1–14: Qoraqalpog'iston, Andijon, ... Xorazm).
+REGION_IDS = list(range(1, 15))  # 1..14
+
 SOURCES = [
-    {"url": "https://tmbm.ssv.uz/post/category/testers_list_doctors", "stage": 1, "profession": "doctor"},
-    {"url": "https://tmbm.ssv.uz/post/category/testers_list_nurses", "stage": 1, "profession": "nurse"},
-    {"url": "https://tmbm.ssv.uz/post/category/testers_doctors", "stage": 2, "profession": "doctor"},
-    {"url": "https://tmbm.ssv.uz/post/category/testers_nurses", "stage": 2, "profession": "nurse"},
+    {"url": "https://tmbm.ssv.uz/post/category/testers_list_doctors", "stage": 1, "profession": "doctor", "by_region": True},
+    {"url": "https://tmbm.ssv.uz/post/category/testers_list_nurses", "stage": 1, "profession": "nurse", "by_region": True},
+    {"url": "https://tmbm.ssv.uz/post/category/testers_doctors", "stage": 2, "profession": "doctor", "by_region": True},
+    {"url": "https://tmbm.ssv.uz/post/category/testers_nurses", "stage": 2, "profession": "nurse", "by_region": True},
 ]
 
 
@@ -45,8 +49,21 @@ def normalize_name(name: str) -> str:
     return s.strip()
 
 
-def get_session():
-    return requests.Session().__enter__()
+def url_with_region(url: str, region_id: int) -> str:
+    """Add or replace ?l=region_id in category URL."""
+    parsed = urlparse(url)
+    query = parsed.query
+    if query:
+        parts = [p for p in query.split("&") if not p.startswith("l=")]
+        parts.append(f"l={region_id}")
+        new_query = "&".join(parts)
+    else:
+        new_query = f"l={region_id}"
+    return urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
+
+
+def get_session() -> requests.Session:
+    return requests.Session()
 
 
 def fetch(session: requests.Session, url: str) -> str | None:
@@ -185,38 +202,46 @@ def main() -> None:
         url = source["url"]
         stage = source["stage"]
         profession = source["profession"]
-        logger.info("Category: %s stage=%s profession=%s", url, stage, profession)
+        by_region = source.get("by_region", False)
+        urls_to_fetch = [url_with_region(url, rid) for rid in REGION_IDS] if by_region else [url]
 
-        html = fetch(session, url)
-        if not html:
-            continue
-        time.sleep(SLEEP_BETWEEN_REQUESTS)
+        for idx, cat_url in enumerate(urls_to_fetch):
+            region_id = REGION_IDS[idx] if by_region else None
+            region_label = f" l={region_id}" if region_id is not None else ""
+            logger.info("Category: %s stage=%s profession=%s%s", cat_url, stage, profession, region_label)
 
-        links = parse_category_links(html, url, limit=MAX_POSTS_PER_CATEGORY)
-        logger.info("Found %d post links", len(links))
-
-        for post_url, _title, published_date in links:
-            time.sleep(SLEEP_BETWEEN_REQUESTS)
-            post_html = fetch(session, post_url)
-            if not post_html:
+            html = fetch(session, cat_url)
+            if not html:
                 continue
-            try:
-                post_soup = BeautifulSoup(post_html, "html.parser")
-                page_region = extract_region_from_page(post_soup)
-                table_rows = parse_table_rows(post_soup)
-                for row in table_rows:
-                    if not row.get("full_name"):
-                        continue
-                    if not row.get("region") and page_region:
-                        row["region"] = page_region
-                    row["stage"] = stage
-                    row["profession"] = profession
-                    row["source_url"] = post_url
-                    row["published_date"] = published_date
-                    all_rows.append(row)
-                logger.info("Post %s: %d rows", post_url, len(table_rows))
-            except Exception as e:
-                logger.exception("Process post %s: %s", post_url, e)
+            time.sleep(SLEEP_BETWEEN_REQUESTS)
+
+            links = parse_category_links(html, cat_url, limit=MAX_POSTS_PER_CATEGORY)
+            if not links and by_region:
+                continue
+            logger.info("Found %d post links", len(links))
+
+            for post_url, _title, published_date in links:
+                time.sleep(SLEEP_BETWEEN_REQUESTS)
+                post_html = fetch(session, post_url)
+                if not post_html:
+                    continue
+                try:
+                    post_soup = BeautifulSoup(post_html, "html.parser")
+                    page_region = extract_region_from_page(post_soup)
+                    table_rows = parse_table_rows(post_soup)
+                    for row in table_rows:
+                        if not row.get("full_name"):
+                            continue
+                        if not row.get("region") and page_region:
+                            row["region"] = page_region
+                        row["stage"] = stage
+                        row["profession"] = profession
+                        row["source_url"] = post_url
+                        row["published_date"] = published_date
+                        all_rows.append(row)
+                    logger.info("Post %s: %d rows", post_url, len(table_rows))
+                except Exception as e:
+                    logger.exception("Process post %s: %s", post_url, e)
 
     logger.info("Total rows to insert: %d", len(all_rows))
 
@@ -239,6 +264,7 @@ def main() -> None:
                     pub_ts = r.get("published_date")
                     pub_date = pub_ts.date() if pub_ts else None
                     yield (
+                        str(uuid.uuid4()),
                         r["full_name"],
                         normalized,
                         r.get("specialty"),
@@ -255,12 +281,12 @@ def main() -> None:
                 cur,
                 """
                 INSERT INTO attestation_people (
-                    full_name, full_name_normalized, specialty, region, stage, profession,
+                    id, full_name, full_name_normalized, specialty, region, stage, profession,
                     exam_date, exam_time, source_url, published_date
                 ) VALUES %s
                 """,
                 list(gen()),
-                template="(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                template="(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             )
             conn.commit()
             logger.info("Inserted attestation rows successfully.")
