@@ -355,7 +355,7 @@ function CabinetClient() {
     }
     const getSortDate = (r: AttestationRow) => r.published_date || r.exam_date || '';
     const formatDate = (d: string) => (d.length === 10 && d.includes('-') ? d.split('-').reverse().join('.') : d);
-    const out: { type: 'single'; row: AttestationRow } | { type: 'merged'; firstDate: string; secondDate: string; mainRow: AttestationRow }[] = [];
+    const out: ({ type: 'single'; row: AttestationRow } | { type: 'merged'; firstDate: string; secondDate: string; mainRow: AttestationRow })[] = [];
     groups.forEach((rows) => {
       rows.sort((a, b) => getSortDate(a).localeCompare(getSortDate(b)));
       if (rows.length === 1) {
